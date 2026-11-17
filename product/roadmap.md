@@ -26,6 +26,7 @@ Spec: `../specs/001-p0-spike/`
 ## Phase 1 — Core loop MVP
 
 - [ ] Model providers: ModelJars, OpenAI-compatible, Claude (native)
+- [ ] Model profiles in `settings.json`; `--model` and `/model` (D-032)
 - [ ] Agent loop: stream reply, extract the JS block, run it, return result or error with line numbers
 - [ ] Isolate manager: one Engine per agent, fresh Context per run, limits, watchdog
 - [ ] `api`: readContext, readFile, writeFile, editFile, listFiles, grep, git, emit
@@ -55,6 +56,7 @@ Spec: `../specs/001-p0-spike/`
 - [ ] Egress proxy in the host: every HTTP client and command-line tool goes through it
 - [ ] Rules files `~/.jharness/network.rules` (general) and `.jharness/network.rules` (project); DNS pinning; `/network` commands
 - [ ] OS sandbox allows network only to the proxy port
+- [ ] Offline mode: network default deny, Maven/Gradle/npm offline flags, no update checks (D-033)
 - [ ] Injection, malicious-repo and sandbox-escape test suites, on JVM and native
 - [ ] Model profiles; retries and rate-limit handling
 - [ ] `--debug`, `jharness log <session>`, local crash reports
@@ -69,6 +71,7 @@ Spec: `../specs/001-p0-spike/`
 - [ ] Slash commands (Markdown templates and JS)
 - [ ] MCP client (stdio, streamable HTTP), called from JS through `api.mcp`; stdio servers started through `ProcessRunner` in the OS sandbox
 - [ ] Todo list and plan mode
+- [ ] Optional action reviewer: Kev, Jev or own model; only tightens; fails to ask (D-031)
 
 **Gate:** one custom agent and one hook ship as working examples.
 

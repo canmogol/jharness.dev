@@ -41,6 +41,18 @@ Last updated: 2026-11-15
 
 Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative DeepSeek-Coder-V2-Lite-Instruct.
 
+Models are chosen through named profiles in `settings.json` (D-032).
+
+## Action reviewer (optional, D-031)
+
+| Back-end | Where it runs | Notes |
+| --- | --- | --- |
+| Kev | User-run local server (Python; CUDA, ROCm or MLX) | Apache-2.0; 0.8B practical next to a 7B coding model on 16 GB |
+| Jev | Hosted (TypeSafe API) | Action and context leave the machine |
+| Own model | Any model profile | No extra process |
+
+Kev and Jev share the System One API, so JHarness has one HTTP client for both.
+
 ## Sandbox limits (defaults, tune in P0)
 
 Every value below can be changed in the `sandbox` section of `settings.json`, per profile (D-003). The policy, isolate mode and thread count are fixed.

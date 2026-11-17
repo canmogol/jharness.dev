@@ -41,6 +41,9 @@ Last updated: 2026-11-17
 | D-028 | Per-operation timeouts, and a cap on the process output returned to the model | Accepted |
 | D-029 | No long-lived background processes in v1 | Accepted |
 | D-030 | P0 go/no-go thresholds; local 7B speed is a soft target | Accepted |
+| D-031 | Optional action reviewer (Kev, Jev or own model) that can only tighten decisions | Accepted |
+| D-032 | Named model profiles in `settings.json`; switch per session or per agent | Accepted |
+| D-033 | Offline mode | Accepted |
 
 ---
 
@@ -389,6 +392,79 @@ Local 7B model speed is a soft target, not a gate. On a 16 GB Apple Silicon Mac:
 
 **Source.** User decisions on 2026-11-17. Details in `specs/001-p0-spike/plan.md`.
 
+## D-031 — Optional action reviewer
+
+**Decision.** An optional reviewer gives a yes/no judgement on each state-changing operation: does it fit the user's task and the project settings? It runs after the deterministic checks pass (typed operation, argument checks, file policy, permissions rules, proxy rules) and before the operation executes.
+
+- **Only tightens.** It can turn "allow" into "ask the user" or "deny", never the other way round. It is never the only gate.
+- **Fails safe.** If it is down, slow or returns an error, the operation falls back to asking the user.
+- **Three back-ends**, one client:
+  - `kev` — Kev, small open decision models (Apache-2.0, sizes 0.8B to 27B), run by the user on localhost, like Ollama.
+  - `jev` — Jev, the hosted model behind TypeSafe's API. The action and its context leave the machine; the docs must say so.
+  - `model` — one of the user's own model profiles (D-032), asked a yes/no question; no extra process.
+  Kev and Jev share the System One API (`POST /v1/systemone`), so only the URL and key differ.
+- **Off by default.** Lands in P3, next to hooks.
+
+**Configuration** (`settings.json`):
+
+```json
+"reviewer": {
+  "enabled": true,
+  "provider": "kev",
+  "url": "http://127.0.0.1:8000/v1/systemone",
+  "apiKeyEnv": "KEV_API_KEY",
+  "askBelow": 0.90,
+  "denyBelow": 0.20,
+  "timeoutMs": 3000,
+  "onError": "ask"
+}
+```
+
+The reviewer endpoint is allowed through the proxy automatically, like the model endpoint. Every verdict emits a `review.*` event with the confidence.
+
+**Why.** Rules can't judge intent: a prompt-injected commit of unrelated files, an unrequested npm script or a POST to an allowed host all pass the rules. A reviewer catches some of these. It can't be the security boundary because it is probabilistic and judges text an attacker may control.
+
+**Costs.** Kev is a separate Python server (CUDA, ROCm or MLX), outside the one-binary principle, so it stays optional and user-run. On a 16 GB machine next to a 7B coding model, Kev-0.8B is the practical size. Each reviewed operation adds latency.
+
+**Source.** User request and acceptance on 2026-11-17.
+
+## D-032 — Model profiles
+
+**Decision.** Models are named profiles in `settings.json`; one is the default.
+
+```json
+{
+  "model": "local-qwen",
+  "models": {
+    "local-qwen":  { "provider": "modeljars", "artifact": "<ModelJars coordinates for Qwen2.5-Coder-7B Q4_K_M>" },
+    "ollama-qwen": { "provider": "openai-compatible", "baseUrl": "http://localhost:11434/v1", "model": "qwen2.5-coder:7b" },
+    "claude":      { "provider": "anthropic", "model": "<Claude model id>", "apiKeyEnv": "ANTHROPIC_API_KEY" }
+  }
+}
+```
+
+- Switch with `jharness --model <name>` or `/model <name>` in a session.
+- Custom agents and subagents may name their own profile.
+- API keys come from environment variables (or the 0600 secrets file), never from settings files.
+- Each profile can carry model-profile notes (context size, JS-writing quality, "slow on this hardware", D-030).
+
+**Source.** User question and acceptance on 2026-11-17.
+
+## D-033 — Offline mode
+
+**Decision.** `jharness --offline` or `"offline": true` in settings:
+- sets the network default to `deny` (local model and reviewer endpoints stay allowed);
+- passes `-o` to Maven, `--offline` to Gradle and `--offline` to npm;
+- skips update checks.
+
+**What works offline:** a ModelJars model already in the cache or a model already pulled in Ollama; Kev running locally; Maven and Gradle with dependencies, plugins and the Gradle wrapper distribution already downloaded; npm with packages in its cache; git (except fetch and push), `rg` and file edits. JHarness itself never needs the network: no license check, no telemetry, no required update check.
+
+**What doesn't:** Claude, Jev, remote MCP servers and anything missing from the local caches. Each fails with a clear message.
+
+**Why.** A Java developer with dependencies in `~/.m2` and a local model should be able to work without a connection.
+
+**Source.** User question and acceptance on 2026-11-17. Lands in P2, with the build tools and the proxy.
+
 ---
 
 ## Questions and answers
@@ -430,6 +506,10 @@ Questions raised during design, the answers given, and why each mattered.
 | Q31 | Cap the output returned to the model? | Yes: last 30,000 characters plus exit code; full log in the session | Keeps build logs from filling the context | D-028 |
 | Q32 | Long-lived background processes in v1? | No, after v0.1 | Keeps sandbox and cleanup simple | D-029 |
 | Q33 | What are the P0 go/no-go thresholds? | As proposed, but cold start-up under 2 s and a looser, soft target for the local 7B model | The spike can be judged | D-030 |
+| Q34 | Does a yes/no check (Kev or Jev) improve command safety? | Yes for reliability and intent, only as an extra layer that can tighten; not as the security boundary | Catches off-task actions rules can't | D-031 |
+| Q35 | How does the user choose a local model or Claude? | Named model profiles in `settings.json`; `--model` and `/model` | One switch for all providers | D-032 |
+| Q36 | How is Kev or Jev configured? | `reviewer` section: provider, URL, key, confidence thresholds, timeout, fail to ask | | D-031 |
+| Q37 | Can a Java developer work offline with a local model and Kev? | Yes, with everything cached; an explicit offline mode | Works without a connection | D-033 |
 
 ---
 

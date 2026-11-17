@@ -2,7 +2,7 @@
 
 The rules every feature must follow. A feature's `plan.md` must pass the constitution check below before tasks are written. Changing an article needs a new entry in `decisions.md` that says why.
 
-Version 1.3 · Ratified 2026-11-16 · Amended 2026-11-17 (Article III: JS-only hooks, D-022, and configurable limit values, D-003; Article IV: stdio MCP servers, D-023, and `rg`, D-027)
+Version 1.4 · Ratified 2026-11-16 · Amended 2026-11-17 (Article VII: reviewer only tightens, D-031; Article III: JS-only hooks, D-022, and configurable limit values, D-003; Article IV: stdio MCP servers, D-023, and `rg`, D-027)
 
 ---
 
@@ -33,8 +33,8 @@ Only strings and JSON cross into and out of isolates. No live host object is han
 *Source: D-005, D-006*
 
 ### VII. Safe by default
-State-changing operations ask for approval unless a rule allows them. A project's own code and settings run only after the user trusts the project. Secrets never reach prompts, the guest or the event log.
-*Source: D-010, D-011*
+State-changing operations ask for approval unless a rule allows them. An automated reviewer may only make a decision stricter, never approve something the rules would not. A project's own code and settings run only after the user trusts the project. Secrets never reach prompts, the guest or the event log.
+*Source: D-010, D-011, D-031*
 
 ### VIII. Events are the source of truth
 Everything that happens is a JSON event with a host-stamped envelope, appended to the session log. UI, hooks, audit and resume read events; nothing reads hidden state instead.

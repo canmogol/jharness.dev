@@ -61,7 +61,7 @@ Maven multi-module build. Dependencies flow downward.
 | --- | --- | --- |
 | `jharness-events` | Event envelope, types, validation, bus, JSONL session log | — |
 | `jharness-config` | Settings layers (user, project, session), project trust, permission rules, network rules | events |
-| `jharness-security` | Permission engine, file policy | config |
+| `jharness-security` | Permission engine, file policy, optional action reviewer client (Kev, Jev, own model) | config |
 | `jharness-proxy` | Egress proxy: rules-file parser, rule matching, DNS pinning, CONNECT and plain-HTTP forwarding, per-session credentials | config, events |
 | `jharness-process` | `ProcessRunner`, typed git / Maven / Gradle / npm / rg operations, OS sandbox launchers | security |
 | `jharness-sandbox` | Isolate manager, `api` facade, limits, watchdog, `api.d.ts` generation | security, process |
@@ -97,13 +97,13 @@ Model providers, agent loop with RunJS, file `api` and git, ask-mode permissions
 
 ### P2 — Build tools and hardening
 
-Maven, Gradle and npm operations; web fetch; the egress proxy with its two rules files and `/network` commands; OS sandbox for build tools (which also blocks any direct connection that skips the proxy); full limits and watchdog; injection and sandbox-escape suites; model profiles; retries; debugging tools.
+Maven, Gradle and npm operations; offline mode; web fetch; the egress proxy with its two rules files and `/network` commands; OS sandbox for build tools (which also blocks any direct connection that skips the proxy); full limits and watchdog; injection and sandbox-escape suites; model profiles; retries; debugging tools.
 
 **Gate:** every runaway, out-of-memory, injection and escape test is contained, on Linux and macOS.
 
 ### P3 — Extensibility
 
-Custom JS agents, subagents (`api.spawnAgent`), JS-only hooks, slash commands, MCP client reached through `api.mcp`, todo list and plan mode.
+Custom JS agents, subagents (`api.spawnAgent`), JS-only hooks, slash commands, MCP client reached through `api.mcp`, todo list and plan mode, optional action reviewer.
 
 **Gate:** one custom agent and one hook ship as working examples.
 

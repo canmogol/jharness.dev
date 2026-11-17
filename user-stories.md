@@ -29,7 +29,8 @@ Last updated: 2026-11-15
 | --- | --- | --- | --- | --- |
 | US-1.1 | As a developer, I want to install JHarness as one file on macOS or Linux, so I don't have to set up Java or other runtimes. | Single binary; Homebrew tap and install script; macOS binary is signed and notarized | MVP | P4 |
 | US-1.2 | As a privacy-minded developer, I want to run a local model inside JHarness with no extra server, so my code never leaves my machine. | A ModelJars model downloads once, is verified by SHA-256 and runs in the JHarness process | MVP | P0–P1 |
-| US-1.3 | As a developer, I want to use Claude or any OpenAI-compatible server instead, so I can pick quality, cost or privacy per project. | Provider set in settings; Claude, Ollama and llama.cpp work | MVP | P1 |
+| US-1.3 | As a developer, I want to use Claude or any OpenAI-compatible server instead, so I can pick quality, cost or privacy per project. | Named model profiles; `--model` and `/model` switch; Claude, Ollama and llama.cpp work | MVP | P1 |
+| US-1.5 | As a Java developer with my dependencies already on my machine, I want to work fully offline with a local model. | `--offline` sets network default deny and passes offline flags to Maven, Gradle and npm; everything cached works | MVP | P2 |
 | US-1.4 | As a developer, I want JHarness to ask whether I trust a project the first time I open it, so a cloned repo can't run its own code without my say-so. | Trust prompt once per folder; untrusted projects can't run builds, wrappers or scripts | MVP | P1 |
 
 ## Epic 2 — Everyday coding
@@ -56,6 +57,7 @@ Last updated: 2026-11-15
 | US-3.5 | As a security-minded user, I want build tools to run in an OS sandbox, so a malicious build script can't reach outside the project. | Maven, Gradle and npm write only to the workspace and caches; network through rules | MVP | P2 |
 | US-3.6 | As a security-minded user, I want a log of everything the agent did, so I can audit a session. | Every action is an event in the session log; `jharness log <session>` shows it | MVP | P1–P2 |
 | US-3.7 | As a developer, I want the agent to read reference folders without changing them, so it can use docs and other repos safely. | Mounted folders are read-only | MVP | P1 |
+| US-3.8 | As a security-minded user, I want an optional reviewer model to flag actions that don't fit my task, so off-task or injected actions get stopped for my review. | Kev, Jev or own model; can only turn allow into ask or deny; falls back to asking when unavailable | MVP | P3 |
 
 ## Epic 4 — Teams and extensions
 
