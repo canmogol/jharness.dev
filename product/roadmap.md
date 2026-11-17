@@ -29,6 +29,7 @@ Spec: `../specs/001-p0-spike/`
 - [ ] Agent loop: stream reply, extract the JS block, run it, return result or error with line numbers
 - [ ] Isolate manager: one Engine per agent, fresh Context per run, limits, watchdog
 - [ ] `api`: readContext, readFile, writeFile, editFile, listFiles, grep, git, emit
+- [ ] `ProcessRunner` with git and `rg` (search), Java search fallback when `rg` is missing
 - [ ] `api.d.ts` and examples in the system prompt
 - [ ] Permissions: ask, accept-edits, read-only (plan), bypass; permanent approvals per project
 - [ ] Approvals inside a running JS block (watchdog pauses while waiting)

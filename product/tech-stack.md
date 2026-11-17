@@ -26,7 +26,7 @@ Last updated: 2026-11-15
 | Egress proxy | Own small HTTP forward proxy in the host (CONNECT + plain HTTP), on `127.0.0.1` with per-session credentials | Enforces `~/.jharness/network.rules` and `.jharness/network.rules`; no TLS interception |
 | JSON | Jackson tree model | No DTO binding, so little reflection config |
 | Diff | java-diff-utils | Edit previews and patches |
-| Search | Java NIO glob + regex | Using `rg` would need it added to the pinned-tool list (open item) |
+| Search | `rg` (ripgrep) through `ProcessRunner`; Java NIO glob + regex when `rg` isn't installed | Read-only; `--pre`, `--search-zip` and `--follow` blocked (D-027) |
 | MCP | MCP Java SDK, or our own client if it fails under Native Image | stdio and streamable HTTP |
 | Storage | JSONL session logs, JSON settings under `~/.jharness/` | No native database library |
 | Tests | JUnit 5, jqwik (property-based), the plugin's `nativeTest` | Security suites run on JVM and native |
@@ -56,7 +56,7 @@ Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative De
 ## Threads
 
 - Agent isolates run on platform threads, one per agent.
-- Virtual threads serve blocking host I/O: model streaming, HTTP, and git, Maven, Gradle and npm processes.
+- Virtual threads serve blocking host I/O: model streaming, HTTP, and git, Maven, Gradle, npm and `rg` processes.
 
 ## Build tools JHarness drives (v1)
 
@@ -66,6 +66,7 @@ Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative De
 | Maven (`mvn`, `./mvnw`) | Batch mode; wrapper only in trusted projects |
 | Gradle (`./gradlew`, `gradle`) | Plain console; wrapper must pin `distributionSha256Sum` |
 | npm | `--ignore-scripts` on install; `npm ci` with a lockfile |
+| rg | Search only; read-only, no network, no approval needed |
 
 ## Network
 

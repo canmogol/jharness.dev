@@ -2,7 +2,7 @@
 
 The rules every feature must follow. A feature's `plan.md` must pass the constitution check below before tasks are written. Changing an article needs a new entry in `decisions.md` that says why.
 
-Version 1.1 · Ratified 2026-11-16 · Amended 2026-11-17 (Article III: JS-only hooks, D-022; Article IV: stdio MCP servers, D-023)
+Version 1.2 · Ratified 2026-11-16 · Amended 2026-11-17 (Article III: JS-only hooks, D-022; Article IV: stdio MCP servers, D-023, and `rg`, D-027)
 
 ---
 
@@ -21,8 +21,8 @@ Every agent context runs under `SandboxPolicy.UNTRUSTED` and `HostAccess.UNTRUST
 *Source: D-003, D-004, D-022*
 
 ### IV. No shell
-Agent code cannot start processes. The host starts processes only through `ProcessRunner`: typed git, Maven, Gradle and npm operations, and stdio MCP servers from the user's own configuration. Every process gets an argv list: never `sh -c`, never a command string built by concatenation, never an executable from inside the workspace except wrappers in trusted projects.
-*Source: D-008, D-009, D-023*
+Agent code cannot start processes. The host starts processes only through `ProcessRunner`: typed git, Maven, Gradle, npm and `rg` operations, and stdio MCP servers from the user's own configuration. Every process gets an argv list: never `sh -c`, never a command string built by concatenation, never an executable from inside the workspace except wrappers in trusted projects.
+*Source: D-008, D-009, D-023, D-027*
 
 ### V. All network traffic goes through the host proxy
 Every outbound connection, from the Java `HttpClient` and from every command-line tool, goes through the host egress proxy and its rules files. No code may build an HTTP client or open a socket that skips it. Build tools run in an OS sandbox that only allows the proxy port.

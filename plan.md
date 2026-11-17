@@ -24,7 +24,7 @@ Terminal UI / headless CLI
 │              ▼                                                                           │
 │          api facade ──► Permissions ──► Host operations                                  │
 │                                          ├─ Files (workspace rw, mounted folders ro)     │
-│                                          ├─ ProcessRunner: git, Maven, Gradle, npm       │
+│                                          ├─ ProcessRunner: git, Maven, Gradle, npm, rg   │
 │                                          ├─ HTTP client                                  │
 │                                          ├─ MCP client (api.mcp; stdio via ProcessRunner)│
 │                                          └─ spawnAgent (subagent in its own isolate)     │
@@ -63,7 +63,7 @@ Maven multi-module build. Dependencies flow downward.
 | `jharness-config` | Settings layers (user, project, session), project trust, permission rules, network rules | events |
 | `jharness-security` | Permission engine, file policy | config |
 | `jharness-proxy` | Egress proxy: rules-file parser, rule matching, DNS pinning, CONNECT and plain-HTTP forwarding, per-session credentials | config, events |
-| `jharness-process` | `ProcessRunner`, typed git / Maven / Gradle / npm operations, OS sandbox launchers | security |
+| `jharness-process` | `ProcessRunner`, typed git / Maven / Gradle / npm / rg operations, OS sandbox launchers | security |
 | `jharness-sandbox` | Isolate manager, `api` facade, limits, watchdog, `api.d.ts` generation | security, process |
 | `jharness-llm` | Provider interface; ModelJars, OpenAI-compatible and Claude providers; streaming | events |
 | `jharness-agent` | Agent loop, JS block extraction, subagents, hooks, slash commands, checkpoints | sandbox, llm |

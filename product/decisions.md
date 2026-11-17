@@ -37,6 +37,7 @@ Last updated: 2026-11-17
 | D-024 | Source license: MIT | Accepted |
 | D-025 | One host egress proxy for all network traffic, configured by two simple rules files | Accepted |
 | D-026 | Product docs live in `product/`, feature specs in `specs/NNN-name/`, rules in `product/constitution.md` | Accepted |
+| D-027 | `rg` (ripgrep) is an allowed tool for `api.grep` and `api.listFiles`, with a Java fallback | Accepted |
 
 ---
 
@@ -324,6 +325,24 @@ specs/
 
 **Why.** Matches the product layer used by Agent OS (mission, roadmap, tech stack, decisions) and the per-feature spec, plan and tasks of GitHub Spec Kit, with Spec Kit's constitution for the non-negotiable rules. A folder named `spec/` for product docs would clash with per-feature `specs/`.
 
+## D-027 — `rg` for search
+
+**Decision.** `rg` (ripgrep) joins git, Maven, Gradle and npm as a tool the host may run through `ProcessRunner`. It backs `api.grep` and `api.listFiles`. When `rg` isn't installed, JHarness falls back to Java NIO glob and regex search, with the same results format.
+
+**Source.** User decision on 2026-11-17.
+
+**Why.** `rg` is much faster than a Java walk on large repos, respects `.gitignore` and is commonly installed. It only reads files and needs no network.
+
+**How it runs.**
+- Resolved to an absolute path at startup, like the other tools; never taken from the workspace.
+- Typed operation only: pattern via `-e`, paths after `--`, `--json` output parsed by the host.
+- Blocked flags: `--pre` and `--pre-glob` (they run a program on every file), `-z`/`--search-zip` (runs decompression programs), `-L`/`--follow` (symlinks could leave the workspace).
+- `RIPGREP_CONFIG_PATH` is never set (clean environment), so no config file can add flags.
+- The file policy applies: paths limited to the workspace and read-only mounted folders, and deny-list entries (`.env`, keys, `.git` internals) passed as `--glob '!…'` exclusions.
+- Read-only, so it needs no approval (D-010). Timeout and output cap as for every process. No network access in its OS sandbox.
+
+**Consequences.** Constitution Article IV lists `rg`. The command-execution test suites cover the blocked flags and deny-list exclusions.
+
 ---
 
 ## Questions and answers
@@ -359,6 +378,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q25 | Which source license? | MIT, from the repository's `LICENSE` file | | D-024 |
 | Q26 | Are hooks JS only in v1? | Yes, accepted | Keeps one execution path | D-022 |
 | Q27 | Are MCP tools reached through `api.mcp`? | Yes, accepted | Fits RunJS as the only action | D-023 |
+| Q28 | Can search use `rg`? | Yes, add it to the allowed tools | Fast search on large repos | D-027 |
 
 ---
 
@@ -366,4 +386,4 @@ Questions raised during design, the answers given, and why each mattered.
 
 | Item | Why it blocks | Blocks |
 | --- | --- | --- |
-| `rg` for search | Runs a process outside the typed-operations list; either add it to `ProcessRunner`'s pinned tools or use Java-only search | P1 |
+| Go/no-go thresholds for the P0 spike (`specs/001-p0-spike/plan.md`) | The spike can't be judged without them | P0 |
