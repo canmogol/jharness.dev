@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "claude-basics": {
+      "source": {
+        "source": "github",
+        "repo": "canmogol/claude-basics"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "p-spec@claude-basics": true
+  }
+}
