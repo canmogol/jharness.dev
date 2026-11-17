@@ -63,4 +63,4 @@ Agent loop, permissions, file `api`, egress proxy, build tools, TUI design, mode
 
 ## Open questions
 
-- Pass thresholds for go/no-go are proposed in `plan.md`; confirm them before the spike runs.
+None. Go/no-go thresholds were confirmed on 2026-11-17 (see `plan.md`).

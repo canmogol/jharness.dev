@@ -40,6 +40,7 @@ Last updated: 2026-11-17
 | D-027 | `rg` (ripgrep) is an allowed tool for `api.grep` and `api.listFiles`, with a Java fallback | Accepted |
 | D-028 | Per-operation timeouts, and a cap on the process output returned to the model | Accepted |
 | D-029 | No long-lived background processes in v1 | Accepted |
+| D-030 | P0 go/no-go thresholds; local 7B speed is a soft target | Accepted |
 
 ---
 
@@ -378,6 +379,16 @@ All defaults and maximums are configurable in the `timeouts` section of `setting
 
 **Source.** User decision on 2026-11-17.
 
+## D-030 — P0 go/no-go thresholds
+
+**Decision.** The P0 spike passes when: polyglot isolates work in the native binary on all three targets; cold start-up is under 2 s; isolate creation is under 300 ms median; ModelJars runs in the native binary at no less than 70% of its JVM speed; JLine works on macOS and Linux.
+
+Local 7B model speed is a soft target, not a gate. On a 16 GB Apple Silicon Mac: good is an 8k-token prompt in under 120 s and at least 3 tokens/s; slow (still go, flagged in the model profile) is under 240 s and at least 1.5 tokens/s. Anything slower changes the recommended local setup (7B through Ollama or llama.cpp), not the plan.
+
+**Why.** The start-up target was relaxed from 1 s to 2 s, and the 7B targets loosened, because a slightly slower local setup is acceptable while a failed gate would stall the project.
+
+**Source.** User decisions on 2026-11-17. Details in `specs/001-p0-spike/plan.md`.
+
 ---
 
 ## Questions and answers
@@ -418,11 +429,10 @@ Questions raised during design, the answers given, and why each mattered.
 | Q30 | Are 10 s CPU and 60 s wall clock enough? | No: 30 s CPU, 15-minute run wall clock, plus per-operation timeouts | A build or test run takes minutes | D-003, D-028 |
 | Q31 | Cap the output returned to the model? | Yes: last 30,000 characters plus exit code; full log in the session | Keeps build logs from filling the context | D-028 |
 | Q32 | Long-lived background processes in v1? | No, after v0.1 | Keeps sandbox and cleanup simple | D-029 |
+| Q33 | What are the P0 go/no-go thresholds? | As proposed, but cold start-up under 2 s and a looser, soft target for the local 7B model | The spike can be judged | D-030 |
 
 ---
 
 ## Open items to settle before implementation
 
-| Item | Why it blocks | Blocks |
-| --- | --- | --- |
-| Go/no-go thresholds for the P0 spike (`specs/001-p0-spike/plan.md`) | The spike can't be judged without them | P0 |
+None. P0 can start.

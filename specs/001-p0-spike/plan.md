@@ -136,16 +136,26 @@ The exact option set UNTRUSTED requires is checked against the GraalVM version u
 
 Read three lines in raw mode with editing and history; exit on Ctrl-D. Check by hand on macOS and Linux terminals.
 
-## Proposed go/no-go thresholds (confirm before running)
+## Go/no-go thresholds (confirmed 2026-11-17)
 
 | Item | Go if |
 | --- | --- |
 | Polyglot isolates in native | AC-02 and AC-03 pass on all three targets |
-| Cold start-up | Under 1 s to first output (mission target) |
+| Cold start-up | Under 2 s to first output |
 | Isolate creation | Under 300 ms median |
 | ModelJars in native | Runs, and native speed is at least 70% of JVM speed |
-| Local 7B model usable | On a 16 GB Apple Silicon Mac: 8k-token prompt processed in under 60 s, generation at least 5 tokens/s |
+| Local 7B model usable | Soft target, see below |
 | JLine | AC-10 passes on macOS and Linux |
+
+**Local 7B model (soft target).** Measured on a 16 GB Apple Silicon Mac with Qwen2.5-Coder-7B at Q4_K_M:
+
+| Result | 8k-token prompt | Generation | Outcome |
+| --- | --- | --- | --- |
+| Good | under 120 s | at least 3 tokens/s | Go: 7B is the default local model |
+| Slow | under 240 s | at least 1.5 tokens/s | Go, with the 7B model marked "slow on this hardware" in its model profile and a smaller model suggested |
+| Too slow | slower than that | | Not a no-go for the project: recommend running 7B through the OpenAI-compatible client (Ollama, llama.cpp) and keep ModelJars for smaller models |
+
+None of these results stops P1; they only decide which local setup JHarness recommends by default.
 
 A no-go on ModelJars keeps the plan intact: local models then run through the OpenAI-compatible client (Ollama, llama.cpp), recorded as a change to D-013.
 

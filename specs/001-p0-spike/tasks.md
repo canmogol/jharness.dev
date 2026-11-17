@@ -7,7 +7,7 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 ## Group 0 — Before starting
 
 - [x] T001 Decide the source license and record it in `product/decisions.md` D-024: MIT (AC-12)
-- [ ] T002 Confirm the go/no-go thresholds in `plan.md` (AC-11)
+- [x] T002 Confirm the go/no-go thresholds in `plan.md` (AC-11)
 
 ## Group 1 — Repository and build
 

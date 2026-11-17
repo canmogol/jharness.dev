@@ -58,6 +58,6 @@ Windows; long-lived background processes such as dev servers; IDE plugins; a GUI
 | --- | --- |
 | Seeded-bug benchmark solved end to end | With Claude and with the default local model |
 | Sandbox-escape and injection suites | 100% contained on Linux and macOS |
-| Start-up to prompt | Under 1 second, excluding model load |
+| Start-up to prompt | Under 2 seconds, excluding model load |
 | Install | One command on macOS and Linux |
 | Security reports | Disclosure process published from day one |
