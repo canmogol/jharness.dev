@@ -141,6 +141,8 @@
               <mainClass>${main.class}</mainClass>
               <buildArgs>
                 <buildArg>--no-fallback</buildArg>
+                <!-- Rss uses FFM on macOS; polyglot needs native access too. -->
+                <buildArg>--enable-native-access=ALL-UNNAMED,org.graalvm.truffle</buildArg>
               </buildArgs>
             </configuration>
           </plugin>

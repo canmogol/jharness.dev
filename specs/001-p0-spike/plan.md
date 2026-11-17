@@ -50,8 +50,9 @@ SandboxConfig cfg = SandboxConfig.load(configPath, overrides)   // defaults, the
 
 Engine engine = Engine.newBuilder("js")
     .option("engine.SpawnIsolate", "true")          // or .spawnIsolate(true) where available
-    .option("engine.IsolateMode", "internal")       // fixed, not configurable
-    .options(cfg.engineOptions())                   // engine.MaxIsolateMemory, engine.MemoryProtection
+    .useSystemProperties(false)                     // options come only from SandboxConfig
+    // engine.IsolateMode is experimental in polyglot 25.0; its default "internal" is checked, not set
+    .options(cfg.engineOptions())                   // engine.MaxIsolateMemory, engine.IsolateMemoryProtection
     .build();
 
 Context ctx = Context.newBuilder("js")
@@ -109,7 +110,7 @@ Rules:
 
 The exact option set UNTRUSTED requires is checked against the GraalVM version used; the builder refuses a context with a missing limit, which the probe records.
 
-- Memory protection: build a second engine with `engine.MemoryProtection=true`; record success, error or no effect.
+- Memory protection: build a second engine with `engine.MemoryProtection=true`; record success, error or no effect. Polyglot 25.0 names the option `engine.IsolateMemoryProtection` and marks it experimental; the config key keeps the plan's name, and only the probe engine allows experimental options.
 - Wall clock: a `ScheduledExecutorService` calls `ctx.close(true)` when the wall clock runs out while JS waits in `api.sleep(...)`. The probe sets a short value with `--set main.wallClock=5s` instead of waiting 15 minutes.
 - CPU time while blocked (AC-14): JS calls `api.sleep(20000)` with `sandbox.MaxCPUTime=5s`; the run must not be stopped by the CPU limit, showing that blocked time in a host callback is not counted. Then a host callback that does 10 s of busy work must trip the 5 s limit, showing that host CPU work is counted.
 - After each limit trips: close the context, build a new one on the same engine, run `api.echo` again.
@@ -121,7 +122,7 @@ The exact option set UNTRUSTED requires is checked against the GraalVM version u
 | Binary size | `ls -l` of the built executable |
 | Cold start-up | `hyperfine --warmup 0 --runs 20 './spike isolate --noop'` |
 | Isolate creation | `System.nanoTime()` around engine + first context build, 20 runs, median |
-| Memory per idle isolate | RSS before and after creating 1, 5 and 10 engines (`/proc/self/status` on Linux, `ps -o rss` on macOS) |
+| Memory per idle isolate | RSS before and after creating 1, 5 and 10 engines (`/proc/self/status` on Linux, `proc_pid_rusage` through FFM on macOS, so no child process is started) |
 
 ### Local model (ModelProbe)
 

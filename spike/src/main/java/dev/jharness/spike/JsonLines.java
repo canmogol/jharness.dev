@@ -2,9 +2,10 @@ package dev.jharness.spike;
 
 import java.io.PrintStream;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
-/** Writes flat JSON objects, one per line. Values: strings, numbers, booleans, null. */
+/** Writes JSON objects, one per line. Values: strings, numbers, booleans, null, maps, lists. */
 final class JsonLines {
 
     private final PrintStream out;
@@ -26,24 +27,44 @@ final class JsonLines {
     }
 
     void write(Map<String, ?> object) {
-        StringBuilder sb = new StringBuilder("{");
-        boolean first = true;
-        for (Map.Entry<String, ?> e : object.entrySet()) {
-            if (!first) {
-                sb.append(',');
-            }
-            first = false;
-            quote(sb, e.getKey());
-            sb.append(':');
-            Object v = e.getValue();
-            if (v == null || v instanceof Number || v instanceof Boolean) {
-                sb.append(v);
-            } else {
-                quote(sb, v.toString());
-            }
-        }
-        out.println(sb.append('}'));
+        StringBuilder sb = new StringBuilder();
+        value(sb, object);
+        out.println(sb);
         out.flush();
+    }
+
+    private static void value(StringBuilder sb, Object v) {
+        if (v == null || v instanceof Boolean) {
+            sb.append(v);
+        } else if (v instanceof Double d && (d.isNaN() || d.isInfinite())) {
+            sb.append("null");
+        } else if (v instanceof Number) {
+            sb.append(v);
+        } else if (v instanceof Map<?, ?> m) {
+            sb.append('{');
+            boolean first = true;
+            for (Map.Entry<?, ?> e : m.entrySet()) {
+                if (!first) {
+                    sb.append(',');
+                }
+                first = false;
+                quote(sb, String.valueOf(e.getKey()));
+                sb.append(':');
+                value(sb, e.getValue());
+            }
+            sb.append('}');
+        } else if (v instanceof List<?> l) {
+            sb.append('[');
+            for (int i = 0; i < l.size(); i++) {
+                if (i > 0) {
+                    sb.append(',');
+                }
+                value(sb, l.get(i));
+            }
+            sb.append(']');
+        } else {
+            quote(sb, v.toString());
+        }
     }
 
     private static void quote(StringBuilder sb, String s) {

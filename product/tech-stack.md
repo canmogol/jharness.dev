@@ -3,7 +3,7 @@
 The stack is chosen to stay Native Image friendly: few reflection-heavy libraries, and thin clients of our own where an SDK might not compile.
 Reasons for the main choices are in `decisions.md`.
 
-Last updated: 2026-11-15
+Last updated: 2026-11-18
 
 ## Core
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-15
 | Language | Java 25 (LTS) | Records, sealed types; virtual threads for host I/O |
 | Runtime and compiler | Oracle GraalVM 25.x with Native Image | GFTC license: free redistribution, not for a fee |
 | JS engine | GraalJS via `org.graalvm.polyglot:polyglot` + `js-isolate` | One platform classifier per release target |
-| Isolate mode | `engine.IsolateMode=internal` | One process |
+| Isolate mode | `engine.IsolateMode=internal` | One process; the engine default, checked at startup, not set (experimental option in polyglot 25.0, D-034) |
 | Sandbox | `SandboxPolicy.UNTRUSTED`, `HostAccess.UNTRUSTED` | Limits listed below |
 | Build | Maven + `native-maven-plugin` | No uber JAR; reachability metadata in `META-INF/native-image/` |
 
@@ -67,7 +67,7 @@ Every value below can be changed in the `sandbox` section of `settings.json`, pe
 | `sandbox.MaxASTDepth` | 100 | 100 |
 | `sandbox.MaxOutputStreamSize` | 256 KB | 256 KB |
 | `sandbox.MaxErrorStreamSize` | 256 KB | 256 KB |
-| `engine.MemoryProtection` | Linux with protection keys only | Same |
+| `engine.MemoryProtection` (`engine.IsolateMemoryProtection` in polyglot 25.0, experimental) | Linux with protection keys only (D-018, pending P0 results) | Same |
 
 ## Operation timeouts and output (D-028)
 

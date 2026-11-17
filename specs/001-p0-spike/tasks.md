@@ -18,10 +18,10 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 2 — Isolates
 
-- [ ] T007 Write `SpikeApi` with `@HostAccess.Export echo(String)` and `sleep(long)`, plus reachability metadata (AC-02)
-- [ ] T028 Write `SandboxConfig`: built-in defaults in `sandbox-defaults.json` (output and error caps 256KB), `--config` file, `--set` overrides, validation of keys, units and fixed settings (AC-13)
-- [ ] T008 Write `IsolateProbe`: UNTRUSTED context built from `SandboxConfig`, call `api.echo` from JS, print the result and the effective limits (AC-02, AC-13)
-- [ ] T009 [P] Add isolate creation timing, 20 runs, median (AC-04)
+- [x] T007 Write `SpikeApi` with `@HostAccess.Export echo(String)` and `sleep(long)`, plus reachability metadata (AC-02)
+- [x] T028 Write `SandboxConfig`: built-in defaults in `sandbox-defaults.json` (output and error caps 256KB), `--config` file, `--set` overrides, validation of keys, units and fixed settings (AC-13)
+- [x] T008 Write `IsolateProbe`: UNTRUSTED context built from `SandboxConfig`, call `api.echo` from JS, print the result and the effective limits (AC-02, AC-13)
+- [x] T009 [P] Add isolate creation timing, 20 runs, median (AC-04)
 - [ ] T010 [P] Add RSS measurement for 1, 5 and 10 idle engines on Linux and macOS (AC-04)
 - [ ] T011 [P] Measure binary size and cold start-up with `hyperfine` (AC-04)
 - [ ] T012 [P] Try `engine.MemoryProtection=true` on Linux; record success, error or no effect per machine (AC-05)

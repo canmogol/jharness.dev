@@ -1,28 +1,29 @@
 package dev.jharness.spike;
 
 import java.io.PrintStream;
-import java.util.Arrays;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Spike entry point: {@code spike <isolate|limits|model|jline|all> [args...]}.
+ * Spike entry point: {@code spike <isolate|limits|model|jline|all> [--config FILE] [--set P.KEY=VALUE]... [args...]}.
  *
- * <p>Every result is one JSON object per line on stdout, so CI can collect them. Probes are
- * filled in by later tasks (Groups 2–5); until then they report {@code "status":"pending"}.
+ * <p>Every result is one JSON object per line on stdout, so CI can collect them. Probes not yet
+ * written report {@code "status":"pending"}. A bad config stops start-up with exit code 2 (AC-13).
  */
 public final class Main {
 
     /** One probe: takes its own arguments and writes JSON lines. Returns true on success. */
     interface Probe {
-        boolean run(List<String> args, JsonLines out) throws Exception;
+        boolean run(List<String> args, SandboxConfig config, JsonLines out) throws Exception;
     }
 
     private static final Map<String, Probe> PROBES = new LinkedHashMap<>();
 
     static {
-        PROBES.put("isolate", pending("isolate", "AC-02, AC-04, AC-05"));
+        PROBES.put("isolate", new IsolateProbe());
         PROBES.put("limits", pending("limits", "AC-03, AC-13, AC-14"));
         PROBES.put("model", pending("model", "AC-06, AC-07, AC-08"));
         PROBES.put("jline", pending("jline", "AC-10"));
@@ -37,18 +38,45 @@ public final class Main {
     static int run(String[] argv, PrintStream stdout, PrintStream stderr) {
         JsonLines out = new JsonLines(stdout);
         if (argv.length == 0 || argv[0].equals("-h") || argv[0].equals("--help")) {
-            stderr.println("usage: spike <" + String.join("|", PROBES.keySet()) + "|all> [args...]");
+            stderr.println("usage: spike <" + String.join("|", PROBES.keySet())
+                    + "|all> [--config FILE] [--set PROFILE.KEY=VALUE]... [args...]");
             return argv.length == 0 ? 2 : 0;
         }
         String command = argv[0];
         // Output is always JSON lines; --json is accepted so CI scripts can say so explicitly.
-        List<String> args = Arrays.stream(argv, 1, argv.length).filter(a -> !a.equals("--json")).toList();
+        List<String> args = new ArrayList<>();
+        Path configFile = null;
+        List<String> overrides = new ArrayList<>();
+        for (int i = 1; i < argv.length; i++) {
+            switch (argv[i]) {
+                case "--json" -> { }
+                case "--config", "--set" -> {
+                    if (i + 1 >= argv.length) {
+                        out.write(JsonLines.obj("probe", "main", "status", "error", "error", argv[i] + " needs a value"));
+                        return 2;
+                    }
+                    if (argv[i].equals("--config")) {
+                        configFile = Path.of(argv[++i]);
+                    } else {
+                        overrides.add(argv[++i]);
+                    }
+                }
+                default -> args.add(argv[i]);
+            }
+        }
 
         out.write(environment());
+        SandboxConfig config;
+        try {
+            config = SandboxConfig.load(configFile, overrides);
+        } catch (SandboxConfig.ConfigException e) {
+            out.write(JsonLines.obj("probe", "config", "status", "error", "error", e.getMessage()));
+            return 2;
+        }
         if (command.equals("all")) {
             boolean ok = true;
             for (Map.Entry<String, Probe> e : PROBES.entrySet()) {
-                ok &= runProbe(e.getKey(), e.getValue(), args, out);
+                ok &= runProbe(e.getKey(), e.getValue(), args, config, out);
             }
             return ok ? 0 : 1;
         }
@@ -57,12 +85,12 @@ public final class Main {
             out.write(JsonLines.obj("probe", "main", "status", "error", "error", "unknown command: " + command));
             return 2;
         }
-        return runProbe(command, probe, args, out) ? 0 : 1;
+        return runProbe(command, probe, args, config, out) ? 0 : 1;
     }
 
-    private static boolean runProbe(String name, Probe probe, List<String> args, JsonLines out) {
+    private static boolean runProbe(String name, Probe probe, List<String> args, SandboxConfig config, JsonLines out) {
         try {
-            return probe.run(args, out);
+            return probe.run(args, config, out);
         } catch (Exception e) {
             out.write(JsonLines.obj("probe", name, "status", "error", "error", String.valueOf(e)));
             return false;
@@ -70,7 +98,7 @@ public final class Main {
     }
 
     private static Probe pending(String name, String criteria) {
-        return (args, out) -> {
+        return (args, config, out) -> {
             out.write(JsonLines.obj("probe", name, "status", "pending", "criteria", criteria));
             return true;
         };

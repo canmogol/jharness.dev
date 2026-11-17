@@ -3,7 +3,7 @@
 Decision log for JHarness. Each entry records what was decided, why, and what was rejected.
 Status values: **Accepted** (settled), **Proposed** (recommended, not yet confirmed), **Open** (needs an answer before the related work starts).
 
-Last updated: 2026-11-17
+Last updated: 2026-11-18
 
 ---
 
@@ -44,6 +44,7 @@ Last updated: 2026-11-17
 | D-031 | Optional action reviewer (Kev, Jev or own model) that can only tighten decisions | Accepted |
 | D-032 | Named model profiles in `settings.json`; switch per session or per agent | Accepted |
 | D-033 | Offline mode | Accepted |
+| D-034 | Internal isolate mode comes from the engine default, checked at startup; no experimental options | Accepted |
 
 ---
 
@@ -203,7 +204,7 @@ Last updated: 2026-11-17
 
 ## D-018 — Memory protection keys
 
-**Decision.** Turn on `engine.MemoryProtection=true` on Linux when the CPU supports protection keys, detected at startup. Not available on macOS or Windows.
+**Decision.** Turn on `engine.MemoryProtection=true` (named `engine.IsolateMemoryProtection` in polyglot 25.0, where it is experimental; whether to allow that is settled with the P0 results) on Linux when the CPU supports protection keys, detected at startup. Not available on macOS or Windows.
 
 **Why.** Extra defense in depth where possible; the isolate and limits remain the main boundary.
 
@@ -465,6 +466,14 @@ The reviewer endpoint is allowed through the proxy automatically, like the model
 
 **Source.** User question and acceptance on 2026-11-17. Lands in P2, with the build tools and the proxy.
 
+## D-034 — Isolate mode from the engine default
+
+**Decision.** Agent engines don't set `engine.IsolateMode`. In polyglot 25.0 it is an experimental option, and its default is `internal`. Engines are built with `useSystemProperties(false)`, so no `polyglot.*` system property can change it, and start-up fails unless the default is `internal`. Agent engines never call `allowExperimentalOptions(true)`.
+
+**Why.** Setting the option needs `allowExperimentalOptions(true)`, which unlocks every experimental engine option. Relying on the checked default keeps D-002 (one process) without widening what the engine accepts.
+
+**Source.** User answer while specifying 001-p0-spike, 2026-11-18.
+
 ---
 
 ## Questions and answers
@@ -510,6 +519,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q35 | How does the user choose a local model or Claude? | Named model profiles in `settings.json`; `--model` and `/model` | One switch for all providers | D-032 |
 | Q36 | How is Kev or Jev configured? | `reviewer` section: provider, URL, key, confidence thresholds, timeout, fail to ask | | D-031 |
 | Q37 | Can a Java developer work offline with a local model and Kev? | Yes, with everything cached; an explicit offline mode | Works without a connection | D-033 |
+| Q38 | `engine.IsolateMode` is experimental in polyglot 25.0: set it or rely on the default? | Rely on the default `internal`, checked at startup; no experimental options | Keeps one process without unlocking experimental options | D-034 |
 
 ---
 

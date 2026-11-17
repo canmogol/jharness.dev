@@ -56,20 +56,31 @@ jobs:
       - name: Native build
         run: mvn -B -ntp -Pnative package -DskipTests
 
+      - name: Install hyperfine
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then brew install hyperfine; else sudo apt-get install -y hyperfine; fi
+          hyperfine --version
+
+      # Before anything else runs the binary, so the first run is a cold start (AC-04, T011).
+      - name: Binary size and start-up
+        run: |
+          mkdir -p results
+          size=$(wc -c < target/spike | tr -d ' ')
+          printf '{"probe":"binary","target":"%s","bytes":%s}\n' "${{ matrix.target }}" "$size" \
+            | tee results/binary.jsonl
+          hyperfine -N --warmup 0 --runs 20 --export-json results/startup.json \
+            './target/spike isolate --noop' './target/spike isolate --echo'
+
       - name: Run probes
         env:
           RUN_MODEL: ${{ inputs.model && 'true' || 'false' }}
         run: |
-          mkdir -p results
           # jline needs a terminal and is checked by hand (AC-10).
           probes="isolate limits"
           if [ "$RUN_MODEL" = "true" ]; then probes="$probes model"; fi
           for probe in $probes; do
             ./target/spike "$probe" --json | tee -a results/probes.jsonl
           done
-          size=$(wc -c < target/spike | tr -d ' ')
-          printf '{"probe":"binary","target":"%s","bytes":%s}\n' "${{ matrix.target }}" "$size" \
-            | tee results/binary.jsonl
 
       - uses: actions/upload-artifact@v7.0.2
         with:
