@@ -3,7 +3,7 @@
 Decision log for JHarness. Each entry records what was decided, why, and what was rejected.
 Status values: **Accepted** (settled), **Proposed** (recommended, not yet confirmed), **Open** (needs an answer before the related work starts).
 
-Last updated: 2026-11-15
+Last updated: 2026-11-17
 
 ---
 
