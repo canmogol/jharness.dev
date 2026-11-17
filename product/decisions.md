@@ -13,7 +13,7 @@ Last updated: 2026-11-17
 | --- | --- | --- |
 | D-001 | Ship one native executable built with Oracle GraalVM Native Image | Accepted |
 | D-002 | Run agent JavaScript in GraalJS polyglot isolates, inside the same process | Accepted |
-| D-003 | Use the `UNTRUSTED` sandbox policy with hard CPU and memory limits | Accepted |
+| D-003 | Use the `UNTRUSTED` sandbox policy with hard CPU and memory limits; limit values are configurable | Accepted |
 | D-004 | One `Engine` (one isolate) per agent; a fresh `Context` per run | Accepted |
 | D-005 | Only strings and JSON cross the isolate boundary | Accepted |
 | D-006 | Events are stringified JSON with a host-stamped envelope | Accepted |
@@ -65,7 +65,9 @@ Last updated: 2026-11-17
 
 **Why.** Agent-written code must be treated as untrusted: even a trusted model can be steered by prompt injection from files, web pages or tool output. UNTRUSTED refuses to build a context when a required limit is missing, so limits can't be forgotten.
 
-**Starting limits (tune in P0).** Main agent: 512 MB isolate memory, 256 MB soft heap, 10 s CPU and 60 s wall clock per run. Subagents: half of that.
+**Default limits (tune in P0).** Main agent: 512 MB isolate memory, 256 MB soft heap, 10 s CPU, 60 s wall clock per run, 256 KB output and 256 KB error stream caps. Subagents: half the memory, CPU and wall clock; the same stream caps.
+
+**Configurable.** Every limit value can be changed in the `sandbox` section of `~/.jharness/settings.json` (and of a trusted project's `.jharness/settings.json`, D-011), per profile (`main`, `subagent`), without rebuilding. Fixed: the UNTRUSTED policy and host access, `engine.IsolateMode=internal`, one thread. A limit can be changed but never removed; unknown keys and bad values stop start-up. Source: user request, 2026-11-17.
 
 **Consequences.** When a limit trips, the context is cancelled and cannot be reused. The host emits `sandbox.limit_exceeded`, returns an error to the model and creates a fresh context.
 
@@ -379,6 +381,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q26 | Are hooks JS only in v1? | Yes, accepted | Keeps one execution path | D-022 |
 | Q27 | Are MCP tools reached through `api.mcp`? | Yes, accepted | Fits RunJS as the only action | D-023 |
 | Q28 | Can search use `rg`? | Yes, add it to the allowed tools | Fast search on large repos | D-027 |
+| Q29 | Should sandbox and engine limits be configurable? | Yes, with defaults; output and error stream caps default to 256KB | Users can tune limits without rebuilding | D-003 |
 
 ---
 

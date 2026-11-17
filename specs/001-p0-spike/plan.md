@@ -12,12 +12,15 @@ spike/
   src/main/java/dev/jharness/spike/
     Main.java                   picocli-free dispatcher: isolate | limits | model | jline | all
     SpikeApi.java               @HostAccess.Export echo(String), sleep(long)
+    SandboxConfig.java          built-in defaults + config file + --set overrides (AC-13)
     IsolateProbe.java           AC-02, AC-04, AC-05
     LimitsProbe.java            AC-03
     ModelProbe.java             AC-06, AC-07, AC-08
     JLineProbe.java             AC-10
-  src/main/resources/META-INF/native-image/dev.jharness/spike/
-    reachability-metadata.json  SpikeApi methods
+  src/main/resources/
+    sandbox-defaults.json       built-in default values (below)
+    META-INF/native-image/dev.jharness/spike/
+      reachability-metadata.json  SpikeApi methods
 docs/p0-results.md              results template (below)
 ```
 
@@ -27,7 +30,7 @@ docs/p0-results.md              results template (below)
 | --- | --- | --- |
 | I One binary | One native executable; no helper processes | Yes |
 | II Host owns side effects | `SpikeApi` is the only exported surface | Yes |
-| III Untrusted | Contexts use `SandboxPolicy.UNTRUSTED` with all required limits | Yes |
+| III Untrusted | Contexts use `SandboxPolicy.UNTRUSTED` with all required limits. Limit values are configurable; the policy, isolate mode and thread count are not, and no limit can be removed | Yes |
 | IV No shell | No processes started | Yes |
 | V Proxy | Not in scope; the spike only downloads model weights from the host. Noted as an exception for the spike only | Exception (spike) |
 | VI Strings | `echo` takes and returns `String` | Yes |
@@ -42,27 +45,67 @@ docs/p0-results.md              results template (below)
 ### Isolate context (IsolateProbe, LimitsProbe)
 
 ```java
+SandboxConfig cfg = SandboxConfig.load(configPath, overrides)   // defaults, then file, then --set
+                                 .profile("main");               // or "subagent"
+
 Engine engine = Engine.newBuilder("js")
     .option("engine.SpawnIsolate", "true")          // or .spawnIsolate(true) where available
-    .option("engine.IsolateMode", "internal")
-    .option("engine.MaxIsolateMemory", "512MB")
+    .option("engine.IsolateMode", "internal")       // fixed, not configurable
+    .options(cfg.engineOptions())                   // engine.MaxIsolateMemory, engine.MemoryProtection
     .build();
 
 Context ctx = Context.newBuilder("js")
     .engine(engine)
-    .sandbox(SandboxPolicy.UNTRUSTED)
-    .allowHostAccess(HostAccess.UNTRUSTED)
+    .sandbox(SandboxPolicy.UNTRUSTED)               // fixed
+    .allowHostAccess(HostAccess.UNTRUSTED)          // fixed
     .in(InputStream.nullInputStream())
     .out(out).err(err)
-    .option("sandbox.MaxHeapMemory", "256MB")
-    .option("sandbox.MaxCPUTime", "10s")
-    .option("sandbox.MaxThreads", "1")
-    .option("sandbox.MaxASTDepth", "100")
-    .option("sandbox.MaxOutputStreamSize", "64KB")
-    .option("sandbox.MaxErrorStreamSize", "64KB")
+    .option("sandbox.MaxThreads", "1")              // fixed
+    .options(cfg.contextOptions())                  // every other sandbox.* limit
     .build();
 ctx.getBindings("js").putMember("api", new SpikeApi());
+// cfg.wallClock() drives the watchdog
 ```
+
+### Configurable options (SandboxConfig)
+
+Every engine and sandbox limit has a built-in default and can be changed without rebuilding. Values are resolved in this order, later wins:
+
+1. Built-in defaults (`sandbox-defaults.json`, inside the binary)
+2. Config file: `--config <file>` in the spike; `~/.jharness/settings.json` and, for trusted projects, `.jharness/settings.json` in the product (D-011)
+3. Command-line overrides: `--set main.sandbox.MaxCPUTime=5s`
+
+Defaults:
+
+| Option | `main` | `subagent` |
+| --- | --- | --- |
+| `engine.MaxIsolateMemory` | 512MB | 256MB |
+| `engine.MemoryProtection` | auto (on where supported, Linux) | auto |
+| `sandbox.MaxHeapMemory` | 256MB | 128MB |
+| `sandbox.MaxCPUTime` | 10s | 5s |
+| `sandbox.MaxASTDepth` | 100 | 100 |
+| `sandbox.MaxOutputStreamSize` | 256KB | 256KB |
+| `sandbox.MaxErrorStreamSize` | 256KB | 256KB |
+| `wallClock` (watchdog) | 60s | 30s |
+
+Config shape (same in the spike file and in `settings.json`):
+
+```json
+{
+  "sandbox": {
+    "main":     { "sandbox.MaxCPUTime": "20s", "sandbox.MaxOutputStreamSize": "512KB" },
+    "subagent": { "engine.MaxIsolateMemory": "384MB" }
+  }
+}
+```
+
+Rules:
+- Only the keys in the table are accepted; an unknown key or a bad value (wrong unit, zero, negative) stops start-up with a clear error.
+- Not configurable: `SandboxPolicy.UNTRUSTED`, `HostAccess.UNTRUSTED`, `engine.IsolateMode=internal`, `sandbox.MaxThreads=1`. A limit can be changed but never removed.
+- `sandbox.MaxHeapMemory` must stay below `engine.MaxIsolateMemory`.
+- The effective values are printed with every probe result (and, in the product, emitted in `session.started`).
+
+### Probe notes
 
 The exact option set UNTRUSTED requires is checked against the GraalVM version used; the builder refuses a context with a missing limit, which the probe records.
 
@@ -114,6 +157,7 @@ A no-go on ModelJars keeps the plan intact: local models then run through the Op
 | Isolate creation (ms, median) | | | |
 | RSS per idle isolate (MB) | | | |
 | Limits AC-03 (pass/fail) | | | |
+| Config overrides AC-13 (pass/fail) | | | |
 | Memory protection | | | n/a |
 | Model prompt speed, native / JVM (tok/s) | | | |
 | Model generation speed, native / JVM (tok/s) | | | |

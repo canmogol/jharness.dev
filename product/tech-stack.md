@@ -41,7 +41,9 @@ Last updated: 2026-11-15
 
 Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative DeepSeek-Coder-V2-Lite-Instruct.
 
-## Sandbox limits (starting values, tune in P0)
+## Sandbox limits (defaults, tune in P0)
+
+Every value below can be changed in the `sandbox` section of `settings.json`, per profile (D-003). The policy, isolate mode and thread count are fixed.
 
 | Option | Main agent | Subagent |
 | --- | --- | --- |
@@ -50,7 +52,9 @@ Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative De
 | `sandbox.MaxCPUTime` per run | 10 s | 5 s |
 | Wall clock per run (watchdog) | 60 s | 30 s |
 | `sandbox.MaxThreads` | 1 | 1 |
-| `sandbox.MaxASTDepth`, output and error caps | Set | Set |
+| `sandbox.MaxASTDepth` | 100 | 100 |
+| `sandbox.MaxOutputStreamSize` | 256 KB | 256 KB |
+| `sandbox.MaxErrorStreamSize` | 256 KB | 256 KB |
 | `engine.MemoryProtection` | Linux with protection keys only | Same |
 
 ## Threads

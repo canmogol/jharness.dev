@@ -19,7 +19,7 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 ## Group 2 — Isolates
 
 - [ ] T007 Write `SpikeApi` with `@HostAccess.Export echo(String)` and `sleep(long)`, plus reachability metadata (AC-02)
-- [ ] T008 Write `IsolateProbe`: UNTRUSTED context, call `api.echo` from JS, print the result (AC-02)
+- [ ] T008 Write `IsolateProbe`: UNTRUSTED context built from `SandboxConfig`, call `api.echo` from JS, print the result and the effective limits (AC-02, AC-13)
 - [ ] T009 [P] Add isolate creation timing, 20 runs, median (AC-04)
 - [ ] T010 [P] Add RSS measurement for 1, 5 and 10 idle engines on Linux and macOS (AC-04)
 - [ ] T011 [P] Measure binary size and cold start-up with `hyperfine` (AC-04)
@@ -31,6 +31,8 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 - [ ] T014 [P] Memory limit with a large allocation (AC-03)
 - [ ] T015 [P] Wall-clock watchdog closing a context blocked in `api.sleep` (AC-03)
 - [ ] T016 After each limit trips, build a fresh context on the same engine and run `api.echo` again (AC-03)
+- [ ] T028 Write `SandboxConfig`: built-in defaults in `sandbox-defaults.json` (output and error caps 256KB), `--config` file, `--set` overrides, validation of keys, units and fixed settings (AC-13)
+- [ ] T029 Show that overrides take effect: lower `sandbox.MaxCPUTime` stops a loop sooner; a larger output cap lets more output through; a bad key fails start-up (AC-13)
 
 ## Group 4 — Local model
 
@@ -68,3 +70,4 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 | AC-10 | T024 |
 | AC-11 | T002, T025, T026, T027 |
 | AC-12 | T001, T003, T006 |
+| AC-13 | T028, T029 |

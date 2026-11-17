@@ -2,7 +2,7 @@
 
 The rules every feature must follow. A feature's `plan.md` must pass the constitution check below before tasks are written. Changing an article needs a new entry in `decisions.md` that says why.
 
-Version 1.2 · Ratified 2026-11-16 · Amended 2026-11-17 (Article III: JS-only hooks, D-022; Article IV: stdio MCP servers, D-023, and `rg`, D-027)
+Version 1.3 · Ratified 2026-11-16 · Amended 2026-11-17 (Article III: JS-only hooks, D-022, and configurable limit values, D-003; Article IV: stdio MCP servers, D-023, and `rg`, D-027)
 
 ---
 
@@ -17,7 +17,7 @@ Files, network, processes, model calls and secrets are handled only by Java host
 *Source: D-005, D-007*
 
 ### III. Agent code is untrusted
-Every agent context runs under `SandboxPolicy.UNTRUSTED` and `HostAccess.UNTRUSTED`, with hard memory and CPU limits, one thread and a wall-clock watchdog. One `Engine` per agent; a fresh `Context` per run. Hooks are JS only and run under the same rules. No feature may weaken these settings.
+Every agent context runs under `SandboxPolicy.UNTRUSTED` and `HostAccess.UNTRUSTED`, with hard memory and CPU limits, one thread and a wall-clock watchdog. One `Engine` per agent; a fresh `Context` per run. Hooks are JS only and run under the same rules. Users may change limit values through settings; no feature or setting may remove a limit, change the policy or isolate mode, or allow more than one thread.
 *Source: D-003, D-004, D-022*
 
 ### IV. No shell
