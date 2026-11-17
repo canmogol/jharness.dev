@@ -24,7 +24,7 @@ public final class Main {
 
     static {
         PROBES.put("isolate", new IsolateProbe());
-        PROBES.put("limits", pending("limits", "AC-03, AC-13, AC-14"));
+        PROBES.put("limits", new LimitsProbe());
         PROBES.put("model", pending("model", "AC-06, AC-07, AC-08"));
         PROBES.put("jline", pending("jline", "AC-10"));
     }

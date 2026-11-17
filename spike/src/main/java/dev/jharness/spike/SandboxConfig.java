@@ -110,9 +110,20 @@ final class SandboxConfig {
     }
 
     private final Map<String, Map<String, String>> profiles;
+    private final Path configFile;
+    private final List<String> overrides;
 
-    private SandboxConfig(Map<String, Map<String, String>> profiles) {
+    private SandboxConfig(Map<String, Map<String, String>> profiles, Path configFile, List<String> overrides) {
         this.profiles = profiles;
+        this.configFile = configFile;
+        this.overrides = List.copyOf(overrides);
+    }
+
+    /** The same sources plus more {@code --set} values, applied last; used by probes that compare settings. */
+    SandboxConfig with(String... moreOverrides) throws ConfigException {
+        List<String> all = new java.util.ArrayList<>(overrides);
+        all.addAll(List.of(moreOverrides));
+        return load(configFile, all);
     }
 
     /** Built-in defaults only. */
@@ -145,7 +156,7 @@ final class SandboxConfig {
         for (Map.Entry<String, Map<String, String>> e : profiles.entrySet()) {
             checkComplete(e.getKey(), e.getValue());
         }
-        return new SandboxConfig(profiles);
+        return new SandboxConfig(profiles, configFile, overrides);
     }
 
     Profile profile(String name) {

@@ -18,4 +18,17 @@ public final class SpikeApi {
     public void sleep(long millis) throws InterruptedException {
         Thread.sleep(millis);
     }
+
+    /** Burns host CPU inside a host call; used by the CPU-time probe (AC-14). */
+    @HostAccess.Export
+    public void busy(long millis) {
+        long end = System.nanoTime() + millis * 1_000_000L;
+        long x = 0;
+        while (System.nanoTime() < end) {
+            x = x * 31 + 7;
+        }
+        sink = x;
+    }
+
+    private volatile long sink;
 }

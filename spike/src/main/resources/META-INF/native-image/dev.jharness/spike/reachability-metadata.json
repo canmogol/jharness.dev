@@ -4,7 +4,8 @@
       "type": "dev.jharness.spike.SpikeApi",
       "methods": [
         { "name": "echo", "parameterTypes": ["java.lang.String"] },
-        { "name": "sleep", "parameterTypes": ["long"] }
+        { "name": "sleep", "parameterTypes": ["long"] },
+        { "name": "busy", "parameterTypes": ["long"] }
       ]
     }
   ],

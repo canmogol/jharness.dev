@@ -22,18 +22,18 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 - [x] T028 Write `SandboxConfig`: built-in defaults in `sandbox-defaults.json` (output and error caps 256KB), `--config` file, `--set` overrides, validation of keys, units and fixed settings (AC-13)
 - [x] T008 Write `IsolateProbe`: UNTRUSTED context built from `SandboxConfig`, call `api.echo` from JS, print the result and the effective limits (AC-02, AC-13)
 - [x] T009 [P] Add isolate creation timing, 20 runs, median (AC-04)
-- [ ] T010 [P] Add RSS measurement for 1, 5 and 10 idle engines on Linux and macOS (AC-04)
-- [ ] T011 [P] Measure binary size and cold start-up with `hyperfine` (AC-04)
-- [ ] T012 [P] Try `engine.MemoryProtection=true` on Linux; record success, error or no effect per machine (AC-05)
+- [x] T010 [P] Add RSS measurement for 1, 5 and 10 idle engines on Linux and macOS (AC-04)
+- [x] T011 [P] Measure binary size and cold start-up with `hyperfine` (AC-04)
+- [x] T012 [P] Try `engine.MemoryProtection=true` on Linux; record success, error or no effect per machine (AC-05)
 
 ## Group 3 — Limits
 
-- [ ] T013 Write `LimitsProbe`: CPU limit with `while(true){}` (AC-03)
-- [ ] T014 [P] Memory limit with a large allocation (AC-03)
-- [ ] T015 [P] Wall-clock watchdog closing a context blocked in `api.sleep`, using a short `--set main.wallClock` value (AC-03)
-- [ ] T030 [P] Check that blocked time in a host callback does not count as CPU time and host CPU work does (AC-14)
-- [ ] T016 After each limit trips, build a fresh context on the same engine and run `api.echo` again (AC-03)
-- [ ] T029 Show that overrides take effect: lower `sandbox.MaxCPUTime` stops a loop sooner; a larger output cap lets more output through; a bad key fails start-up (AC-13)
+- [x] T013 Write `LimitsProbe`: CPU limit with `while(true){}` (AC-03)
+- [x] T014 [P] Memory limit with a large allocation (AC-03)
+- [x] T015 [P] Wall-clock watchdog closing a context blocked in `api.sleep`, using a short `--set main.wallClock` value (AC-03)
+- [x] T030 [P] Check that blocked time in a host callback does not count as CPU time and host CPU work does (AC-14)
+- [x] T016 After each limit trips, build a fresh context on the same engine and run `api.echo` again (AC-03)
+- [x] T029 Show that overrides take effect: lower `sandbox.MaxCPUTime` stops a loop sooner; a larger output cap lets more output through; a bad key fails start-up (AC-13)
 
 ## Group 4 — Local model
 
