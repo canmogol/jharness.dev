@@ -33,7 +33,7 @@ jobs:
           - target: linux-aarch64
             runner: ubuntu-24.04-arm
           - target: macos-aarch64
-            runner: macos-15
+            runner: macos-26
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     defaults:
