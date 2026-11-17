@@ -50,7 +50,7 @@ Interactive TUI and headless mode; RunJS with file, git, Maven, Gradle, npm and 
 
 ## Not in v0.1
 
-Windows; IDE plugins; a GUI; a multi-user server; remote or cloud execution; isolate languages other than JS; build tools beyond git, Maven, Gradle and npm; extension installs from a registry.
+Windows; long-lived background processes such as dev servers; IDE plugins; a GUI; a multi-user server; remote or cloud execution; isolate languages other than JS; build tools beyond git, Maven, Gradle and npm; extension installs from a registry.
 
 ## Success measures (proposed, to confirm)
 

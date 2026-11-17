@@ -38,6 +38,8 @@ Last updated: 2026-11-17
 | D-025 | One host egress proxy for all network traffic, configured by two simple rules files | Accepted |
 | D-026 | Product docs live in `product/`, feature specs in `specs/NNN-name/`, rules in `product/constitution.md` | Accepted |
 | D-027 | `rg` (ripgrep) is an allowed tool for `api.grep` and `api.listFiles`, with a Java fallback | Accepted |
+| D-028 | Per-operation timeouts, and a cap on the process output returned to the model | Accepted |
+| D-029 | No long-lived background processes in v1 | Accepted |
 
 ---
 
@@ -65,7 +67,11 @@ Last updated: 2026-11-17
 
 **Why.** Agent-written code must be treated as untrusted: even a trusted model can be steered by prompt injection from files, web pages or tool output. UNTRUSTED refuses to build a context when a required limit is missing, so limits can't be forgotten.
 
-**Default limits (tune in P0).** Main agent: 512 MB isolate memory, 256 MB soft heap, 10 s CPU, 60 s wall clock per run, 256 KB output and 256 KB error stream caps. Subagents: half the memory, CPU and wall clock; the same stream caps.
+**Default limits (tune in P0).** Main agent: 512 MB isolate memory, 256 MB soft heap, 30 s CPU and a 15-minute wall clock per run, 256 KB output and 256 KB error stream caps. Subagents: half the memory; the same time limits and stream caps.
+
+**Wall clock.** The run's wall clock does not count time spent waiting for a user approval or for a subagent to finish. Individual host operations inside a run have their own timeouts (D-028).
+
+**CPU time** only guards against runaway JS. GraalVM counts CPU time spent in host callbacks, but a thread blocked waiting for a build uses no CPU; P0 confirms this (spec 001, AC-14). Source for the 30 s and 15 min values: user, 2026-11-17.
 
 **Configurable.** Every limit value can be changed in the `sandbox` section of `~/.jharness/settings.json` (and of a trusted project's `.jharness/settings.json`, D-011), per profile (`main`, `subagent`), without rebuilding. Fixed: the UNTRUSTED policy and host access, `engine.IsolateMode=internal`, one thread. A limit can be changed but never removed; unknown keys and bad values stop start-up. Source: user request, 2026-11-17.
 
@@ -345,6 +351,33 @@ specs/
 
 **Consequences.** Constitution Article IV lists `rg`. The command-execution test suites cover the blocked flags and deny-list exclusions.
 
+## D-028 — Per-operation timeouts and output cap
+
+**Decision.** Each host operation has its own timeout, separate from the run's CPU and wall-clock limits (D-003). The model may ask for a longer timeout on a single call with `timeoutMs`, up to the maximum.
+
+| Operation | Default | Maximum the model can request |
+| --- | --- | --- |
+| git, Maven, Gradle, npm | 2 min | 10 min |
+| `api.http` | 30 s | 2 min |
+| `api.mcp` | 60 s | 10 min |
+| `rg` | 60 s | 60 s |
+
+All defaults and maximums are configurable in the `timeouts` section of `settings.json`. On timeout the whole process tree is killed and the call returns an error with the output so far. Esc cancels everything at once.
+
+**Output to the model.** A process result returns the exit code and the last 30,000 characters of combined output (configurable, up to 150,000). The full output is kept in the session log, so nothing is lost and the model can ask for a specific part.
+
+**Why.** A single `mvn test` can take minutes, which a run-level watchdog would kill. These values match Claude Code's Bash tool: 2 minutes by default, up to 10 minutes on request, and 30,000 characters of output returned. Large build logs would otherwise fill the model's context.
+
+**Source.** Proposal accepted by the user on 2026-11-17.
+
+## D-029 — No long-lived background processes in v1
+
+**Decision.** Every process the host starts must finish within its timeout. Dev servers, watch modes and other long-lived background processes are not supported in v1.
+
+**Why.** Background processes complicate the OS sandbox, cleanup on cancel and session resume. Revisit after v0.1.
+
+**Source.** User decision on 2026-11-17.
+
 ---
 
 ## Questions and answers
@@ -382,6 +415,9 @@ Questions raised during design, the answers given, and why each mattered.
 | Q27 | Are MCP tools reached through `api.mcp`? | Yes, accepted | Fits RunJS as the only action | D-023 |
 | Q28 | Can search use `rg`? | Yes, add it to the allowed tools | Fast search on large repos | D-027 |
 | Q29 | Should sandbox and engine limits be configurable? | Yes, with defaults; output and error stream caps default to 256KB | Users can tune limits without rebuilding | D-003 |
+| Q30 | Are 10 s CPU and 60 s wall clock enough? | No: 30 s CPU, 15-minute run wall clock, plus per-operation timeouts | A build or test run takes minutes | D-003, D-028 |
+| Q31 | Cap the output returned to the model? | Yes: last 30,000 characters plus exit code; full log in the session | Keeps build logs from filling the context | D-028 |
+| Q32 | Long-lived background processes in v1? | No, after v0.1 | Keeps sandbox and cleanup simple | D-029 |
 
 ---
 

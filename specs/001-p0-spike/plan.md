@@ -82,11 +82,11 @@ Defaults:
 | `engine.MaxIsolateMemory` | 512MB | 256MB |
 | `engine.MemoryProtection` | auto (on where supported, Linux) | auto |
 | `sandbox.MaxHeapMemory` | 256MB | 128MB |
-| `sandbox.MaxCPUTime` | 10s | 5s |
+| `sandbox.MaxCPUTime` | 30s | 30s |
 | `sandbox.MaxASTDepth` | 100 | 100 |
 | `sandbox.MaxOutputStreamSize` | 256KB | 256KB |
 | `sandbox.MaxErrorStreamSize` | 256KB | 256KB |
-| `wallClock` (watchdog) | 60s | 30s |
+| `wallClock` (watchdog; excludes approval and subagent waits) | 15m | 15m |
 
 Config shape (same in the spike file and in `settings.json`):
 
@@ -110,7 +110,8 @@ Rules:
 The exact option set UNTRUSTED requires is checked against the GraalVM version used; the builder refuses a context with a missing limit, which the probe records.
 
 - Memory protection: build a second engine with `engine.MemoryProtection=true`; record success, error or no effect.
-- Wall clock: a `ScheduledExecutorService` calls `ctx.close(true)` after N seconds while JS waits in `api.sleep(...)`.
+- Wall clock: a `ScheduledExecutorService` calls `ctx.close(true)` when the wall clock runs out while JS waits in `api.sleep(...)`. The probe sets a short value with `--set main.wallClock=5s` instead of waiting 15 minutes.
+- CPU time while blocked (AC-14): JS calls `api.sleep(20000)` with `sandbox.MaxCPUTime=5s`; the run must not be stopped by the CPU limit, showing that blocked time in a host callback is not counted. Then a host callback that does 10 s of busy work must trip the 5 s limit, showing that host CPU work is counted.
 - After each limit trips: close the context, build a new one on the same engine, run `api.echo` again.
 
 ### Measurements (IsolateProbe)
@@ -158,6 +159,7 @@ A no-go on ModelJars keeps the plan intact: local models then run through the Op
 | RSS per idle isolate (MB) | | | |
 | Limits AC-03 (pass/fail) | | | |
 | Config overrides AC-13 (pass/fail) | | | |
+| Blocked time not counted as CPU, AC-14 (pass/fail) | | | |
 | Memory protection | | | n/a |
 | Model prompt speed, native / JVM (tok/s) | | | |
 | Model generation speed, native / JVM (tok/s) | | | |

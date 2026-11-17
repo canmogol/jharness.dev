@@ -29,7 +29,8 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 - [ ] T013 Write `LimitsProbe`: CPU limit with `while(true){}` (AC-03)
 - [ ] T014 [P] Memory limit with a large allocation (AC-03)
-- [ ] T015 [P] Wall-clock watchdog closing a context blocked in `api.sleep` (AC-03)
+- [ ] T015 [P] Wall-clock watchdog closing a context blocked in `api.sleep`, using a short `--set main.wallClock` value (AC-03)
+- [ ] T030 [P] Check that blocked time in a host callback does not count as CPU time and host CPU work does (AC-14)
 - [ ] T016 After each limit trips, build a fresh context on the same engine and run `api.echo` again (AC-03)
 - [ ] T028 Write `SandboxConfig`: built-in defaults in `sandbox-defaults.json` (output and error caps 256KB), `--config` file, `--set` overrides, validation of keys, units and fixed settings (AC-13)
 - [ ] T029 Show that overrides take effect: lower `sandbox.MaxCPUTime` stops a loop sooner; a larger output cap lets more output through; a bad key fails start-up (AC-13)
@@ -71,3 +72,4 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 | AC-11 | T002, T025, T026, T027 |
 | AC-12 | T001, T003, T006 |
 | AC-13 | T028, T029 |
+| AC-14 | T030 |

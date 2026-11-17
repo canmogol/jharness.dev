@@ -49,6 +49,7 @@ The architecture rests on these assumptions (`product/decisions.md` D-001, D-002
 | AC-11 | `docs/p0-results.md` holds every number and finding, and `product/decisions.md` has a go/no-go entry for ModelJars-in-native-image and any decision that changed. |
 | AC-12 | Repository basics exist: MIT license (done), `SECURITY.md`, `CONTRIBUTING.md`, CI running the spike build. |
 | AC-13 | Every engine and sandbox limit is read from built-in defaults, a config file and `--set` overrides (later wins). A changed value changes behavior (a lower `sandbox.MaxCPUTime` stops a loop sooner; a larger output cap lets more output through). Unknown keys, bad values and attempts to change fixed settings are rejected. Output and error stream caps default to 256KB. |
+| AC-14 | Time spent blocked inside a host callback (waiting, not computing) does not count toward `sandbox.MaxCPUTime`, and CPU work done inside a host callback does. If blocked time does count, record it: the CPU and wall-clock design (D-003, D-028) must change. |
 
 ## Out of scope
 

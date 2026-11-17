@@ -36,7 +36,7 @@ Last updated: 2026-11-15
 
 | ID | Story | Acceptance (high level) | Priority | Phase |
 | --- | --- | --- | --- | --- |
-| US-2.1 | As a developer, I want to describe a bug and have the agent find it, fix it and run the tests, so I spend less time on routine fixes. | Agent searches, edits and runs tests via Maven, Gradle or npm; shows the diff | MVP | P1–P2 |
+| US-2.1 | As a developer, I want to describe a bug and have the agent find it, fix it and run the tests, so I spend less time on routine fixes. | Agent searches, edits and runs tests via Maven, Gradle or npm (up to 10 min per run on request); shows the diff | MVP | P1–P2 |
 | US-2.2 | As a developer, I want to ask questions about an unfamiliar codebase in read-only mode, so I can learn it without risk. | Plan/read-only mode makes no changes; answers cite files | MVP | P1 |
 | US-2.3 | As a developer, I want to see every change as a diff, so I know exactly what the agent did. | Diff shown before or after applying, per permission mode | MVP | P1 |
 | US-2.4 | As a developer, I want to undo the agent's changes per turn, so a bad edit costs nothing. | `/undo` and `/rewind <turn>` restore files | MVP | P1 |
@@ -93,3 +93,4 @@ Last updated: 2026-11-15
 | US-L.3 | As a developer, I want more build tools (pnpm, yarn, Python, Go, Cargo). |
 | US-L.4 | As a developer, I want image input and web search. |
 | US-L.5 | As a Java developer, I want to embed JHarness in my own app through a Java SDK. |
+| US-L.6 | As a developer, I want the agent to start a dev server or watch mode in the background and check on it later. |

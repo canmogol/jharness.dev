@@ -47,6 +47,8 @@ Spec: `../specs/001-p0-spike/`
 ## Phase 2 — Build tools and hardening
 
 - [ ] Maven, Gradle and npm typed operations through `ProcessRunner`
+- [ ] Per-operation timeouts with `timeoutMs` (2 min default, 10 min max for builds) and process-tree kill
+- [ ] Output returned to the model capped at the last 30,000 characters plus exit code; full output in the session log
 - [ ] Command-execution checks (no shell, pinned executables, argument validation, git hardening, clean environment, process-tree kill)
 - [ ] OS sandbox for build tools (bubblewrap or Landlock on Linux, Seatbelt on macOS)
 - [ ] `api.http` and web fetch
@@ -86,6 +88,7 @@ Spec: `../specs/001-p0-spike/`
 
 ## After v0.1
 
+- Long-lived background processes (dev servers, watch modes)
 - Windows
 - Extensions installed from a git URL
 - More build tools: pnpm, yarn, Python (uv, pip, pytest), Go, Cargo, make, Docker

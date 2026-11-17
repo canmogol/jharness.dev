@@ -49,13 +49,24 @@ Every value below can be changed in the `sandbox` section of `settings.json`, pe
 | --- | --- | --- |
 | `engine.MaxIsolateMemory` (hard) | 512 MB | 256 MB |
 | `sandbox.MaxHeapMemory` (soft) | 256 MB | 128 MB |
-| `sandbox.MaxCPUTime` per run | 10 s | 5 s |
-| Wall clock per run (watchdog) | 60 s | 30 s |
+| `sandbox.MaxCPUTime` per run | 30 s | 30 s |
+| Wall clock per run (watchdog; excludes approval and subagent waits) | 15 min | 15 min |
 | `sandbox.MaxThreads` | 1 | 1 |
 | `sandbox.MaxASTDepth` | 100 | 100 |
 | `sandbox.MaxOutputStreamSize` | 256 KB | 256 KB |
 | `sandbox.MaxErrorStreamSize` | 256 KB | 256 KB |
 | `engine.MemoryProtection` | Linux with protection keys only | Same |
+
+## Operation timeouts and output (D-028)
+
+| Operation | Default | Maximum the model can request |
+| --- | --- | --- |
+| git, Maven, Gradle, npm | 2 min | 10 min |
+| `api.http` | 30 s | 2 min |
+| `api.mcp` | 60 s | 10 min |
+| `rg` | 60 s | 60 s |
+
+Process results return the exit code and the last 30,000 characters of output (configurable up to 150,000); the full output stays in the session log. No long-lived background processes in v1 (D-029).
 
 ## Threads
 
