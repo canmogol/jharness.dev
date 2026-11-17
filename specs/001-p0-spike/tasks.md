@@ -11,14 +11,15 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 1 — Repository and build
 
-- [ ] T003 Add `SECURITY.md` (disclosure process) and `CONTRIBUTING.md`; the repository and LICENSE already exist (AC-12)
-- [ ] T004 Create `spike/pom.xml`: Java 25, `polyglot` and `js-isolate` with platform classifiers, `native-maven-plugin` profile (AC-01)
-- [ ] T005 Add `Main.java` dispatcher with subcommands `isolate | limits | model | jline | all` and JSON-lines output (AC-01)
-- [ ] T006 Set up the GitHub Actions matrix (ubuntu x64, ubuntu arm64, macOS arm64) building the native image and uploading results (AC-01, AC-12)
+- [x] T003 Add `SECURITY.md` (disclosure process) and `CONTRIBUTING.md`; the repository and LICENSE already exist (AC-12)
+- [x] T004 Create `spike/pom.xml`: Java 25, `polyglot` and `js-isolate` with platform classifiers, `native-maven-plugin` profile (AC-01)
+- [x] T005 Add `Main.java` dispatcher with subcommands `isolate | limits | model | jline | all` and JSON-lines output (AC-01)
+- [x] T006 Set up the GitHub Actions matrix (ubuntu x64, ubuntu arm64, macOS arm64) building the native image and uploading results (AC-01, AC-12)
 
 ## Group 2 — Isolates
 
 - [ ] T007 Write `SpikeApi` with `@HostAccess.Export echo(String)` and `sleep(long)`, plus reachability metadata (AC-02)
+- [ ] T028 Write `SandboxConfig`: built-in defaults in `sandbox-defaults.json` (output and error caps 256KB), `--config` file, `--set` overrides, validation of keys, units and fixed settings (AC-13)
 - [ ] T008 Write `IsolateProbe`: UNTRUSTED context built from `SandboxConfig`, call `api.echo` from JS, print the result and the effective limits (AC-02, AC-13)
 - [ ] T009 [P] Add isolate creation timing, 20 runs, median (AC-04)
 - [ ] T010 [P] Add RSS measurement for 1, 5 and 10 idle engines on Linux and macOS (AC-04)
@@ -32,7 +33,6 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 - [ ] T015 [P] Wall-clock watchdog closing a context blocked in `api.sleep`, using a short `--set main.wallClock` value (AC-03)
 - [ ] T030 [P] Check that blocked time in a host callback does not count as CPU time and host CPU work does (AC-14)
 - [ ] T016 After each limit trips, build a fresh context on the same engine and run `api.echo` again (AC-03)
-- [ ] T028 Write `SandboxConfig`: built-in defaults in `sandbox-defaults.json` (output and error caps 256KB), `--config` file, `--set` overrides, validation of keys, units and fixed settings (AC-13)
 - [ ] T029 Show that overrides take effect: lower `sandbox.MaxCPUTime` stops a loop sooner; a larger output cap lets more output through; a bad key fails start-up (AC-13)
 
 ## Group 4 — Local model

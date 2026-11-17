@@ -1,0 +1,78 @@
+# P0 spike (specs/001-p0-spike): native build on every target, results uploaded as artifacts.
+name: spike
+
+on:
+  push:
+    branches: [master, "[0-9][0-9][0-9]-*"]
+    paths: ["spike/**", ".github/workflows/spike.yml"]
+  pull_request:
+    paths: ["spike/**", ".github/workflows/spike.yml"]
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Also run the model probe (large downloads)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spike-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: native (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            runner: ubuntu-24.04
+          - target: linux-aarch64
+            runner: ubuntu-24.04-arm
+          - target: macos-aarch64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash   # -eo pipefail, so a failing probe fails the step despite tee
+        working-directory: spike
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: graalvm/setup-graalvm@v1.6.8
+        with:
+          java-version: "25"
+          distribution: graalvm
+          cache: maven
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: JVM build
+        run: mvn -B -ntp verify
+
+      - name: Native build
+        run: mvn -B -ntp -Pnative package -DskipTests
+
+      - name: Run probes
+        env:
+          RUN_MODEL: ${{ inputs.model && 'true' || 'false' }}
+        run: |
+          mkdir -p results
+          # jline needs a terminal and is checked by hand (AC-10).
+          probes="isolate limits"
+          if [ "$RUN_MODEL" = "true" ]; then probes="$probes model"; fi
+          for probe in $probes; do
+            ./target/spike "$probe" --json | tee -a results/probes.jsonl
+          done
+          size=$(wc -c < target/spike | tr -d ' ')
+          printf '{"probe":"binary","target":"%s","bytes":%s}\n' "${{ matrix.target }}" "$size" \
+            | tee results/binary.jsonl
+
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: spike-results-${{ matrix.target }}
+          path: spike/results/
+          retention-days: 30
