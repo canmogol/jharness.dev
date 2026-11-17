@@ -62,9 +62,9 @@ Spec: `../specs/001-p0-spike/`
 
 - [ ] Custom JS agents in `.jharness/agents/`
 - [ ] Subagents via `api.spawnAgent`
-- [ ] JS hooks (pre-tool, post-tool, stop)
+- [ ] JS hooks (pre-tool, post-tool, stop); no shell hooks
 - [ ] Slash commands (Markdown templates and JS)
-- [ ] MCP client (stdio, streamable HTTP)
+- [ ] MCP client (stdio, streamable HTTP), called from JS through `api.mcp`; stdio servers started through `ProcessRunner` in the OS sandbox
 - [ ] Todo list and plan mode
 
 **Gate:** one custom agent and one hook ship as working examples.

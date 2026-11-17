@@ -26,7 +26,7 @@ Terminal UI / headless CLI
 │                                          ├─ Files (workspace rw, mounted folders ro)     │
 │                                          ├─ ProcessRunner: git, Maven, Gradle, npm       │
 │                                          ├─ HTTP client                                  │
-│                                          ├─ MCP client                                   │
+│                                          ├─ MCP client (api.mcp; stdio via ProcessRunner)│
 │                                          └─ spawnAgent (subagent in its own isolate)     │
 │                                                                                          │
 │  Egress proxy (127.0.0.1, random port): every outbound connection from the HTTP client,  │
@@ -103,7 +103,7 @@ Maven, Gradle and npm operations; web fetch; the egress proxy with its two rules
 
 ### P3 — Extensibility
 
-Custom JS agents, subagents (`api.spawnAgent`), JS hooks, slash commands, MCP client, todo list and plan mode.
+Custom JS agents, subagents (`api.spawnAgent`), JS-only hooks, slash commands, MCP client reached through `api.mcp`, todo list and plan mode.
 
 **Gate:** one custom agent and one hook ship as working examples.
 

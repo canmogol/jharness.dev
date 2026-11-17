@@ -32,8 +32,8 @@ Last updated: 2026-11-17
 | D-019 | Name: JHarness; instructions file `JHARNESS.md`; config in `.jharness/` | Accepted |
 | D-020 | Oracle GraalVM under GFTC; the product is free and open source | Accepted |
 | D-021 | Develop on the JVM, build native in CI | Accepted |
-| D-022 | Hooks are JS only in v1 (no shell hooks) | Proposed |
-| D-023 | MCP tools are reached from JS through `api.mcp(...)` | Proposed |
+| D-022 | Hooks are JS only in v1 (no shell hooks) | Accepted |
+| D-023 | MCP tools are reached from JS through `api.mcp(...)` | Accepted |
 | D-024 | Source license: MIT | Accepted |
 | D-025 | One host egress proxy for all network traffic, configured by two simple rules files | Accepted |
 | D-026 | Product docs live in `product/`, feature specs in `specs/NNN-name/`, rules in `product/constitution.md` | Accepted |
@@ -212,21 +212,28 @@ Last updated: 2026-11-17
 
 **Why.** Native builds are slow and memory-hungry.
 
-## D-022 — Hooks are JS only in v1 *(Proposed)*
+## D-022 — Hooks are JS only in v1
 
-**Decision.** Hooks run as JS in an isolate. Shell-command hooks are dropped from v1.
+**Decision.** Hooks run as JS in an isolate, under the same sandbox and `api` as agent code. Shell-command hooks are not supported in v1.
 
-**Why.** The design doc still mentions shell hooks, which contradicts D-008. JS hooks keep one execution path.
+**Why.** Shell hooks would contradict D-008 (no shell). JS hooks keep one execution path, one set of limits and one permission path.
 
-**Needs confirmation.**
+**Source.** Accepted by the user on 2026-11-17.
 
-## D-023 — MCP tools through `api.mcp(...)` *(Proposed)*
+**Consequences.** A hook that needs git or a build tool calls `api.git`, `api.maven`, `api.gradle` or `api.npm`, with the usual approvals.
 
-**Decision.** With RunJS as the only action (D-007), MCP server tools are called from JS: `api.mcp('{"server":"jira","tool":"search","input":{...}}')`, through the same permissions.
+## D-023 — MCP tools through `api.mcp(...)`
 
-**Why.** The design doc says MCP tools "join the tool registry", which assumed native tool calls.
+**Decision.** With RunJS as the only action (D-007), MCP server tools are called from JS: `api.mcp('{"server":"jira","tool":"search","input":{...}}')`, returning the tool's result as a JSON string, through the same permissions as every other `api` call.
 
-**Needs confirmation.**
+**Why.** The earlier design had MCP tools "join the tool registry", which assumed native tool calls. With RunJS only, MCP tools are reached the same way as everything else.
+
+**Source.** Accepted by the user on 2026-11-17.
+
+**Consequences.**
+- The list of configured servers and their tools goes into the system prompt next to `api.d.ts`, so the model knows what it can call.
+- stdio MCP servers are child processes. The host starts them through `ProcessRunner` from the user's own configuration (never from agent code), in the OS sandbox, with network access only through the egress proxy (D-025). The constitution's Article IV names them as an allowed process type.
+- MCP servers over HTTP go through the egress proxy like any other HTTP traffic.
 
 ## D-024 — Source license: MIT
 
@@ -350,6 +357,8 @@ Questions raised during design, the answers given, and why each mattered.
 | Q23 | How are network rules enforced? | A proxy in the host, configured by a simple general file and a project file; the Java HttpClient and all command-line tools use it | One enforcement point | D-025 |
 | Q24 | How should the docs be structured? | Product docs in `product/`, feature specs in `specs/`, plus a constitution | Spec-driven development | D-026 |
 | Q25 | Which source license? | MIT, from the repository's `LICENSE` file | | D-024 |
+| Q26 | Are hooks JS only in v1? | Yes, accepted | Keeps one execution path | D-022 |
+| Q27 | Are MCP tools reached through `api.mcp`? | Yes, accepted | Fits RunJS as the only action | D-023 |
 
 ---
 
@@ -357,6 +366,4 @@ Questions raised during design, the answers given, and why each mattered.
 
 | Item | Why it blocks | Blocks |
 | --- | --- | --- |
-| D-022 hooks JS only? | Hook runner design | P3 |
-| D-023 MCP through `api.mcp`? | `api` contract | P3 |
 | `rg` for search | Runs a process outside the typed-operations list; either add it to `ProcessRunner`'s pinned tools or use Java-only search | P1 |
