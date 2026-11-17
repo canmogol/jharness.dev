@@ -18,6 +18,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <graalvm.polyglot.version>25.0.5</graalvm.polyglot.version>
     <native.maven.plugin.version>1.1.18</native.maven.plugin.version>
+    <jline.version>3.30.17</jline.version>
     <main.class>dev.jharness.spike.Main</main.class>
     <!-- Set by the platform profiles below; the build fails on an unsupported platform. -->
     <js.isolate.platform>unsupported</js.isolate.platform>
@@ -36,6 +37,17 @@
       <version>${graalvm.polyglot.version}</version>
       <type>pom</type>
       <scope>runtime</scope>
+    </dependency>
+    <!-- JLine 3 (tech stack); the FFM terminal provider needs no JNI library. -->
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline-reader</artifactId>
+      <version>${jline.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline-terminal-ffm</artifactId>
+      <version>${jline.version}</version>
     </dependency>
   </dependencies>
 

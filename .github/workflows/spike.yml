@@ -75,12 +75,15 @@ jobs:
         env:
           RUN_MODEL: ${{ inputs.model && 'true' || 'false' }}
         run: |
-          # jline needs a terminal and is checked by hand (AC-10).
+          # jline needs a terminal: it runs in the pty check below (AC-10).
           probes="isolate limits"
           if [ "$RUN_MODEL" = "true" ]; then probes="$probes model"; fi
           for probe in $probes; do
             ./target/spike "$probe" --json | tee -a results/probes.jsonl
           done
+
+      - name: JLine in a pseudo-terminal
+        run: python3 scripts/jline-pty-check.py ./target/spike | tee results/jline.jsonl
 
       - uses: actions/upload-artifact@v7.0.2
         with:

@@ -137,6 +137,8 @@ The exact option set UNTRUSTED requires is checked against the GraalVM version u
 
 Read three lines in raw mode with editing and history; exit on Ctrl-D. Check by hand on macOS and Linux terminals.
 
+JLine 3.30.17 with the FFM terminal provider (`jline-terminal-ffm`), so no JNI library and no `stty` child process. `spike/scripts/jline-pty-check.py` drives the same keys through a pseudo-terminal (type, move left and insert, recall with Up, Ctrl-D) and runs in CI on every target.
+
 ## Go/no-go thresholds (confirmed 2026-11-17)
 
 | Item | Go if |
