@@ -14,15 +14,18 @@ import dev.jharness.events.Json;
 
 /**
  * User settings from {@code ~/.jharness/settings.json}: {@code model}, {@code models}, {@code sandbox},
- * {@code timeouts} and {@code agent}. Project and session layers come with the layered-settings feature. Unknown
+ * {@code timeouts}, {@code agent},
+ * {@code permissions} and {@code files}. Project and session layers come with the layered-settings feature. Unknown
  * keys and bad values throw {@link ConfigException}, which stops start-up.
  */
-public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts timeouts, AgentSettings agent) {
+public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts timeouts, AgentSettings agent,
+        PermissionSettings permissions, FileSettings files) {
 
-    private static final Set<String> TOP = Set.of("model", "models", "sandbox", "timeouts", "agent");
+    private static final Set<String> TOP = Set.of("model", "models", "sandbox", "timeouts", "agent", "permissions", "files");
 
     public static Settings defaults() {
-        return new Settings(ModelProfiles.empty(), SandboxSettings.defaults(), Timeouts.defaults(), AgentSettings.defaults());
+        return new Settings(ModelProfiles.empty(), SandboxSettings.defaults(), Timeouts.defaults(), AgentSettings.defaults(),
+                PermissionSettings.defaults(), FileSettings.defaults());
     }
 
     public static Path userFile(Path home) {
@@ -55,13 +58,15 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
         }
         for (Map.Entry<String, JsonNode> e : root.properties()) {
             if (!TOP.contains(e.getKey())) {
-                throw new ConfigException(source + ": unknown key \"" + e.getKey() + "\" (known: model, models, sandbox, timeouts, agent)");
+                throw new ConfigException(source + ": unknown key \"" + e.getKey() + "\" (known: model, models, sandbox, timeouts, agent, permissions, files)");
             }
         }
         return new Settings(
                 ModelProfiles.parse(root.get("model"), root.get("models"), source),
                 SandboxSettings.parse(root.get("sandbox"), source),
                 Timeouts.parse(root.get("timeouts"), source),
-                AgentSettings.parse(root.get("agent"), source));
+                AgentSettings.parse(root.get("agent"), source),
+                PermissionSettings.parse(root.get("permissions"), source),
+                FileSettings.parse(root.get("files"), source));
     }
 }

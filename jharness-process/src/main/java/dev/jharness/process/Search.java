@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.jharness.config.Timeouts;
 import dev.jharness.events.EventBus;
 import dev.jharness.events.Origin;
+import dev.jharness.security.DenyList;
 import dev.jharness.security.Workspace;
 
 /**
@@ -32,11 +33,21 @@ public interface Search {
 
     /** {@code rg} when it is installed, else the Java fallback. */
     static Search create(Workspace ws, EventBus bus, Supplier<Origin> origin, Timeouts timeouts) {
+        return create(ws, bus, origin, timeouts, new DenyList(java.util.List.of()));
+    }
+
+    /** @param deny files left out of results ({@code rg -g '!glob'}, and the same globs in the Java walk) */
+    static Search create(Workspace ws, EventBus bus, Supplier<Origin> origin, Timeouts timeouts, DenyList deny) {
         Optional<Executable> rg = Executables.resolve("rg", ws.root());
         if (rg.isPresent()) {
-            return new RipgrepSearch(new ProcessRunner(bus, origin, timeouts.outputChars()), rg.get(), ws, timeouts.rg());
+            return new RipgrepSearch(new ProcessRunner(bus, origin, timeouts.outputChars()), rg.get(), ws, timeouts.rg(), deny);
         }
-        return new JavaSearch(ws);
+        return new JavaSearch(ws, deny);
+    }
+
+    /** Paths in results: workspace-relative inside the workspace, absolute elsewhere (mounted folders). */
+    static String display(Workspace ws, Path p) {
+        return p.startsWith(ws.root()) ? ws.relative(p) : p.toString();
     }
 
     static String clip(String line) {

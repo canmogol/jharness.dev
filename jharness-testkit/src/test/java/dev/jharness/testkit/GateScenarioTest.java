@@ -13,7 +13,6 @@ import dev.jharness.agent.TurnResult;
 import dev.jharness.config.Settings;
 import dev.jharness.events.SessionLog;
 import dev.jharness.llm.ReplayProvider;
-import dev.jharness.security.PermissionGate;
 
 /** The P1 gate scenario with recorded replies (AC-08): search, read, fix, commit, finish. */
 class GateScenarioTest {
@@ -27,8 +26,13 @@ class GateScenarioTest {
         ReplayProvider[] replay = new ReplayProvider[1];
         TurnResult r;
         Path log;
-        // Permissions arrive in the next spec; this scenario approves everything.
-        try (Session s = Session.open(tmp.resolve("home"), repo, Settings.defaults(), PermissionGate.allowAll(), (bus, turns) -> {
+        // ask mode (the default) with a user who approves each question once.
+        java.util.List<String> asked = new java.util.ArrayList<>();
+        dev.jharness.security.Prompter user = op -> {
+            asked.add(op.api() + " " + op.summary());
+            return dev.jharness.security.Prompter.Answer.ONCE;
+        };
+        try (Session s = Session.open(tmp.resolve("home"), repo, Settings.defaults(), Session.Access.prompter(user), (bus, turns) -> {
             replay[0] = ReplayProvider.ofReplies(SampleRepo.gateReplies(), bus, turns);
             return replay[0];
         })) {
@@ -41,6 +45,7 @@ class GateScenarioTest {
             assertTrue(results.get(3).contains("committed"), results.get(3));
         }
         assertEquals("done", r.stopReason());
+        assertEquals(3, asked.size(), "edit, git add and git commit ask; reads don't: " + asked);
         assertEquals(4, r.steps());
         assertTrue(SampleRepo.fixed(repo));
         assertEquals("Fix Calculator.add to add", SampleRepo.log(repo).getFirst());

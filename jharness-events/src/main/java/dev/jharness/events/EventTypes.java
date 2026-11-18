@@ -18,6 +18,8 @@ public final class EventTypes {
         HOST.put("session.started", List.of("workspace"));
         HOST.put("api.call", List.of("api", "status"));
         HOST.put("permission.decided", List.of("api", "kind", "allowed"));
+        HOST.put("permission.asked", List.of("api", "kind", "summary"));
+        HOST.put("permission.rule_added", List.of("kind"));
         HOST.put("process.started", List.of("executable", "args"));
         HOST.put("process.completed", List.of("executable", "exitCode", "durationMs", "output"));
         HOST.put("sandbox.run_started", List.of("profile"));

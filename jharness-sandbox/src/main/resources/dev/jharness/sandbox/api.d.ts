@@ -2,11 +2,14 @@
  * The JHarness api. Every method takes strings and returns a string; structured results are JSON
  * strings, so call JSON.parse on them. Object arguments are turned into JSON for you. A failed call
  * throws an Error whose message says why (for example "permission denied: ..." or "... is outside
- * the workspace"). Paths are relative to the workspace root.
+ * the workspace"). Paths are relative to the workspace root. Read-only mounted folders (listed in
+ * readContext().mounts) are reached by absolute path. Secrets, keys and .git internals are on a deny
+ * list: they can't be read or written and never appear in listFiles or grep results.
  */
 
 /** {"workspace": string, "os": string, "arch": string, "date": string,
- *   "git": {"branch": string, "dirty": boolean} | null, "files": string[]} — names ending in "/" are folders */
+ *   "git": {"branch": string, "dirty": boolean} | null, "mounts": string[], "files": string[]}
+ *   — mounts are read-only folders (absolute paths); file names ending in "/" are folders */
 type ContextJson = string;
 
 /** {"path": string, "bytes": number} */
@@ -65,7 +68,7 @@ declare const api: {
   readContext(): ContextJson;
   /** UTF-8 text of a file, up to 1 MB. */
   readFile(path: string): string;
-  /** Creates or replaces a file; creates missing folders. Needs approval. */
+  /** Creates or replaces a file in the workspace; creates missing folders. Needs approval. */
   writeFile(path: string, content: string): WriteResultJson;
   /** Replaces oldText, which must occur exactly once, with newText. Needs approval. */
   editFile(path: string, oldText: string, newText: string): EditResultJson;

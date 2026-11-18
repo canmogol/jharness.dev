@@ -31,7 +31,7 @@ class AgentLoopTest {
         Files.createDirectories(ws.resolve("src"));
         Files.writeString(ws.resolve("src/App.java"), "class App {\n  int answer() { return 41; }\n}\n");
         Settings s = Settings.parse(settingsJson, "test");
-        session = Session.open(tmp.resolve("home"), ws, s, new DefaultGate(), (bus, turns) -> {
+        session = Session.open(tmp.resolve("home"), ws, s, Session.Access.gate(new DefaultGate()), (bus, turns) -> {
             replay = ReplayProvider.ofReplies(List.of(replies), bus, turns);
             return replay;
         });

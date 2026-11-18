@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.jharness.events.Json;
+import dev.jharness.security.DenyList;
 import dev.jharness.security.Workspace;
 
 /**
@@ -27,8 +28,13 @@ public final class RipgrepSearch implements Search {
     private final Executable rg;
     private final Workspace ws;
     private final Duration timeout;
+    private final DenyList deny;
 
     public RipgrepSearch(ProcessRunner runner, Executable rg, Workspace ws, Duration timeout) {
+        this(runner, rg, ws, timeout, new DenyList(List.of()));
+    }
+
+    public RipgrepSearch(ProcessRunner runner, Executable rg, Workspace ws, Duration timeout, DenyList deny) {
         if (!rg.name().equals("rg")) {
             throw new IllegalArgumentException("not rg: " + rg);
         }
@@ -36,6 +42,14 @@ public final class RipgrepSearch implements Search {
         this.rg = rg;
         this.ws = ws;
         this.timeout = timeout;
+        this.deny = deny;
+    }
+
+    private void excludes(List<String> a) {
+        for (String g : deny.globs()) {
+            a.add("-g");
+            a.add("!" + g);
+        }
     }
 
     @Override
@@ -52,10 +66,11 @@ public final class RipgrepSearch implements Search {
             a.add("-g");
             a.add(glob);
         }
+        excludes(a);
         a.add("-e");
         a.add(pattern);
         a.add("--");
-        a.add(ws.relative(dir));
+        a.add(Search.display(ws, dir));
         check(a);
         return a;
     }
@@ -66,8 +81,9 @@ public final class RipgrepSearch implements Search {
             a.add("-g");
             a.add(glob);
         }
+        excludes(a);
         a.add("--");
-        a.add(ws.relative(dir));
+        a.add(Search.display(ws, dir));
         check(a);
         return a;
     }

@@ -21,7 +21,12 @@ import dev.jharness.sandbox.AgentIsolate;
 import dev.jharness.sandbox.ApiServices;
 import dev.jharness.sandbox.IsolateManager;
 import dev.jharness.sandbox.RunResult;
+import dev.jharness.security.FilePolicy;
+import dev.jharness.security.PermissionEngine;
 import dev.jharness.security.PermissionGate;
+import dev.jharness.security.PermissionMode;
+import dev.jharness.security.ProjectRules;
+import dev.jharness.security.Prompter;
 import dev.jharness.security.Workspace;
 
 /** Wires one session together: bus and log, workspace, tools, the main agent's isolate, provider and loop. */
@@ -41,11 +46,25 @@ public final class Session implements AutoCloseable {
         this.workspace = workspace;
     }
 
+    /**
+     * How the session decides permissions: the permission engine from settings with a prompter (the
+     * normal case), or a fixed gate (tests).
+     */
+    public record Access(PermissionGate gate, Prompter prompter) {
+        public static Access prompter(Prompter p) {
+            return new Access(null, p);
+        }
+
+        public static Access gate(PermissionGate g) {
+            return new Access(g, null);
+        }
+    }
+
     /** Opens a session with the provider for {@code profileName} (null = the default profile). */
-    public static Session open(Path home, Path workspace, Settings settings, String profileName, PermissionGate gate)
+    public static Session open(Path home, Path workspace, Settings settings, String profileName, Access access)
             throws ConfigException, IOException {
         ModelProfile p = settings.models().resolve(profileName);
-        return open(home, workspace, settings, gate, (bus, turns) -> ModelProviders.create(p, bus, turns));
+        return open(home, workspace, settings, access, (bus, turns) -> ModelProviders.create(p, bus, turns));
     }
 
     /** Builds the provider once the bus exists; tests pass a replay provider. */
@@ -53,7 +72,7 @@ public final class Session implements AutoCloseable {
         ModelProvider create(EventBus bus, TurnCounter turns) throws IOException;
     }
 
-    public static Session open(Path home, Path workspacePath, Settings settings, PermissionGate gate, ProviderFactory providers)
+    public static Session open(Path home, Path workspacePath, Settings settings, Access access, ProviderFactory providers)
             throws IOException {
         Workspace ws = new Workspace(workspacePath);
         EventBus bus = new EventBus(EventBus.newSessionId());
@@ -66,8 +85,12 @@ public final class Session implements AutoCloseable {
         ProcessRunner runner = new ProcessRunner(bus, turns, settings.timeouts().outputChars());
         Optional<Executable> git = Executables.resolve("git", ws.root());
         GitOperations gitOps = git.map(g -> new GitOperations(runner, g, ws, settings.timeouts().process())).orElse(null);
-        Search search = Search.create(ws, bus, turns, settings.timeouts());
-        ApiServices services = new ApiServices(ws, gate, bus, turns, search, gitOps);
+        FilePolicy files = new FilePolicy(ws, settings.files().mounts(), settings.files().deny());
+        Search search = Search.create(ws, bus, turns, settings.timeouts(), files.denyList());
+        PermissionGate gate = access.gate() != null ? access.gate()
+                : new PermissionEngine(PermissionMode.of(settings.permissions().mode()), ProjectRules.load(home, ws.root()),
+                        access.prompter(), bus, turns);
+        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
         String system = SystemPrompt.build(ctx.ok() ? ctx.value() : null);

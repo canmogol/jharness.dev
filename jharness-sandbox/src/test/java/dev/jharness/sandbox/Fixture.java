@@ -17,6 +17,7 @@ import dev.jharness.process.Executables;
 import dev.jharness.process.GitOperations;
 import dev.jharness.process.ProcessRunner;
 import dev.jharness.process.Search;
+import dev.jharness.security.FilePolicy;
 import dev.jharness.security.PermissionGate;
 import dev.jharness.security.Workspace;
 
@@ -51,8 +52,12 @@ final class Fixture {
         search = Search.create(ws, bus, () -> Origin.main(1), Timeouts.defaults());
     }
 
+    ApiServices services(PermissionGate gate, FilePolicy files) {
+        return new ApiServices(files, gate, bus, () -> Origin.main(1), search, git);
+    }
+
     ApiServices services(PermissionGate gate) {
-        return new ApiServices(ws, gate, bus, () -> Origin.main(1), search, git);
+        return new ApiServices(FilePolicy.workspaceOnly(ws), gate, bus, () -> Origin.main(1), search, git);
     }
 
     static SandboxSettings.Profile profile(Map<String, String> changes) throws Exception {
