@@ -17,8 +17,9 @@ on:
 permissions:
   contents: read
 
+# Per event, so a push never cancels a manual model run.
 concurrency:
-  group: spike-${{ github.ref }}
+  group: spike-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
