@@ -3,7 +3,7 @@
 Decision log for JHarness. Each entry records what was decided, why, and what was rejected.
 Status values: **Accepted** (settled), **Proposed** (recommended, not yet confirmed), **Open** (needs an answer before the related work starts).
 
-Last updated: 2026-11-18
+Last updated: 2026-11-19
 
 ---
 
@@ -55,6 +55,7 @@ Last updated: 2026-11-18
 | D-042 | Secrets come from the environment, then `~/.jharness/secrets` (KEY=value, 0600 only) | Accepted |
 | D-043 | Trust answers in `~/.jharness/trusted.json`; settings layers user, project, session; untrusted projects only tighten | Accepted |
 | D-044 | Checkpoints hold file contents per turn; `/undo` and `/rewind` restore files and the conversation, not git history | Accepted |
+| D-045 | The P1 gate passes on a local model; the live Claude run moves to the v0.1 release checks | Accepted |
 
 ---
 
@@ -601,6 +602,19 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-045 — P1 gate without a live Claude run
+
+**Decision.**
+- The Phase 1 gate passes when the seeded-bug scenario is fixed end to end with a local model, run by hand in the `jharness` TUI and recorded in `docs/p1-gate.md`.
+- The Claude half of the gate is covered for now by the Claude provider tests against the stub server (spec 002) and the replay run of the gate scenario (spec 003).
+- The live Claude run (`LiveLoopTest.claude`, or the same scenario by hand) becomes a Phase 4 release check, done before v0.1 is tagged.
+
+**Why.** No Claude API key is available yet. The provider code is tested against the wire format, and the loop is the same for both providers, so waiting would block Phase 2 for a check that doesn't change the design. A release still can't ship without it.
+
+**Source.** User, 2026-11-19.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -656,6 +670,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q47 | Where do API keys come from besides the environment? | `~/.jharness/secrets`, `NAME=value` lines, 0600 only | One lookup for both sources; a readable file is refused | D-042 |
 | Q48 | Where are trust answers kept, how do settings layer, and what does an untrusted project's settings file do? | `~/.jharness/trusted.json`; user, project, session; untrusted: only `files.deny` and `plan` | A cloned repo can only make JHarness stricter | D-043 |
 | Q49 | What do checkpoints save, and does undo touch git? | File contents per turn; files and conversation are restored, git history isn't | Works outside git; never rewrites history | D-044 |
+| Q50 | Can the P1 gate pass without a Claude API key? | Yes, on a local model; the live Claude run becomes a v0.1 release check | Phase 2 isn't blocked on a key | D-045 |
 
 ---
 
