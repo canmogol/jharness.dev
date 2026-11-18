@@ -2,7 +2,7 @@
 
 Gate (`../product/roadmap.md`): fixes a seeded bug in a sample repo end to end, with a local model and with Claude. The Claude run moves to the v0.1 release checks (D-045); this run covers the local model.
 
-Status: **pending** · Run: <YYYY-MM-DD>
+Status: **pending**: attempt 1 fixed the bug but didn't commit in the same turn · Run: 2026-11-19
 
 ## Summary
 
@@ -21,10 +21,10 @@ Covered without a live Claude run: the Claude provider against the stub server (
 
 | Item | Value |
 | --- | --- |
-| Machine | |
-| Binary | `jharness --version` output; JVM or native |
-| Model server | e.g. LM Studio, address |
-| Model | e.g. `qwen2.5-coder-7b-instruct`, quantization |
+| Machine | Apple M4, macOS 26.7.3 |
+| Binary | `jharness 0.1.0-SNAPSHOT` |
+| Model server | LM Studio, OpenAI-compatible API on the local network |
+| Model | `qwen2.5-coder-7b-instruct` |
 
 1. Build: `mvn install`, then `mvn -Pnative -pl jharness-cli package -DskipTests` for the native binary.
 2. Put the model profile in `~/.jharness/settings.json`, not in a project folder: the sample repo is a new, untrusted folder, so its own settings can't add a profile.
@@ -80,8 +80,15 @@ Covered without a live Claude run: the Claude provider against the stub server (
 
 | # | Steps | Stop reason | Fixed | Committed | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 1 | | | | | |
+| 1 | 11 + 1 | `done`, then `done` | Yes | Only after a second prompt | See attempt 1 below |
 
 ## Notes
 
-- 
+### Attempt 1
+
+- Steps 1–9 wandered: four greps, a `listFiles` for `*.js` and `*.ts`, `readContext` again and `README.md`. Step 10 read `Calculator.java`.
+- Step 11's reply had two `js` blocks: the edit, then `git add` and `commit`. The loop runs only the first block (spec 003 AC-01), so the edit ran (approved, diff shown, checkpoint saved) and the commit block was dropped without a word to the model.
+- The next reply said the fix was committed and ended the turn (`done`). It wasn't.
+- After the user wrote "You didn't commit the change", turn 2 ran `git add` and `commit` in one step, both approved. Result: `b93b838 Fix Calculator.add to return the correct sum`, only `Calculator.java` changed.
+- Checks: found yes (slowly), fixed yes, approvals yes, ended `done` within 15 steps yes, session log yes. Committed in the same turn: no.
+- Finding: when a reply has more than one block, the loop should tell the model that the later blocks didn't run, so it doesn't report work it never did.
