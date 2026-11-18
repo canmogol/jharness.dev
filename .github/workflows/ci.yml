@@ -1,0 +1,71 @@
+# Host modules (specs/002-host-foundations): JVM tests and the native smoke binary on every target.
+name: ci
+
+on:
+  push:
+    branches: [master, "[0-9][0-9][0-9]-*"]
+    paths-ignore: ["spike/**", "**/*.md", ".github/workflows/spike.yml"]
+  pull_request:
+    paths-ignore: ["spike/**", "**/*.md", ".github/workflows/spike.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            runner: ubuntu-24.04
+          - target: linux-aarch64
+            runner: ubuntu-24.04-arm
+          - target: macos-aarch64
+            runner: macos-26
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: graalvm/setup-graalvm@v1.6.8
+        with:
+          java-version: "25"
+          distribution: graalvm
+          cache: maven
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # rg backs api.grep and api.listFiles (D-027); the Java fallback is tested without it.
+      - name: Install ripgrep
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then brew install ripgrep; else sudo apt-get update -q && sudo apt-get install -y -q ripgrep; fi
+          rg --version | head -1
+
+      - name: JVM tests
+        run: mvn -B -ntp install
+
+      - name: Native smoke binary
+        run: mvn -B -ntp -Pnative -pl jharness-testkit package -DskipTests
+
+      - name: Run native smoke
+        run: |
+          ls -l jharness-testkit/target/jharness-smoke
+          ./jharness-testkit/target/jharness-smoke | tee smoke-${{ matrix.target }}.jsonl
+
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: smoke-${{ matrix.target }}
+          path: |
+            smoke-*.jsonl
+            **/target/surefire-reports/*.txt
+          if-no-files-found: ignore

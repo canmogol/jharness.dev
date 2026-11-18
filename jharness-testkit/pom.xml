@@ -15,4 +15,37 @@
     <dependency><groupId>dev.jharness</groupId><artifactId>jharness-sandbox</artifactId></dependency>
     <dependency><groupId>dev.jharness</groupId><artifactId>jharness-llm</artifactId></dependency>
   </dependencies>
+
+  <profiles>
+    <!-- mvn -Pnative -pl jharness-testkit -am package -DskipTests: the native smoke binary (AC-14). -->
+    <profile>
+      <id>native</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.graalvm.buildtools</groupId>
+            <artifactId>native-maven-plugin</artifactId>
+            <extensions>true</extensions>
+            <executions>
+              <execution>
+                <id>build-native</id>
+                <goals>
+                  <goal>compile-no-fork</goal>
+                </goals>
+                <phase>package</phase>
+              </execution>
+            </executions>
+            <configuration>
+              <imageName>jharness-smoke</imageName>
+              <mainClass>dev.jharness.testkit.Smoke</mainClass>
+              <buildArgs>
+                <buildArg>--no-fallback</buildArg>
+                <buildArg>--enable-native-access=ALL-UNNAMED,org.graalvm.truffle</buildArg>
+              </buildArgs>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

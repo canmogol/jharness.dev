@@ -42,8 +42,8 @@ Order and grouping: the recommended module-by-module order, accepted on the user
 ## Group 6 — Architecture and native
 
 - [x] T019 Write the architecture test for `ProcessBuilder`, `Runtime.exec`, `HttpClient` and `Socket` use (AC-01)
-- [ ] T020 Write the `Smoke` main and the `native` profile in `jharness-testkit` (AC-14)
-- [ ] T021 Add the CI workflow: JVM tests, `rg` installed, native smoke on all three targets (AC-01, AC-12, AC-14)
+- [x] T020 Write the `Smoke` main and the `native` profile in `jharness-testkit` (AC-14)
+- [x] T021 Add the CI workflow: JVM tests, `rg` installed, native smoke on all three targets (AC-01, AC-12, AC-14)
 
 ## Traceability
 
