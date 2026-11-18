@@ -1,6 +1,50 @@
 # Changelog
 
-<!-- last-commit: 882f65025383fa27c09c572f85bb8a56edac761e -->
+<!-- last-commit: fcafc2a7c620c3c02679b1318cfdb0027fcfb693 -->
+
+## 2026-11-18 · 007 Checkpoints, undo and interrupt
+
+- Added per-turn checkpoints that save a file's content before the agent first changes it; `/undo` and `/rewind N` restore files and cut the conversation back, refusing when a file changed since (`--force` overrides).
+- File changes now carry a unified diff: shown in the approval question in `ask` mode, printed after the change in other modes, and with `/diff` for the last turn.
+- Esc stops a running turn at once (model stream and running block), with stop reason `interrupted`; the session log stays intact on interrupt.
+- Decision: checkpoints hold file contents per turn, and undo restores files and the conversation, not git history (D-044).
+
+## 2026-11-18 · 006 Project trust, layered settings and JHARNESS.md
+
+- Added the project trust question, remembered in `~/.jharness/trusted.json`; headless runs and unknown folders are untrusted.
+- Settings now merge user, project and session layers; an untrusted project's settings can only tighten (`files.deny`, `permissions.mode: plan`), and ignored keys are reported in a `settings.ignored` event.
+- Workspace and user `JHARNESS.md` files are read into the system prompt, each capped at 32 KB.
+- Decision: trust answers, settings layers and the untrusted-only-tightens rule (D-043).
+
+## 2026-11-18 · 005 CLI and TUI
+
+- Added the `jharness` command: JLine TUI with streamed replies, code steps, approvals (`y`/`a`/`n`) and history; headless `-p` mode; `--model`, `--cwd`, `--version`, `--help`.
+- Added `/model` to list and switch profiles mid-session.
+- API keys now come from the environment, then a 0600 `~/.jharness/secrets` file; key values never reach events or the log.
+- CI builds the native `jharness` binary on all three targets and checks a headless run and the TUI; the README covers building and running.
+- Decision: secrets from the environment, then `~/.jharness/secrets` (D-042).
+
+## 2026-11-18 · 004 Permissions and file policy
+
+- Added the permission engine with `ask`, `accept-edits`, `plan` and `bypass` modes; approvals are asked inside a running block with the watchdog paused.
+- "Always for this project" approvals are saved per project in the user folder; repository files can't add rules.
+- Added the file policy: read-only mounted folders and a deny list that applies in every mode, including search with `rg` and the Java fallback.
+- Decisions: permanent approvals live in the user folder (D-040); the four permission modes, with the file policy in every mode (D-041).
+
+## 2026-11-18 · 003 Agent loop with RunJS
+
+- Added the agent loop: stream the reply, run the first JS block in the isolate, send back the result or the error with its line number, and stop at `agent.maxSteps`.
+- Added `api.d.ts` (checked against the host methods) and a system prompt with examples and workspace context.
+- Added the replay and recording providers, a replay test of the P1 gate scenario, and live loop tests against Ollama and Claude when configured.
+
+## 2026-11-18 · 002 Host foundations
+
+- Added the host modules: event bus with host-stamped envelopes and the JSONL session log, settings with validation, workspace confinement and a permission gate, and `ProcessRunner` with git and `rg` plus a Java search fallback.
+- Added the isolate manager (one engine per agent, fresh context per run, limits, watchdog) and the `api` facade.
+- Added the OpenAI-compatible and Claude providers with model profiles, a stub model server, and an architecture test that keeps process and network access in their modules.
+- Added a native smoke binary and a CI matrix for the three targets.
+- Claude may now commit and push feature branches in this repo.
+- Decisions: session logs live in the user folder (D-038); git runs local operations only until the egress proxy (D-039).
 
 ## 2026-11-18 · 001 P0 Spike
 
