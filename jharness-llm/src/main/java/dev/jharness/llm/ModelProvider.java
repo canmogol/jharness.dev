@@ -16,4 +16,8 @@ public interface ModelProvider {
      * @return the whole reply
      */
     ChatReply stream(ChatRequest request, Consumer<String> onDelta) throws ModelException;
+
+    /** Stops a running {@link #stream} from another thread; it then throws {@link ModelException}. */
+    default void cancel() {
+    }
 }

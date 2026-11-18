@@ -21,6 +21,7 @@ import dev.jharness.process.ProcessRunner;
 import dev.jharness.process.Search;
 import dev.jharness.sandbox.AgentIsolate;
 import dev.jharness.sandbox.ApiServices;
+import dev.jharness.sandbox.Checkpoints;
 import dev.jharness.sandbox.IsolateManager;
 import dev.jharness.sandbox.RunResult;
 import dev.jharness.security.FilePolicy;
@@ -108,13 +109,15 @@ public final class Session implements AutoCloseable {
         PermissionGate gate = access.gate() != null ? access.gate()
                 : new PermissionEngine(PermissionMode.of(settings.permissions().mode()), ProjectRules.load(home, ws.root()),
                         access.prompter(), bus, turns);
-        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps);
+        Checkpoints checkpoints = new Checkpoints(Checkpoints.rootFor(home, ws.root(), bus.session()), bus, turns);
+        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
         String system = SystemPrompt.build(ctx.ok() ? ctx.value() : null, SystemPrompt.readMemory(ws.root().resolve("JHARNESS.md")),
                 SystemPrompt.readMemory(home.resolve(".jharness").resolve("JHARNESS.md")));
         AgentLoop loop = new AgentLoop(provider, isolate, services, bus, turns, system, settings.agent().maxSteps(),
                 settings.timeouts().outputChars());
+        loop.useCheckpoints(checkpoints);
         return new Session(bus, log, isolate, loop, ws, turns, settings);
     }
 

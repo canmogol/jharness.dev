@@ -54,6 +54,20 @@ class SessionLogTest {
     }
 
     @Test
+    void anInterruptedThreadDoesNotCloseTheLog() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws"));
+        EventBus bus = new EventBus("s-int");
+        try (SessionLog log = SessionLog.open(tmp.resolve("home"), ws, bus.session())) {
+            bus.subscribe(log);
+            Thread.currentThread().interrupt();
+            bus.publish(Origin.main(1), "model.delta", Json.object().put("text", "while interrupted"));
+            Thread.interrupted();
+            bus.publish(Origin.main(1), "model.delta", Json.object().put("text", "after"));
+            assertEquals(2, SessionLog.read(log.path()).size());
+        }
+    }
+
+    @Test
     void projectHashUsesRealPath() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws"));
         Path link = Files.createSymbolicLink(tmp.resolve("link"), ws);

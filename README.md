@@ -27,7 +27,7 @@ This repository is planned with spec-driven development: product docs first, the
 
 ## Status
 
-Phase 1 (core loop MVP) in progress. Done: the P0 spike (`specs/001-p0-spike/`), the host modules (002), the agent loop (003), permissions and the file policy (004), the CLI and terminal UI (005), and project trust, layered settings and `JHARNESS.md` (006).
+Phase 1 (core loop MVP) in progress. Done: the P0 spike (`specs/001-p0-spike/`), the host modules (002), the agent loop (003), permissions and the file policy (004), the CLI and terminal UI (005), project trust, layered settings and `JHARNESS.md` (006), and checkpoints, undo and Esc (007). Every Phase 1 item is built; the Phase 1 gate (a live run with a local model and with Claude) is next.
 
 ## Build and run
 

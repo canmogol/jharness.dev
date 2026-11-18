@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.stream.Stream;
 
 import org.graalvm.polyglot.HostAccess;
@@ -115,6 +116,36 @@ public final class HostApi {
         return n.asText();
     }
 
+    private int turn() {
+        return s.origin().get().turn();
+    }
+
+    /** The file's current text for a diff, or null if it is missing, too large or not UTF-8. */
+    private static String currentText(Path p) {
+        try {
+            if (!Files.isRegularFile(p) || Files.size(p) > MAX_READ_BYTES) {
+                return null;
+            }
+            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                    .decode(java.nio.ByteBuffer.wrap(Files.readAllBytes(p))).toString();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Saves a checkpoint, writes, records the result and emits {@code file.changed} (D-044). */
+    private void change(Path p, String rel, String diff, byte[] bytes) throws IOException {
+        if (s.checkpoints() != null) {
+            s.checkpoints().beforeChange(turn(), p, rel);
+        }
+        Files.createDirectories(p.getParent());
+        Files.write(p, bytes);
+        if (s.checkpoints() != null) {
+            s.checkpoints().afterChange(turn(), p);
+        }
+        s.bus().publish(s.origin().get(), "file.changed", Json.object().put("path", rel).put("diff", diff));
+    }
+
     /** Drops results the deny list hides; a second line of defence behind the search exclusions. */
     private void filter(ObjectNode result, String field, java.util.function.Function<JsonNode, String> path) {
         var arr = (com.fasterxml.jackson.databind.node.ArrayNode) result.get(field);
@@ -216,16 +247,17 @@ public final class HostApi {
             return reject("writeFile", e);
         }
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        boolean existed = Files.exists(p);
+        String diff = Diffs.unified(rel, existed ? currentText(p) : null, content);
         return call("writeFile", Operation.Kind.WRITE, "write " + rel + " (" + bytes.length + " bytes)",
-                Json.object().put("path", rel).put("bytes", bytes.length), () -> {
+                Json.object().put("path", rel).put("bytes", bytes.length).put("diff", diff), () -> {
                     if (bytes.length > MAX_WRITE_BYTES) {
                         throw new IllegalArgumentException("content is " + bytes.length + " bytes; the limit is " + MAX_WRITE_BYTES);
                     }
                     if (Files.isDirectory(p)) {
                         throw new IllegalArgumentException(rel + " is a folder");
                     }
-                    Files.createDirectories(p.getParent());
-                    Files.write(p, bytes);
+                    change(p, rel, diff, bytes);
                     return Json.write(Json.object().put("path", rel).put("bytes", bytes.length));
                 });
     }
@@ -244,7 +276,10 @@ public final class HostApi {
         } catch (RuntimeException e) {
             return reject("editFile", e);
         }
-        return call("editFile", Operation.Kind.WRITE, "edit " + rel, Json.object().put("path", rel), () -> {
+        String before = currentText(p);
+        String diff = before == null || before.indexOf(oldText) < 0 ? ""
+                : Diffs.unified(rel, before, before.replaceFirst(java.util.regex.Pattern.quote(oldText), java.util.regex.Matcher.quoteReplacement(newText)));
+        return call("editFile", Operation.Kind.WRITE, "edit " + rel, Json.object().put("path", rel).put("diff", diff), () -> {
             if (!Files.isRegularFile(p)) {
                 throw new IllegalArgumentException("no such file: " + rel);
             }
@@ -263,7 +298,8 @@ public final class HostApi {
                 }
                 throw new IllegalArgumentException("oldText occurs " + n + " times in " + rel + "; include more context so it occurs once");
             }
-            Files.writeString(p, text.substring(0, first) + newText + text.substring(first + oldText.length()), StandardCharsets.UTF_8);
+            String after = text.substring(0, first) + newText + text.substring(first + oldText.length());
+            change(p, rel, Diffs.unified(rel, text, after), after.getBytes(StandardCharsets.UTF_8));
             return Json.write(Json.object().put("path", rel).put("replacements", 1));
         });
     }
@@ -351,7 +387,25 @@ public final class HostApi {
         } catch (RuntimeException e) {
             return reject("git", e);
         }
-        return call("git", kind, "git " + a.path("op").asText(), a, () -> GitOperations.toJson(s.git().run(a)));
+        String op = a.path("op").asText();
+        return call("git", kind, "git " + op, a, () -> {
+            List<Path> restored = new java.util.ArrayList<>();
+            if (s.checkpoints() != null && kind == Operation.Kind.GIT_WRITE) {
+                s.checkpoints().touchedGit(turn(), op);
+                if (op.equals("restore") && !a.path("staged").asBoolean(false)) {
+                    for (JsonNode p : a.path("paths")) {
+                        FilePolicy.Target t = s.files().write(p.asText());
+                        if (Files.isRegularFile(t.path())) {
+                            s.checkpoints().beforeChange(turn(), t.path(), t.display());
+                            restored.add(t.path());
+                        }
+                    }
+                }
+            }
+            String r = GitOperations.toJson(s.git().run(a));
+            restored.forEach(p -> s.checkpoints().afterChange(turn(), p));
+            return r;
+        });
     }
 
     @HostAccess.Export

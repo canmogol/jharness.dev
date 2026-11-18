@@ -54,6 +54,7 @@ Last updated: 2026-11-18
 | D-041 | Permission modes ask, accept-edits, plan and bypass; the file policy applies in every mode | Accepted |
 | D-042 | Secrets come from the environment, then `~/.jharness/secrets` (KEY=value, 0600 only) | Accepted |
 | D-043 | Trust answers in `~/.jharness/trusted.json`; settings layers user, project, session; untrusted projects only tighten | Accepted |
+| D-044 | Checkpoints hold file contents per turn; `/undo` and `/rewind` restore files and the conversation, not git history | Accepted |
 
 ---
 
@@ -584,6 +585,20 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** Recommended option accepted while the user was away, specifying 006-trust-settings-and-memory, 2026-11-18.
 
+## D-044 — Checkpoints and undo
+
+**Decision.**
+- Before the agent first changes a file in a turn (`writeFile`, `editFile`, `git restore`), the host saves the file's content, or the fact that it didn't exist, in the turn's checkpoint under `~/.jharness/checkpoints/<project-hash>/<session-id>/` (0700, files 0600). Files over 10 MB are not saved; the change is still allowed, and undo reports it can't restore them.
+- `/undo` restores every file changed in the last turn and removes files the turn created. `/rewind N` does the same for every turn after turn N. Both also cut the conversation back, so the model doesn't see the undone turns.
+- Undo restores files only: commits, staged changes and other git state stay. The undo message says so when an undone turn ran `git add`, `commit` or `restore`.
+- If a file changed since the agent last wrote it (the user edited it), undo stops, lists the files, and changes nothing; `/undo --force` restores anyway.
+- Diff review: in `ask` mode the approval question shows the unified diff of the change; in `accept-edits` and `bypass` the TUI prints the diff after the change. `/diff` shows the last turn's changes.
+- Esc while a turn runs stops the model stream and the running block; the turn ends with stop reason `interrupted`.
+
+**Why.** US-2.3, US-2.4 and US-2.5. Saving contents per turn needs no git and works in folders that aren't repositories. Undoing commits would rewrite history the user may have pushed, so it stays manual.
+
+**Source.** Recommended option accepted while the user was away, specifying 007-checkpoints-and-undo, 2026-11-18.
+
 ---
 
 ## Questions and answers
@@ -640,6 +655,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q46 | What do the permission modes allow, and does bypass skip the file policy? | Table in D-041; the file policy applies in every mode | Secrets and mounted folders stay protected | D-041 |
 | Q47 | Where do API keys come from besides the environment? | `~/.jharness/secrets`, `NAME=value` lines, 0600 only | One lookup for both sources; a readable file is refused | D-042 |
 | Q48 | Where are trust answers kept, how do settings layer, and what does an untrusted project's settings file do? | `~/.jharness/trusted.json`; user, project, session; untrusted: only `files.deny` and `plan` | A cloned repo can only make JHarness stricter | D-043 |
+| Q49 | What do checkpoints save, and does undo touch git? | File contents per turn; files and conversation are restored, git history isn't | Works outside git; never rewrites history | D-044 |
 
 ---
 

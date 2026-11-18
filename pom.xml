@@ -30,6 +30,7 @@
     <native.maven.plugin.version>1.1.18</native.maven.plugin.version>
     <jackson.version>2.21.4</jackson.version>
     <junit.version>5.14.4</junit.version>
+    <diffutils.version>4.15</diffutils.version>
     <!-- Set by the platform profiles below; the build fails on an unsupported platform. -->
     <js.isolate.platform>unsupported</js.isolate.platform>
   </properties>
@@ -47,6 +48,11 @@
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
         <version>${jackson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.java-diff-utils</groupId>
+        <artifactId>java-diff-utils</artifactId>
+        <version>${diffutils.version}</version>
       </dependency>
       <dependency>
         <groupId>org.graalvm.polyglot</groupId>

@@ -29,7 +29,7 @@ class TuiTest {
     final ByteArrayOutputStream screen = new ByteArrayOutputStream();
 
     private Terminal terminal(String input) throws Exception {
-        Terminal t = TerminalBuilder.builder().system(false).dumb(true)
+        Terminal t = TerminalBuilder.builder().system(false).dumb(true).type("dumb")
                 .streams(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)), screen).build();
         t.setSize(new org.jline.terminal.Size(200, 50));
         return t;
@@ -47,7 +47,7 @@ class TuiTest {
         Settings s = Settings.parse("{\"models\":{\"local\":{\"provider\":\"openai-compatible\",\"baseUrl\":\"http://127.0.0.1:1/v1\",\"model\":\"q\"},"
                 + "\"claude\":{\"provider\":\"anthropic\",\"model\":\"c\"}}}", "t");
         // Line 1: a task; the approval asks once, gets "maybe" (asked again) then "y". Then /model, /help, /exit.
-        Terminal t = terminal("fix a.txt\nmaybe\ny\n/model\n/help\n/unknown\n/exit\n");
+        Terminal t = terminal("fix a.txt\nmaybe\ny\n/diff\n/undo\n/model\n/help\n/unknown\n/exit\n");
         Path history = home.resolve(".jharness/history");
         Tui tui = new Tui(t, history);
         try (Session session = Session.open(home, ws, s, Session.Access.prompter(tui.prompter()),
@@ -64,7 +64,9 @@ class TuiTest {
         assertTrue(sc.contains("  local  openai-compatible  q") && sc.contains("  claude  anthropic  c"), sc);
         assertTrue(sc.contains("/model NAME"), sc);
         assertTrue(sc.contains("Unknown command /unknown"), sc);
-        assertEquals("new", Files.readString(ws.resolve("a.txt")));
+        assertTrue(sc.contains("-old") && sc.contains("+new"), "diff in the approval question and /diff: " + sc);
+        assertTrue(sc.contains("Restored a.txt."), sc);
+        assertEquals("old", Files.readString(ws.resolve("a.txt")), "/undo restored the file");
         assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(history)));
         assertTrue(Files.readString(history).contains("fix a.txt"), "history saved");
     }

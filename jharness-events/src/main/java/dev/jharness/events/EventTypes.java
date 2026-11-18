@@ -18,6 +18,9 @@ public final class EventTypes {
         HOST.put("session.started", List.of("workspace"));
         HOST.put("session.model_changed", List.of("profile", "provider", "model"));
         HOST.put("project.trusted", List.of("trusted"));
+        HOST.put("checkpoint.saved", List.of("path"));
+        HOST.put("checkpoint.restored", List.of("files", "turns"));
+        HOST.put("file.changed", List.of("path", "diff"));
         HOST.put("settings.ignored", List.of("keys"));
         HOST.put("api.call", List.of("api", "status"));
         HOST.put("permission.decided", List.of("api", "kind", "allowed"));

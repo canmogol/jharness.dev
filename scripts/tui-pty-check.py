@@ -8,7 +8,9 @@ Sets up a temporary home and workspace, then types:
   1. "change a.txt" Enter        -> the recorded reply writes a.txt; JHarness asks for approval
   2. "y" Enter                   -> approve once; the step runs and the final reply streams
   3. "/help" Enter               -> the command list
-  4. Ctrl-D                      -> quit
+  4. "/undo" Enter               -> a.txt is back to "old"
+  5. "spin" Enter, then Esc      -> the recorded reply loops forever; Esc stops it
+  6. Ctrl-D                      -> quit
 Exits 0 only if the approval was asked, the file changed, the reply was shown and JHarness exited 0.
 """
 import fcntl
@@ -55,6 +57,7 @@ def main():
     with open(replay, "w") as f:
         f.write(json.dumps({"reply": "Changing it.\n```js\napi.writeFile('a.txt', 'new')\n```"}) + "\n")
         f.write(json.dumps({"reply": "Changed a.txt to new."}) + "\n")
+        f.write(json.dumps({"reply": "Spinning.\n```js\nwhile (true) {}\n```"}) + "\n")
 
     pid, fd = pty.fork()
     if pid == 0:
@@ -63,12 +66,18 @@ def main():
     # A real terminal has a size; without one JLine shortens every prompt.
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
     transcript = read_available(fd, 8.0)
-    for keys, wait in [(b"n\r", 2.0), (b"change a.txt\r", 4.0), (b"y\r", 4.0), (b"/help\r", 1.0), (b"\x04", 3.0)]:
+    steps = [(b"n\r", 2.0), (b"change a.txt\r", 4.0), (b"y\r", 4.0), (b"/help\r", 1.0), (b"/undo\r", 1.5),
+             (b"spin\r", 2.5), (b"\x1b", 2.5), (b"\x04", 3.0)]
+    content_after_change = None
+    for keys, wait in steps:
         try:
             os.write(fd, keys)
         except OSError:
             break
         transcript += read_available(fd, wait)
+        if keys == b"/help\r":
+            with open(os.path.join(ws, "a.txt")) as f:
+                content_after_change = f.read()
     _, status = os.waitpid(pid, 0)
     text = transcript.decode("utf-8", "replace")
     with open(os.path.join(ws, "a.txt")) as f:
@@ -81,7 +90,10 @@ def main():
         "step": "step 1: ok" in text,
         "reply": "Changed a.txt to new." in text,
         "help": "/model NAME" in text,
-        "file": content == "new",
+        "file": content_after_change == "new",
+        "diff": "-old" in text and "+new" in text,
+        "undo": "Restored a.txt." in text and content == "old",
+        "esc": "[interrupted]" in text,
         "exit": os.waitstatus_to_exitcode(status) == 0,
         "trust-saved": os.path.exists(os.path.join(home, ".jharness", "trusted.json")),
     }
