@@ -29,11 +29,11 @@ Spec: `../specs/001-p0-spike/`
 
 - [x] Model providers: OpenAI-compatible (local models through Ollama or llama.cpp), Claude (native) (D-035)
 - [ ] Model profiles in `settings.json`; `--model` and `/model` (D-032)
-- [ ] Agent loop: stream reply, extract the JS block, run it, return result or error with line numbers
+- [x] Agent loop: stream reply, extract the JS block, run it, return result or error with line numbers
 - [x] Isolate manager: one Engine per agent, fresh Context per run, limits, watchdog
 - [x] `api`: readContext, readFile, writeFile, editFile, listFiles, grep, git, emit
 - [x] `ProcessRunner` with git and `rg` (search), Java search fallback when `rg` is missing
-- [ ] `api.d.ts` and examples in the system prompt
+- [x] `api.d.ts` and examples in the system prompt
 - [ ] Permissions: ask, accept-edits, read-only (plan), bypass; permanent approvals per project
 - [ ] Approvals inside a running JS block (watchdog pauses while waiting)
 - [ ] Project trust prompt
@@ -43,7 +43,7 @@ Spec: `../specs/001-p0-spike/`
 - [ ] `JHARNESS.md` project memory; layered JSON settings
 - [ ] JLine TUI
 - [ ] Secrets from environment variables or a 0600 file
-- [ ] Replay provider for deterministic tests
+- [x] Replay provider for deterministic tests
 
 **Gate:** fixes a seeded bug in a sample repo end to end, with a local model and with Claude.
 

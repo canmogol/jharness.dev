@@ -1,6 +1,6 @@
 # Plan 003 — Agent loop with RunJS
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-18
+Spec: `spec.md` · Status: Done · Created: 2026-11-18
 
 ## Approach
 
@@ -72,8 +72,8 @@ Declares `api` with the eight methods and the JSON shapes from spec 002's plan a
 
 ## Checks
 
-- [ ] `mvn -B -ntp verify`
-- [ ] `mvn -B -ntp -Pnative -pl jharness-testkit package -DskipTests && jharness-testkit/target/jharness-smoke`
+- [x] `mvn -B -ntp verify`
+- [x] `mvn -B -ntp -Pnative -pl jharness-testkit package -DskipTests && jharness-testkit/target/jharness-smoke`
 
 ## Risks
 
