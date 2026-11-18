@@ -24,6 +24,7 @@ public final class EventTypes {
         HOST.put("sandbox.run_completed", List.of("status", "durationMs"));
         HOST.put("sandbox.limit_exceeded", List.of("limit", "message"));
         HOST.put("sandbox.watchdog", List.of("step"));
+        HOST.put("sandbox.memory_protection", List.of("available"));
         HOST.put("model.request", List.of("provider", "model"));
         HOST.put("model.delta", List.of("text"));
         HOST.put("model.completed", List.of("provider", "model", "stopReason"));

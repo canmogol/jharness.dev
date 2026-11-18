@@ -28,9 +28,9 @@ Order and grouping: the recommended module-by-module order, accepted on the user
 
 ## Group 4 — Isolates and api
 
-- [ ] T012 Write `IsolateManager` and `AgentIsolate`: engine per agent, fresh context, limits from settings, isolate mode check, `sandbox.*` events (AC-08)
-- [ ] T013 Write the `Watchdog` with D-037 escalation, pausing during permission decisions (AC-08)
-- [ ] T014 Write the `Api` facade: all eight methods, gate, confinement, events, JS error line numbers (AC-06, AC-07, AC-09)
+- [x] T012 Write `IsolateManager` and `AgentIsolate`: engine per agent, fresh context, limits from settings, isolate mode check, `sandbox.*` events (AC-08)
+- [x] T013 Write the `Watchdog` with D-037 escalation, pausing during permission decisions (AC-08)
+- [x] T014 Write the `Api` facade: all eight methods, gate, confinement, events, JS error line numbers (AC-06, AC-07, AC-09)
 
 ## Group 5 — Model providers
 
