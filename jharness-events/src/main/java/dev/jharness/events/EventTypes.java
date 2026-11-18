@@ -16,6 +16,7 @@ public final class EventTypes {
 
     static {
         HOST.put("session.started", List.of("workspace"));
+        HOST.put("session.model_changed", List.of("profile", "provider", "model"));
         HOST.put("api.call", List.of("api", "status"));
         HOST.put("permission.decided", List.of("api", "kind", "allowed"));
         HOST.put("permission.asked", List.of("api", "kind", "summary"));

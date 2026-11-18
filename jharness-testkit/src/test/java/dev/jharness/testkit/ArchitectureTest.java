@@ -43,7 +43,7 @@ class ArchitectureTest {
         assertNotNull(root);
         List<String> violations = new ArrayList<>();
         int scanned = 0;
-        for (String module : List.of("jharness-events", "jharness-config", "jharness-security", "jharness-process", "jharness-sandbox", "jharness-llm", "jharness-agent")) {
+        for (String module : List.of("jharness-events", "jharness-config", "jharness-security", "jharness-process", "jharness-sandbox", "jharness-llm", "jharness-agent", "jharness-cli")) {
             Path src = root.resolve(module).resolve("src/main/java");
             try (Stream<Path> files = Files.walk(src)) {
                 for (Path f : files.filter(x -> x.toString().endsWith(".java")).toList()) {

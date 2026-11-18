@@ -123,6 +123,24 @@ class ProvidersTest {
     }
 
     @Test
+    void keyFromTheSecretsFileIsSentButNeverLogged(@org.junit.jupiter.api.io.TempDir java.nio.file.Path home) throws Exception {
+        var f = dev.jharness.config.Secrets.fileFor(home);
+        java.nio.file.Files.createDirectories(f.getParent());
+        java.nio.file.Files.writeString(f, "TEST_KEY=sk-from-file-123\n");
+        java.nio.file.Files.setPosixFilePermissions(f, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        var secrets = dev.jharness.config.Secrets.load(home, k -> null);
+        Settings st = Settings.parse("{\"models\":{\"p\":{\"provider\":\"anthropic\",\"baseUrl\":\"" + stub.baseUrl()
+                + "\",\"model\":\"m\",\"apiKeyEnv\":\"TEST_KEY\"}}}", "t");
+        var log = dev.jharness.events.SessionLog.open(home, home, bus.session());
+        bus.subscribe(log);
+        stub.enqueue(Reply.sse(Streams.ANTHROPIC_OK));
+        ModelProviders.create(st.models().resolve("p"), bus, () -> Origin.main(1), secrets).stream(req(), t -> {});
+        log.close();
+        assertEquals("sk-from-file-123", stub.requests().getFirst().header("x-api-key"));
+        assertFalse(java.nio.file.Files.readString(log.path()).contains("sk-from-file-123"), "the key reached the session log");
+    }
+
+    @Test
     void anthropicErrors() throws Exception {
         var p = provider("anthropic", Map.of("TEST_KEY", "k"));
         stub.enqueue(Reply.json(401, Streams.ANTHROPIC_401));
