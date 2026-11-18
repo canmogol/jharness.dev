@@ -4,6 +4,7 @@
 Usage: tui-pty-check.py <jharness-binary>
 
 Sets up a temporary home and workspace, then types:
+  0. "n" Enter                   -> don't trust the new folder (the trust question comes first)
   1. "change a.txt" Enter        -> the recorded reply writes a.txt; JHarness asks for approval
   2. "y" Enter                   -> approve once; the step runs and the final reply streams
   3. "/help" Enter               -> the command list
@@ -62,7 +63,7 @@ def main():
     # A real terminal has a size; without one JLine shortens every prompt.
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
     transcript = read_available(fd, 8.0)
-    for keys, wait in [(b"change a.txt\r", 4.0), (b"y\r", 4.0), (b"/help\r", 1.0), (b"\x04", 3.0)]:
+    for keys, wait in [(b"n\r", 2.0), (b"change a.txt\r", 4.0), (b"y\r", 4.0), (b"/help\r", 1.0), (b"\x04", 3.0)]:
         try:
             os.write(fd, keys)
         except OSError:
@@ -73,6 +74,7 @@ def main():
     with open(os.path.join(ws, "a.txt")) as f:
         content = f.read()
     checks = {
+        "trust": "Do you trust " in text and "loosen JHarness rules" in text,
         "banner": "/help for commands" in text,
         "asked": "Allow writeFile: write a.txt (3 bytes)?" in text,
         "prompt": "> " in text and "[y] once" in text,
@@ -81,6 +83,7 @@ def main():
         "help": "/model NAME" in text,
         "file": content == "new",
         "exit": os.waitstatus_to_exitcode(status) == 0,
+        "trust-saved": os.path.exists(os.path.join(home, ".jharness", "trusted.json")),
     }
     ok = all(checks.values())
     print(json.dumps({"check": "tui-pty", "status": "pass" if ok else "fail", "checks": checks}))

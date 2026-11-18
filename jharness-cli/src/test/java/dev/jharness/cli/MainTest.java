@@ -74,6 +74,36 @@ class MainTest {
         assertTrue(err.toString().contains("no more replies"), err.toString());
     }
 
+    private String sessionLog() throws Exception {
+        try (var files = Files.walk(home.resolve(".jharness/sessions"))) {
+            Path log = files.filter(f -> f.toString().endsWith(".jsonl")).findFirst().orElseThrow();
+            return Files.readString(log);
+        }
+    }
+
+    @Test
+    void untrustedProjectSettingsCantLoosenRules() throws Exception {
+        Files.createDirectories(ws.resolve(".jharness"));
+        Files.writeString(ws.resolve(".jharness/settings.json"), "{\"permissions\":{\"mode\":\"bypass\"}}");
+        Path r = replay("```js\napi.writeFile('a.txt', 'changed')\n```", "done");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "change it"));
+        assertEquals("hello file", Files.readString(ws.resolve("a.txt")), "bypass from an untrusted project is ignored");
+        String log = sessionLog();
+        assertTrue(log.contains("\"type\":\"settings.ignored\"") && log.contains("permissions.mode"), log);
+        assertTrue(log.contains("\"trusted\":false"));
+    }
+
+    @Test
+    void trustedProjectSettingsApply() throws Exception {
+        Files.createDirectories(ws.resolve(".jharness"));
+        Files.writeString(ws.resolve(".jharness/settings.json"), "{\"permissions\":{\"mode\":\"bypass\"}}");
+        dev.jharness.security.TrustStore.load(home).record(ws, true);
+        Path r = replay("```js\napi.writeFile('a.txt', 'changed')\n```", "done");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "change it"));
+        assertEquals("changed", Files.readString(ws.resolve("a.txt")));
+        assertTrue(sessionLog().contains("\"trusted\":true"));
+    }
+
     @Test
     void settingsErrorsExitTwo() throws Exception {
         assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "-p", "x"));
@@ -81,7 +111,7 @@ class MainTest {
         Files.createDirectories(home.resolve(".jharness"));
         Files.writeString(home.resolve(".jharness/settings.json"), "{\"models\":{\"a\":{\"provider\":\"anthropic\",\"model\":\"m\"}}}");
         assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--model", "b", "-p", "x"));
-        assertTrue(err.toString().contains("known: a"), err.toString());
+        assertTrue(err.toString().contains("\"b\""), err.toString());
         Files.writeString(home.resolve(".jharness/settings.json"), "{\"bogus\":1}");
         assertEquals(2, run("--home", home.toString(), "-p", "x"));
         assertEquals(2, run("--no-such-option"));

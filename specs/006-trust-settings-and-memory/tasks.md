@@ -6,16 +6,16 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 1 — Settings layers
 
-- [ ] T001 Write `Settings.layered` with the merge rules, the untrusted filter and project-file errors (AC-03, AC-04, AC-05)
+- [x] T001 Write `Settings.layered` with the merge rules, the untrusted filter and project-file errors (AC-03, AC-04, AC-05)
 
 ## Group 2 — Trust and memory
 
-- [ ] T002 [P] Write `TrustStore` with tests (AC-01)
-- [ ] T003 [P] Add both `JHARNESS.md` files to the system prompt (AC-06)
+- [x] T002 [P] Write `TrustStore` with tests (AC-01)
+- [x] T003 [P] Add both `JHARNESS.md` files to the system prompt (AC-06)
 
 ## Group 3 — Wiring
 
-- [ ] T004 Decide trust in the CLI (stored answer, TUI question, headless untrusted), open sessions with layered settings, emit the events; tests and the pty check (AC-01, AC-02, AC-04, AC-07)
+- [x] T004 Decide trust in the CLI (stored answer, TUI question, headless untrusted), open sessions with layered settings, emit the events; tests and the pty check (AC-01, AC-02, AC-04, AC-07)
 
 ## Traceability
 
