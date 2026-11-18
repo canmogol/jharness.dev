@@ -1,6 +1,6 @@
 # Spec 008 — Loop notice for extra code blocks
 
-Status: Draft · Phase: P1 · Created: 2026-11-19
+Status: Done · Phase: P1 · Created: 2026-11-19
 
 ## Summary
 

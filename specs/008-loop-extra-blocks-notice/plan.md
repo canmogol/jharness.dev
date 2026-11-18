@@ -1,6 +1,6 @@
 # Plan 008 — Loop notice for extra code blocks
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-19
+Spec: `spec.md` · Status: Done · Created: 2026-11-19
 
 ## Approach
 
@@ -51,9 +51,9 @@ The interrupt path is unchanged: an interrupted step ends the turn, so no note i
 
 ## Checks
 
-- [ ] `mvn -pl jharness-agent -am test -Dtest=JsBlocksTest -Dsurefire.failIfNoSpecifiedTests=false`
-- [ ] `mvn -pl jharness-agent,jharness-testkit -am test`
-- [ ] `mvn verify`
+- [x] `mvn -pl jharness-agent -am test -Dtest=JsBlocksTest -Dsurefire.failIfNoSpecifiedTests=false`
+- [x] `mvn -pl jharness-agent,jharness-testkit -am test`
+- [x] `mvn verify`
 - [ ] P1 gate re-run by hand after merge (`docs/p1-gate.md`)
 
 ## Risks
