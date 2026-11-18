@@ -27,7 +27,36 @@ This repository is planned with spec-driven development: product docs first, the
 
 ## Status
 
-Planning. The first spec is `specs/001-p0-spike/`.
+Phase 1 (core loop MVP) in progress. Done: the P0 spike (`specs/001-p0-spike/`), the host modules (002), the agent loop (003), permissions and the file policy (004), and the CLI and terminal UI (005).
+
+## Build and run
+
+Needs Oracle GraalVM 25 (Java 25) and Maven; `rg` (ripgrep) is used when installed.
+
+```
+mvn install                                          # build and test on the JVM
+mvn -Pnative -pl jharness-cli package -DskipTests    # native binary: jharness-cli/target/jharness
+```
+
+Model profiles go in `~/.jharness/settings.json`:
+
+```json
+{
+  "model": "ollama-qwen",
+  "models": {
+    "ollama-qwen": { "provider": "openai-compatible", "baseUrl": "http://localhost:11434/v1", "model": "qwen2.5-coder:7b" },
+    "claude": { "provider": "anthropic", "model": "<Claude model id>", "apiKeyEnv": "ANTHROPIC_API_KEY" }
+  }
+}
+```
+
+API keys come from the environment or `~/.jharness/secrets` (`NAME=value` lines, mode 0600). Then, in a project folder:
+
+```
+jharness                      # terminal UI; /help lists the commands
+jharness --model claude       # another profile
+jharness -p "explain src/"    # one prompt, no UI; changes are denied
+```
 
 ## License
 

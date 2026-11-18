@@ -76,7 +76,7 @@ jobs:
           printf '%s\n' '{"reply":"```js\napi.readFile(\"a.txt\")\n```"}' '{"reply":"The file says hello."}' > "$tmp/replay.jsonl"
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/replay.jsonl" -p "read a.txt" | tee "$tmp/out.txt"
           grep -q "The file says hello." "$tmp/out.txt"
-          grep -q "hello from the workspace" "$tmp"/home/.jharness/sessions/*/*.jsonl
+          grep -q "\"type\":\"loop.result\".*\"status\":\"ok\"" "$tmp"/home/.jharness/sessions/*/*.jsonl
 
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check
