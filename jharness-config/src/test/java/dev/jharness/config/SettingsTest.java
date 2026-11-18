@@ -110,6 +110,15 @@ class SettingsTest {
     }
 
     @Test
+    void agentSection() throws Exception {
+        assertEquals(25, Settings.defaults().agent().maxSteps());
+        assertEquals(5, Settings.parse("{\"agent\":{\"maxSteps\":5}}", "s").agent().maxSteps());
+        assertTrue(bad("{\"agent\":{\"maxSteps\":0}}").getMessage().contains("agent.maxSteps"));
+        assertTrue(bad("{\"agent\":{\"maxSteps\":201}}").getMessage().contains("agent.maxSteps"));
+        assertTrue(bad("{\"agent\":{\"steps\":3}}").getMessage().contains("agent.steps"));
+    }
+
+    @Test
     void profileWithValidates() throws Exception {
         var main = SandboxSettings.defaults().profile("main");
         assertEquals("2s", main.with(Map.of("sandbox.MaxCPUTime", "2s")).values().get("sandbox.MaxCPUTime"));

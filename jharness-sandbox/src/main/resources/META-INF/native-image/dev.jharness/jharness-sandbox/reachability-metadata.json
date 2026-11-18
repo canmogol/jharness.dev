@@ -3,15 +3,61 @@
     {
       "type": "dev.jharness.sandbox.HostApi",
       "methods": [
-        { "name": "readContext", "parameterTypes": [] },
-        { "name": "readFile", "parameterTypes": ["java.lang.String"] },
-        { "name": "writeFile", "parameterTypes": ["java.lang.String", "java.lang.String"] },
-        { "name": "editFile", "parameterTypes": ["java.lang.String", "java.lang.String", "java.lang.String"] },
-        { "name": "listFiles", "parameterTypes": ["java.lang.String"] },
-        { "name": "grep", "parameterTypes": ["java.lang.String"] },
-        { "name": "git", "parameterTypes": ["java.lang.String"] },
-        { "name": "emit", "parameterTypes": ["java.lang.String"] }
+        {
+          "name": "readContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "readFile",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "writeFile",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "editFile",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "listFiles",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "grep",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "git",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "emit",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
       ]
+    }
+  ],
+  "resources": [
+    {
+      "glob": "dev/jharness/sandbox/api.d.ts"
     }
   ]
 }
