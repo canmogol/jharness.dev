@@ -34,6 +34,8 @@ of truth**; nothing outside it (chat notes, older design docs) overrides them.
 
 ## Commits and PRs
 
+- On feature branches (`NNN-<slug>` and other non-default branches), Claude may commit and push the branch to GitHub without asking each time, and open PRs to `master`. This overrides the general "never commit or push unless asked" rule for this repo.
+- Never commit on `master` or `main`, and never push to them; the user merges.
 - Never add a `Co-Authored-By` line or any Claude attribution to commits, PR titles or PR bodies.
 - Short imperative subjects (`Add ProcessRunner argument checks`). Spec-finishing commits: `Finish NNN: <Title>`.
 
