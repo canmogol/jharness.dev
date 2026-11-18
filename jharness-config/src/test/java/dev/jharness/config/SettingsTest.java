@@ -119,6 +119,21 @@ class SettingsTest {
     }
 
     @Test
+    void permissionsAndFiles(@TempDir Path docs) throws Exception {
+        assertEquals("ask", Settings.defaults().permissions().mode());
+        assertEquals("plan", Settings.parse("{\"permissions\":{\"mode\":\"plan\"}}", "s").permissions().mode());
+        assertTrue(bad("{\"permissions\":{\"mode\":\"yolo\"}}").getMessage().contains("permissions.mode"));
+        assertTrue(bad("{\"permissions\":{\"level\":\"ask\"}}").getMessage().contains("permissions.level"));
+        Settings f = Settings.parse("{\"files\":{\"mounts\":[\"" + docs + "\"],\"deny\":[\"secrets/**\"]}}", "s");
+        assertEquals(java.util.List.of(docs.toRealPath()), f.files().mounts());
+        assertEquals(java.util.List.of("secrets/**"), f.files().deny());
+        assertTrue(bad("{\"files\":{\"mounts\":[\"relative/docs\"]}}").getMessage().contains("absolute"));
+        assertTrue(bad("{\"files\":{\"mounts\":[\"" + docs.resolve("missing") + "\"]}}").getMessage().contains("not a folder"));
+        assertTrue(bad("{\"files\":{\"deny\":[\"\"]}}").getMessage().contains("non-empty"));
+        assertTrue(bad("{\"files\":{\"allow\":[\"x\"]}}").getMessage().contains("files.allow"));
+    }
+
+    @Test
     void profileWithValidates() throws Exception {
         var main = SandboxSettings.defaults().profile("main");
         assertEquals("2s", main.with(Map.of("sandbox.MaxCPUTime", "2s")).values().get("sandbox.MaxCPUTime"));

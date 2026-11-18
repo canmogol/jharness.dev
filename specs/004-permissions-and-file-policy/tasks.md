@@ -6,12 +6,12 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 1 — Settings and file policy
 
-- [ ] T001 Add the `permissions` and `files` settings sections with validation (AC-07)
-- [ ] T002 Write `FilePolicy` with mounts and the deny list, and its tests (AC-05, AC-06)
+- [x] T001 Add the `permissions` and `files` settings sections with validation (AC-07)
+- [x] T002 Write `FilePolicy` with mounts and the deny list, and its tests (AC-05, AC-06)
 
 ## Group 2 — Permission engine
 
-- [ ] T003 Write `PermissionMode`, `Prompter`, `ProjectRules` and `PermissionEngine` with tests for every mode (AC-01, AC-02, AC-03)
+- [x] T003 Write `PermissionMode`, `Prompter`, `ProjectRules` and `PermissionEngine` with tests for every mode (AC-01, AC-02, AC-03)
 
 ## Group 3 — Wiring
 
