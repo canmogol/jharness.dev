@@ -3,7 +3,7 @@
 Features in build order. Each phase ends with a gate it must pass before the next starts. No dates are set yet.
 How each phase is built and tested is in `../plan.md`; why each choice was made is in `decisions.md`.
 
-Last updated: 2026-11-15
+Last updated: 2026-11-18
 
 ---
 
@@ -11,21 +11,23 @@ Last updated: 2026-11-15
 
 Prove the risky parts before building features.
 
-- [ ] Native binary on Linux and macOS that runs JS in a `js-isolate` context under the UNTRUSTED policy and calls a host `api` method
-- [ ] Measure binary size, start-up time, isolate creation time and memory
-- [ ] Check memory protection keys on Linux
-- [ ] Load and run a ModelJars model inside the native binary; measure speed on an 8k-token prompt
-- [ ] Check that the default local models are available and qualified in the ModelJars catalog
+- [x] Native binary on Linux and macOS that runs JS in a `js-isolate` context under the UNTRUSTED policy and calls a host `api` method
+- [x] Measure binary size, start-up time, isolate creation time and memory
+- [x] Check memory protection keys on Linux
+- [x] Load and run a ModelJars model inside the native binary; measure speed on an 8k-token prompt
+- [x] Check that the default local models are available and qualified in the ModelJars catalog
 - [x] Repository and MIT license
-- [ ] CI skeleton, `SECURITY.md`, CONTRIBUTING
+- [x] CI skeleton, `SECURITY.md`, CONTRIBUTING
 
 Spec: `../specs/001-p0-spike/`
 
 **Gate:** numbers recorded; both OS builds run; go/no-go on ModelJars in the native image.
 
+**Gate passed 2026-11-18:** numbers in `../docs/p0-results.md`; native builds run on linux-amd64, linux-aarch64 and macos-aarch64; ModelJars is a no-go for v0.1 (D-035), so local models use the OpenAI-compatible client.
+
 ## Phase 1 — Core loop MVP
 
-- [ ] Model providers: ModelJars, OpenAI-compatible, Claude (native)
+- [ ] Model providers: OpenAI-compatible (local models through Ollama or llama.cpp), Claude (native) (D-035)
 - [ ] Model profiles in `settings.json`; `--model` and `/model` (D-032)
 - [ ] Agent loop: stream reply, extract the JS block, run it, return result or error with line numbers
 - [ ] Isolate manager: one Engine per agent, fresh Context per run, limits, watchdog
@@ -97,4 +99,7 @@ Spec: `../specs/001-p0-spike/`
 - More build tools: pnpm, yarn, Python (uv, pip, pytest), Go, Cargo, make, Docker
 - Image input and web search
 - A Java SDK for embedding JHarness
+- In-process local models with ModelJars, when D-035's conditions are met
+- Spike a model helper binary with the Rust backend, started over stdio; first for a small reviewer model (D-035, D-031)
+- Test memory protection keys on a Linux machine that has them; make `auto` the default if it works (D-036)
 - IDE integration

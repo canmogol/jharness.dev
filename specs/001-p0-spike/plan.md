@@ -1,6 +1,6 @@
 # Plan 001 — P0 Spike
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-16
+Spec: `spec.md` · Status: Done · Created: 2026-11-16
 
 ## Approach
 
@@ -31,7 +31,7 @@ docs/p0-results.md              results template (below)
 | I One binary | One native executable; no helper processes | Yes |
 | II Host owns side effects | `SpikeApi` is the only exported surface | Yes |
 | III Untrusted | Contexts use `SandboxPolicy.UNTRUSTED` with all required limits. Limit values are configurable; the policy, isolate mode and thread count are not, and no limit can be removed | Yes |
-| IV No shell | No processes started | Yes |
+| IV No shell | The spike starts no process. Finding: ModelJars' `vectors-core` runs `/usr/sbin/sysctl` on macOS, recorded and one reason for D-035 | Exception (spike, library) |
 | V Proxy | Not in scope; the spike only downloads model weights from the host. Noted as an exception for the spike only | Exception (spike) |
 | VI Strings | `echo` takes and returns `String` | Yes |
 | VII Safe by default | Not applicable | — |
@@ -50,8 +50,9 @@ SandboxConfig cfg = SandboxConfig.load(configPath, overrides)   // defaults, the
 
 Engine engine = Engine.newBuilder("js")
     .option("engine.SpawnIsolate", "true")          // or .spawnIsolate(true) where available
-    .option("engine.IsolateMode", "internal")       // fixed, not configurable
-    .options(cfg.engineOptions())                   // engine.MaxIsolateMemory, engine.MemoryProtection
+    .useSystemProperties(false)                     // options come only from SandboxConfig
+    // engine.IsolateMode is experimental in polyglot 25.0; its default "internal" is checked, not set
+    .options(cfg.engineOptions())                   // engine.MaxIsolateMemory, engine.IsolateMemoryProtection
     .build();
 
 Context ctx = Context.newBuilder("js")
@@ -109,7 +110,7 @@ Rules:
 
 The exact option set UNTRUSTED requires is checked against the GraalVM version used; the builder refuses a context with a missing limit, which the probe records.
 
-- Memory protection: build a second engine with `engine.MemoryProtection=true`; record success, error or no effect.
+- Memory protection: build a second engine with `engine.MemoryProtection=true`; record success, error or no effect. Polyglot 25.0 names the option `engine.IsolateMemoryProtection` and marks it experimental; the config key keeps the plan's name, and only the probe engine allows experimental options.
 - Wall clock: a `ScheduledExecutorService` calls `ctx.close(true)` when the wall clock runs out while JS waits in `api.sleep(...)`. The probe sets a short value with `--set main.wallClock=5s` instead of waiting 15 minutes.
 - CPU time while blocked (AC-14): JS calls `api.sleep(20000)` with `sandbox.MaxCPUTime=5s`; the run must not be stopped by the CPU limit, showing that blocked time in a host callback is not counted. Then a host callback that does 10 s of busy work must trip the 5 s limit, showing that host CPU work is counted.
 - After each limit trips: close the context, build a new one on the same engine, run `api.echo` again.
@@ -121,20 +122,23 @@ The exact option set UNTRUSTED requires is checked against the GraalVM version u
 | Binary size | `ls -l` of the built executable |
 | Cold start-up | `hyperfine --warmup 0 --runs 20 './spike isolate --noop'` |
 | Isolate creation | `System.nanoTime()` around engine + first context build, 20 runs, median |
-| Memory per idle isolate | RSS before and after creating 1, 5 and 10 engines (`/proc/self/status` on Linux, `ps -o rss` on macOS) |
+| Memory per idle isolate | RSS before and after creating 1, 5 and 10 engines (`/proc/self/status` on Linux, `proc_pid_rusage` through FFM on macOS, so no child process is started) |
 
 ### Local model (ModelProbe)
 
-- Dependencies: `org.modeljars:modeljars` (JVM Runtime) and `com.integrallis:backend-java`; the smallest qualified Qwen GGUF marker for the first run.
+- Dependencies: `org.modeljars:modeljars` (JVM Runtime) and `com.integrallis:backend-java`; the smallest qualified Qwen GGUF marker for the first run. Used: ModelJars 0.1.80 without audio, decisions and `backend-native`; Qwen3-0.6B Q4_0, the smallest Qwen GGUF qualified on pure Java. `-Dnomarker` builds without the marker; the `rust-backend` profile adds `backend-native` for T023.
 - Native build flag: `--add-modules=jdk.incubator.vector`.
 - Steps: open with `ModelJars.openRuntime(...)`; render a chat template; generate 128 tokens at temperature 0; time prompt processing on a fixed 8k-token prompt and generation separately.
 - AC-08: build a second variant without the marker JAR and try opening by coordinates string, then from the local cache path.
 - Run each on the JVM too, for comparison.
-- AC-09: `modeljars search qwen2.5-coder` and `modeljars search deepseek-coder` with the ModelJars CLI.
+- AC-09: `modeljars search qwen2.5-coder` and `modeljars search deepseek-coder` with the ModelJars CLI. Done by reading the catalog JAR and the `org/modeljars/huggingface/` listing on Maven Central instead.
+- A native 8k prompt is out of reach (about 13.5 hours at the measured rate), so native speed is compared with the JVM on a 219-token prompt; the JVM also runs the 8k prompt.
 
 ### JLine (JLineProbe)
 
 Read three lines in raw mode with editing and history; exit on Ctrl-D. Check by hand on macOS and Linux terminals.
+
+JLine 3.30.17 with the FFM terminal provider (`jline-terminal-ffm`), so no JNI library and no `stty` child process. `spike/scripts/jline-pty-check.py` drives the same keys through a pseudo-terminal (type, move left and insert, recall with Up, Ctrl-D) and runs in CI on every target.
 
 ## Go/no-go thresholds (confirmed 2026-11-17)
 
@@ -178,7 +182,7 @@ A no-go on ModelJars keeps the plan intact: local models then run through the Op
 
 ## CI
 
-GitHub Actions matrix (ubuntu x64, ubuntu arm64, macOS arm64) with Oracle GraalVM set up; the job builds the native image, runs `spike all --json`, and uploads results as an artifact. Model probes run only on manual dispatch (large downloads).
+GitHub Actions matrix (ubuntu x64, ubuntu arm64, macOS arm64) with Oracle GraalVM set up; the job builds the native image, runs `spike all --json`, and uploads results as an artifact. Model probes run only on manual dispatch (large downloads), in a separate linux-amd64 `model` job.
 
 ## Risks
 
@@ -188,3 +192,4 @@ GitHub Actions matrix (ubuntu x64, ubuntu arm64, macOS arm64) with Oracle GraalV
 | `js-isolate` artifact missing for a target | Record it; affects platform list in D-016 |
 | ModelJars needs the Rust/FFM backend for usable speed | Try `backend-native` as a second run; record shipping cost |
 | CI runners lack protection keys | Test memory protection on a known machine by hand |
+| A run is not stopped by `Context.close(true)` (seen once in CI) | Watchdog escalates to engine close, then a recorded failure and process stop (D-037) |

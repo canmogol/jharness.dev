@@ -1,0 +1,22 @@
+{
+  "reflection": [
+    {
+      "type": "dev.jharness.spike.SpikeApi",
+      "methods": [
+        { "name": "echo", "parameterTypes": ["java.lang.String"] },
+        { "name": "sleep", "parameterTypes": ["long"] },
+        { "name": "busy", "parameterTypes": ["long"] }
+      ]
+    }
+  ],
+  "resources": [
+    { "glob": "sandbox-defaults.json" },
+    { "glob": "META-INF/modeljars/**" },
+    { "glob": "META-INF/services/**" }
+  ],
+  "foreign": {
+    "downcalls": [
+      { "returnType": "jint", "parameterTypes": ["jint", "jint", "void*"] }
+    ]
+  }
+}

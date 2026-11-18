@@ -5,7 +5,7 @@ High-level user stories for stakeholders. Each story names who it serves, what t
 Priority: **MVP** = needed for v0.1 · **Later** = after v0.1.
 Phase refers to `product/roadmap.md`.
 
-Last updated: 2026-11-15
+Last updated: 2026-11-18
 
 ---
 
@@ -28,7 +28,7 @@ Last updated: 2026-11-15
 | ID | Story | Acceptance (high level) | Priority | Phase |
 | --- | --- | --- | --- | --- |
 | US-1.1 | As a developer, I want to install JHarness as one file on macOS or Linux, so I don't have to set up Java or other runtimes. | Single binary; Homebrew tap and install script; macOS binary is signed and notarized | MVP | P4 |
-| US-1.2 | As a privacy-minded developer, I want to run a local model inside JHarness with no extra server, so my code never leaves my machine. | A ModelJars model downloads once, is verified by SHA-256 and runs in the JHarness process | MVP | P0–P1 |
+| US-1.2 | As a privacy-minded developer, I want to run a local model, so my code never leaves my machine. | A local model served by Ollama or llama.cpp works through the OpenAI-compatible client; in-process models are US-L.7 (D-035) | MVP | P0–P1 |
 | US-1.3 | As a developer, I want to use Claude or any OpenAI-compatible server instead, so I can pick quality, cost or privacy per project. | Named model profiles; `--model` and `/model` switch; Claude, Ollama and llama.cpp work | MVP | P1 |
 | US-1.5 | As a Java developer with my dependencies already on my machine, I want to work fully offline with a local model. | `--offline` sets network default deny and passes offline flags to Maven, Gradle and npm; everything cached works | MVP | P2 |
 | US-1.4 | As a developer, I want JHarness to ask whether I trust a project the first time I open it, so a cloned repo can't run its own code without my say-so. | Trust prompt once per folder; untrusted projects can't run builds, wrappers or scripts | MVP | P1 |
@@ -96,3 +96,4 @@ Last updated: 2026-11-15
 | US-L.4 | As a developer, I want image input and web search. |
 | US-L.5 | As a Java developer, I want to embed JHarness in my own app through a Java SDK. |
 | US-L.6 | As a developer, I want the agent to start a dev server or watch mode in the background and check on it later. |
+| US-L.7 | As a privacy-minded developer, I want a local model inside JHarness with no extra server (ModelJars, D-035). |

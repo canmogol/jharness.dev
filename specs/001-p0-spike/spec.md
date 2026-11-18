@@ -1,6 +1,6 @@
 # Spec 001 — P0 Spike
 
-Status: Draft · Phase: P0 · Created: 2026-11-16
+Status: Done · Phase: P0 · Created: 2026-11-16
 
 ## Summary
 

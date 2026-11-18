@@ -1,0 +1,24 @@
+{
+  "sandbox": {
+    "main": {
+      "engine.MaxIsolateMemory": "512MB",
+      "engine.MemoryProtection": "auto",
+      "sandbox.MaxHeapMemory": "256MB",
+      "sandbox.MaxCPUTime": "30s",
+      "sandbox.MaxASTDepth": 100,
+      "sandbox.MaxOutputStreamSize": "256KB",
+      "sandbox.MaxErrorStreamSize": "256KB",
+      "wallClock": "15m"
+    },
+    "subagent": {
+      "engine.MaxIsolateMemory": "256MB",
+      "engine.MemoryProtection": "auto",
+      "sandbox.MaxHeapMemory": "128MB",
+      "sandbox.MaxCPUTime": "30s",
+      "sandbox.MaxASTDepth": 100,
+      "sandbox.MaxOutputStreamSize": "256KB",
+      "sandbox.MaxErrorStreamSize": "256KB",
+      "wallClock": "15m"
+    }
+  }
+}

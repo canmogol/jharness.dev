@@ -3,7 +3,7 @@
 Decision log for JHarness. Each entry records what was decided, why, and what was rejected.
 Status values: **Accepted** (settled), **Proposed** (recommended, not yet confirmed), **Open** (needs an answer before the related work starts).
 
-Last updated: 2026-11-17
+Last updated: 2026-11-18
 
 ---
 
@@ -23,12 +23,12 @@ Last updated: 2026-11-17
 | D-010 | State-changing operations ask for approval; approvals can be made permanent per project | Accepted |
 | D-011 | Project trust gates project code and project settings; trusted settings may override user rules | Accepted |
 | D-012 | Users define network allow and deny rules for domains and IPs | Accepted |
-| D-013 | Three model providers: in-process ModelJars, OpenAI-compatible, native Claude | Accepted |
+| D-013 | Model providers: OpenAI-compatible and native Claude in v0.1; in-process ModelJars after v0.1 (D-035) | Accepted |
 | D-014 | Default local models: Qwen2.5-Coder-7B, DeepSeek-Coder-V2-Lite | Accepted |
 | D-015 | Synchronous `api`; virtual threads for host I/O; isolates on platform threads | Accepted |
 | D-016 | macOS (Apple Silicon) and Linux first; Windows later | Accepted |
 | D-017 | Extensions are plain folders in v1 | Accepted |
-| D-018 | Memory protection keys: Linux only, optional | Accepted |
+| D-018 | Memory protection keys: off by default in v0.1, opt-in `auto` or `on` (D-036) | Accepted |
 | D-019 | Name: JHarness; instructions file `JHARNESS.md`; config in `.jharness/` | Accepted |
 | D-020 | Oracle GraalVM under GFTC; the product is free and open source | Accepted |
 | D-021 | Develop on the JVM, build native in CI | Accepted |
@@ -44,6 +44,10 @@ Last updated: 2026-11-17
 | D-031 | Optional action reviewer (Kev, Jev or own model) that can only tighten decisions | Accepted |
 | D-032 | Named model profiles in `settings.json`; switch per session or per agent | Accepted |
 | D-033 | Offline mode | Accepted |
+| D-034 | Internal isolate mode comes from the engine default, checked at startup; no experimental options | Accepted |
+| D-035 | ModelJars in the native image: no-go for v0.1; local models through Ollama or llama.cpp; after v0.1, a Rust-backend model helper process | Accepted |
+| D-036 | Memory protection keys off by default in v0.1; `auto` (probe at startup) and `on` are opt-in | Accepted |
+| D-037 | The wall-clock watchdog escalates: context close, then engine close, then a recorded failure | Accepted |
 
 ---
 
@@ -163,10 +167,10 @@ Last updated: 2026-11-17
 
 ## D-013 — Three model providers
 
-**Decision.** A provider interface with three implementations:
-1. **ModelJars / Integrallis Models** — local models running inside the JHarness process.
-2. **OpenAI-compatible Chat Completions** — Ollama, llama.cpp, vLLM and other providers.
-3. **Native Anthropic Messages** — Claude.
+**Decision.** A provider interface. v0.1 ships two implementations; the third waits (changed by D-035 on 2026-11-18):
+1. **OpenAI-compatible Chat Completions** — Ollama, llama.cpp, vLLM and other providers. Local models in v0.1 run this way.
+2. **Native Anthropic Messages** — Claude.
+3. **ModelJars / Integrallis Models** — local models inside the JHarness process. After v0.1, when D-035's conditions are met.
 
 **Why.**
 - ModelJars keeps local use in one process (D-002's goal) and pins weights by SHA-256.
@@ -203,7 +207,7 @@ Last updated: 2026-11-17
 
 ## D-018 — Memory protection keys
 
-**Decision.** Turn on `engine.MemoryProtection=true` on Linux when the CPU supports protection keys, detected at startup. Not available on macOS or Windows.
+**Decision.** Off by default in v0.1, with `auto` and `on` as opt-in settings (changed by D-036 on 2026-11-18). Originally: turn on `engine.MemoryProtection=true` (`engine.IsolateMemoryProtection` in polyglot 25.0) on Linux when the CPU supports protection keys, detected at startup. Not available on macOS or Windows.
 
 **Why.** Extra defense in depth where possible; the isolate and limits remain the main boundary.
 
@@ -465,6 +469,54 @@ The reviewer endpoint is allowed through the proxy automatically, like the model
 
 **Source.** User question and acceptance on 2026-11-17. Lands in P2, with the build tools and the proxy.
 
+## D-034 — Isolate mode from the engine default
+
+**Decision.** Agent engines don't set `engine.IsolateMode`. In polyglot 25.0 it is an experimental option, and its default is `internal`. Engines are built with `useSystemProperties(false)`, so no `polyglot.*` system property can change it, and start-up fails unless the default is `internal`. Agent engines never call `allowExperimentalOptions(true)`.
+
+**Why.** Setting the option needs `allowExperimentalOptions(true)`, which unlocks every experimental engine option. Relying on the checked default keeps D-002 (one process) without widening what the engine accepts.
+
+**Source.** User answer while specifying 001-p0-spike, 2026-11-18.
+
+## D-035 — ModelJars in the native image: no-go for v0.1
+
+**Decision.** v0.1 does not run models in-process. Local models run through the OpenAI-compatible client against Ollama or llama.cpp; the default local models stay Qwen2.5-Coder-7B-Instruct and DeepSeek-Coder-V2-Lite-Instruct, served that way. This changes D-013. In-process ModelJars is revisited after v0.1 when all of these hold:
+- ModelJars runs in the native binary at no less than 70% of its JVM speed (D-030);
+- it starts no child process (constitution Article IV);
+- the default coder models are in its catalog and qualified on the backend used.
+
+The path to revisit is a separate native helper binary that runs the Rust FFM backend without Truffle, so the shared-arena limit doesn't apply. JHarness starts it through `ProcessRunner` and talks to it over stdio, like a stdio MCP server; no socket. Its first use is a small reviewer model for D-031 (Kev-class, about 0.8B), so the reviewer works when the user runs no Kev server and doesn't use Jev. Most users are expected to run coding models through Ollama or llama.cpp, or use Claude. Before adoption: prove the helper builds and runs natively on linux-amd64 and macos-aarch64, and settle in that spec the constitution Article IV exception for the helper process and for `vectors-core`'s `sysctl` call inside it. Added 2026-11-18.
+
+**Why.** Measured in P0 (`docs/p0-results.md`):
+- The pure-Java backend runs in the native image at 0.1–1.2% of its JVM speed, even with `-H:+VectorAPISupport`.
+- The Rust FFM backend (`backend-native`) uses `Arena.ofShared`, which Native Image rejects in an image with runtime compilation, and the JS isolates need Truffle.
+- Qwen2.5-Coder-7B and DeepSeek-Coder-V2-Lite are not in the ModelJars catalog.
+- `vectors-core` runs `/usr/sbin/sysctl` through `ProcessBuilder` on macOS.
+
+The plan named this fallback in advance (D-013 Why, `plan.md` risks), so P1 continues.
+
+**Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18.
+
+## D-036 — Memory protection keys off in v0.1
+
+**Decision.** The setting `engine.MemoryProtection` takes `off`, `auto` or `on`; the default is `off` in v0.1. This changes D-018.
+- `off`: agent engines do not set `engine.IsolateMemoryProtection`.
+- `auto`: at startup JHarness builds one probe engine with the option on and creates an isolate. If that works, agent engines use it; if it fails, they run without it and JHarness emits an event saying so.
+- `on`: as `auto`, but startup fails if the probe fails.
+
+With `auto` or `on`, agent engines allow experimental options, an exception to D-034 that only the user's setting turns on; guest code cannot set engine options. Make `auto` the default once the option has been tested on a Linux machine with protection keys.
+
+**Why.** Protection keys are a nice-to-have; JHarness must run without them. In P0 both failure modes were ordinary errors at isolate creation, so a startup probe can detect them: linux-amd64 without `pku` fails with "Setting the protection of the heap memory failed", and linux-aarch64 and macOS report "Memory Protection not available". The option is experimental in polyglot 25.0 and the case where it works is untested, because no machine with protection keys was available, so it stays opt-in. The isolate and its limits remain the boundary (D-002, D-003).
+
+**Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18; changed to off-by-default with opt-in `auto` and `on` by user answer, 2026-11-18.
+
+## D-037 — Watchdog escalation
+
+**Decision.** When a run reaches its wall clock, the watchdog calls `Context.close(true)`. If the run has not ended 10 s later, it closes the agent's `Engine` with `close(true)`. If that has not ended it 30 s later, it records a failure event and stops the agent. Each step is an event. The delays are configuration values next to `wallClock` in P1.
+
+**Why.** In one P0 CI run, a guest that filled most of its isolate heap was not stopped by `Context.close(true)` for 28 minutes. It did not reproduce in 14 other runs, so the next step must not depend on the first one working.
+
+**Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18.
+
 ---
 
 ## Questions and answers
@@ -510,6 +562,11 @@ Questions raised during design, the answers given, and why each mattered.
 | Q35 | How does the user choose a local model or Claude? | Named model profiles in `settings.json`; `--model` and `/model` | One switch for all providers | D-032 |
 | Q36 | How is Kev or Jev configured? | `reviewer` section: provider, URL, key, confidence thresholds, timeout, fail to ask | | D-031 |
 | Q37 | Can a Java developer work offline with a local model and Kev? | Yes, with everything cached; an explicit offline mode | Works without a connection | D-033 |
+| Q38 | `engine.IsolateMode` is experimental in polyglot 25.0: set it or rely on the default? | Rely on the default `internal`, checked at startup; no experimental options | Keeps one process without unlocking experimental options | D-034 |
+| Q39 | Does ModelJars run in the native binary fast enough (D-030)? | No: 0.1–1.2% of JVM speed; the Rust backend can't be built in; no 7B coder model in the catalog | v0.1 runs local models through Ollama or llama.cpp | D-035 |
+| Q40 | Turn on memory protection keys? | Off by default in v0.1; `auto` probes at startup and continues without them, `on` requires them | Nice to have, experimental, and untested where it works | D-036 |
+| Q41 | What if the watchdog's context close doesn't stop a run? | Escalate to engine close, then a recorded failure | One P0 run hung for 28 minutes after context close | D-037 |
+| Q42 | Can the faster Rust model backend be used despite the Truffle conflict? | After v0.1, in a separate helper binary over stdio; first for a small reviewer model | In-process models are rare; most users run Ollama, llama.cpp or Claude | D-035 |
 
 ---
 

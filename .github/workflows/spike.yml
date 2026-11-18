@@ -1,0 +1,132 @@
+# P0 spike (specs/001-p0-spike): native build on every target, results uploaded as artifacts.
+name: spike
+
+on:
+  push:
+    branches: [master, "[0-9][0-9][0-9]-*"]
+    paths: ["spike/**", ".github/workflows/spike.yml"]
+  pull_request:
+    paths: ["spike/**", ".github/workflows/spike.yml"]
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Also run the model job on linux-amd64 (400 MB download, about 2 hours)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Per event, so a push never cancels a manual model run.
+concurrency:
+  group: spike-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: native (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            runner: ubuntu-24.04
+          - target: linux-aarch64
+            runner: ubuntu-24.04-arm
+          - target: macos-aarch64
+            runner: macos-26
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash   # -eo pipefail, so a failing probe fails the step despite tee
+        working-directory: spike
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: graalvm/setup-graalvm@v1.6.8
+        with:
+          java-version: "25"
+          distribution: graalvm
+          cache: maven
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: JVM build
+        run: mvn -B -ntp verify
+
+      - name: Native build
+        run: mvn -B -ntp -Pnative package -DskipTests
+
+      - name: Install hyperfine
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then brew install hyperfine; else sudo apt-get install -y hyperfine; fi
+          hyperfine --version
+
+      # Before anything else runs the binary, so the first run is a cold start (AC-04, T011).
+      - name: Binary size and start-up
+        run: |
+          mkdir -p results
+          size=$(wc -c < target/spike | tr -d ' ')
+          printf '{"probe":"binary","target":"%s","bytes":%s}\n' "${{ matrix.target }}" "$size" \
+            | tee results/binary.jsonl
+          hyperfine -N --warmup 0 --runs 20 --export-json results/startup.json \
+            './target/spike isolate --noop' './target/spike isolate --echo'
+
+      - name: Run probes
+        run: |
+          # jline needs a terminal: it runs in the pty check below (AC-10). The model probe has its own job.
+          for probe in isolate limits; do
+            ./target/spike "$probe" --json | tee -a results/probes.jsonl
+          done
+
+      - name: JLine in a pseudo-terminal
+        run: python3 scripts/jline-pty-check.py ./target/spike | tee results/jline.jsonl
+
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: spike-results-${{ matrix.target }}
+          path: spike/results/
+          retention-days: 30
+
+  # T020 on linux-amd64, manual only. Native pure-Java inference runs at well under 1% of JVM speed,
+  # so the native run uses a small prompt; the JVM runs both the 8k prompt and the small one.
+  model:
+    if: github.event_name == 'workflow_dispatch' && inputs.model
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+        working-directory: spike
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: graalvm/setup-graalvm@v1.6.8
+        with:
+          java-version: "25"
+          distribution: graalvm
+          cache: maven
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: JVM model runs
+        run: |
+          mkdir -p results
+          mvn -B -ntp verify
+          cp="target/classes:$(mvn -q -ntp dependency:build-classpath -Dmdep.outputFile=/dev/stdout)"
+          # The KV cache for an 8k prompt does not fit the default heap (a quarter of the runner's 16 GB).
+          jvm() { java -Xmx8g --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -cp "$cp" dev.jharness.spike.Main model "$@"; }
+          jvm --gen 8 --prompt-tokens 128 | tee results/model-jvm-small.jsonl
+          jvm | tee results/model-jvm-8k.jsonl
+
+      - name: Native model run
+        if: always()
+        run: |
+          mvn -B -ntp -Pnative package -DskipTests
+          ./target/spike model --gen 8 --prompt-tokens 128 | tee results/model-native-small.jsonl
+
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: spike-model-linux-amd64
+          path: spike/results/
+          retention-days: 30

@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  P0 spike (specs/001-p0-spike). Throwaway measurement code: rewritten or deleted under later specs.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>dev.jharness</groupId>
+  <artifactId>spike</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <packaging>jar</packaging>
+  <name>JHarness P0 spike</name>
+
+  <properties>
+    <maven.compiler.release>25</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <graalvm.polyglot.version>25.0.5</graalvm.polyglot.version>
+    <native.maven.plugin.version>1.1.18</native.maven.plugin.version>
+    <jline.version>3.30.17</jline.version>
+    <modeljars.version>0.1.80</modeljars.version>
+    <!-- Smallest Qwen GGUF qualified on the pure-Java backend (T018). -->
+    <model.marker.artifact>ggml-org.qwen3-0.6b-gguf.q4_0</model.marker.artifact>
+    <model.marker.version>3.0.0-q4_0.1</model.marker.version>
+    <main.class>dev.jharness.spike.Main</main.class>
+    <!-- Set by the platform profiles below; the build fails on an unsupported platform. -->
+    <js.isolate.platform>unsupported</js.isolate.platform>
+    <!-- Extra Native Image config folder; the rust-backend profile points it at its traced config. -->
+    <native.extra.config>${project.basedir}/native-config/none</native.extra.config>
+    <native.shared.arena>-H:-SharedArenaSupport</native.shared.arena>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.graalvm.polyglot</groupId>
+      <artifactId>polyglot</artifactId>
+      <version>${graalvm.polyglot.version}</version>
+    </dependency>
+    <!-- Only the isolate for the build platform, so the native image carries one library. -->
+    <dependency>
+      <groupId>org.graalvm.polyglot</groupId>
+      <artifactId>js-isolate-${js.isolate.platform}</artifactId>
+      <version>${graalvm.polyglot.version}</version>
+      <type>pom</type>
+      <scope>runtime</scope>
+    </dependency>
+    <!-- JLine 3 (tech stack); the FFM terminal provider needs no JNI library. -->
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline-reader</artifactId>
+      <version>${jline.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline-terminal-ffm</artifactId>
+      <version>${jline.version}</version>
+    </dependency>
+    <!-- ModelJars with the pure-Java backend only; audio, decisions and the Rust backend are left out. -->
+    <dependency>
+      <groupId>org.modeljars</groupId>
+      <artifactId>modeljars</artifactId>
+      <version>${modeljars.version}</version>
+      <exclusions>
+        <exclusion><groupId>com.integrallis</groupId><artifactId>models-audio</artifactId></exclusion>
+        <exclusion><groupId>com.integrallis</groupId><artifactId>models-decisions</artifactId></exclusion>
+        <exclusion><groupId>com.integrallis</groupId><artifactId>backend-native</artifactId></exclusion>
+      </exclusions>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.14.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>${main.class}</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+        <configuration>
+          <mainClass>${main.class}</mainClass>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>supported-platform</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>[25,)</version>
+                </requireJavaVersion>
+                <requireProperty>
+                  <property>js.isolate.platform</property>
+                  <regex>linux-amd64|linux-aarch64|darwin-aarch64</regex>
+                  <regexMessage>Unsupported platform: the spike targets linux-amd64, linux-aarch64 and macos-aarch64.</regexMessage>
+                </requireProperty>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>linux-amd64</id>
+      <activation>
+        <os><family>unix</family><name>Linux</name><arch>amd64</arch></os>
+      </activation>
+      <properties><js.isolate.platform>linux-amd64</js.isolate.platform></properties>
+    </profile>
+    <profile>
+      <id>linux-aarch64</id>
+      <activation>
+        <os><family>unix</family><name>Linux</name><arch>aarch64</arch></os>
+      </activation>
+      <properties><js.isolate.platform>linux-aarch64</js.isolate.platform></properties>
+    </profile>
+    <profile>
+      <id>macos-aarch64</id>
+      <activation>
+        <os><family>mac</family><arch>aarch64</arch></os>
+      </activation>
+      <properties><js.isolate.platform>darwin-aarch64</js.isolate.platform></properties>
+    </profile>
+
+    <!-- The model's marker JAR; build with -Dnomarker to leave it out (AC-08, T022). -->
+    <profile>
+      <id>model-marker</id>
+      <activation>
+        <property><name>!nomarker</name></property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>org.modeljars.huggingface</groupId>
+          <artifactId>${model.marker.artifact}</artifactId>
+          <version>${model.marker.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+
+    <!-- T023 only: the Rust FFM kernels (backend-native), for comparing speed. Not part of the default build. -->
+    <profile>
+      <id>rust-backend</id>
+      <properties>
+        <!-- Traced with native-image-agent from a JVM run of the Rust backend model probe. -->
+        <native.extra.config>${project.basedir}/native-config/rust-backend</native.extra.config>
+        <!-- RustGgufBatchedMatrixKernel uses Arena.ofShared. -->
+        <native.shared.arena>-H:+SharedArenaSupport</native.shared.arena>
+      </properties>
+      <dependencies>
+        <dependency>
+          <groupId>com.integrallis</groupId>
+          <artifactId>backend-native</artifactId>
+          <version>0.5.22</version>
+        </dependency>
+      </dependencies>
+    </profile>
+
+    <!-- mvn -Pnative package: one profile for every target (AC-01). -->
+    <profile>
+      <id>native</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.graalvm.buildtools</groupId>
+            <artifactId>native-maven-plugin</artifactId>
+            <version>${native.maven.plugin.version}</version>
+            <extensions>true</extensions>
+            <executions>
+              <execution>
+                <id>build-native</id>
+                <goals>
+                  <goal>compile-no-fork</goal>
+                </goals>
+                <phase>package</phase>
+              </execution>
+            </executions>
+            <configuration>
+              <imageName>spike</imageName>
+              <mainClass>${main.class}</mainClass>
+              <buildArgs>
+                <buildArg>--no-fallback</buildArg>
+                <!-- Rss uses FFM on macOS; polyglot needs native access too. -->
+                <buildArg>--enable-native-access=ALL-UNNAMED,org.graalvm.truffle</buildArg>
+                <!-- ModelJars' pure-Java backend uses the Vector API (T019). -->
+                <buildArg>--add-modules=jdk.incubator.vector</buildArg>
+                <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
+                <buildArg>-H:+VectorAPISupport</buildArg>
+                <buildArg>${native.shared.arena}</buildArg>
+                <buildArg>-H:-UnlockExperimentalVMOptions</buildArg>
+                <buildArg>-H:ConfigurationFileDirectories=${native.extra.config}</buildArg>
+              </buildArgs>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

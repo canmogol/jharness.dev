@@ -3,7 +3,7 @@
 The stack is chosen to stay Native Image friendly: few reflection-heavy libraries, and thin clients of our own where an SDK might not compile.
 Reasons for the main choices are in `decisions.md`.
 
-Last updated: 2026-11-15
+Last updated: 2026-11-18
 
 ## Core
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-15
 | Language | Java 25 (LTS) | Records, sealed types; virtual threads for host I/O |
 | Runtime and compiler | Oracle GraalVM 25.x with Native Image | GFTC license: free redistribution, not for a fee |
 | JS engine | GraalJS via `org.graalvm.polyglot:polyglot` + `js-isolate` | One platform classifier per release target |
-| Isolate mode | `engine.IsolateMode=internal` | One process |
+| Isolate mode | `engine.IsolateMode=internal` | One process; the engine default, checked at startup, not set (experimental option in polyglot 25.0, D-034) |
 | Sandbox | `SandboxPolicy.UNTRUSTED`, `HostAccess.UNTRUSTED` | Limits listed below |
 | Build | Maven + `native-maven-plugin` | No uber JAR; reachability metadata in `META-INF/native-image/` |
 
@@ -35,11 +35,11 @@ Last updated: 2026-11-15
 
 | Provider | Implementation | Use |
 | --- | --- | --- |
-| Local, in-process | ModelJars + Integrallis Models (`backend-java` first) | Default for local use; Java 25 Vector API; native-image fit verified in P0 |
-| OpenAI-compatible | Own thin Chat Completions client | Ollama, llama.cpp, vLLM, other providers; fallback for local models |
+| OpenAI-compatible | Own thin Chat Completions client | Ollama, llama.cpp, vLLM, other providers; the way local models run in v0.1 |
 | Claude | Own thin Anthropic Messages client | Native client, because the OpenAI-compatible endpoint is for testing and drops prompt caching |
+| Local, in-process | ModelJars + Integrallis Models | After v0.1: too slow in the native image in P0; revisit as a Rust-backend helper process (D-035) |
 
-Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative DeepSeek-Coder-V2-Lite-Instruct.
+Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative DeepSeek-Coder-V2-Lite-Instruct. Served by Ollama or llama.cpp in v0.1 (D-035).
 
 Models are chosen through named profiles in `settings.json` (D-032).
 
@@ -67,7 +67,7 @@ Every value below can be changed in the `sandbox` section of `settings.json`, pe
 | `sandbox.MaxASTDepth` | 100 | 100 |
 | `sandbox.MaxOutputStreamSize` | 256 KB | 256 KB |
 | `sandbox.MaxErrorStreamSize` | 256 KB | 256 KB |
-| `engine.MemoryProtection` | Linux with protection keys only | Same |
+| `engine.MemoryProtection` (`engine.IsolateMemoryProtection` in polyglot 25.0, experimental) | `off` by default in v0.1; `auto` or `on` opt-in (D-036) | Same |
 
 ## Operation timeouts and output (D-028)
 
