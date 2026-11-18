@@ -19,6 +19,7 @@
     <module>jharness-sandbox</module>
     <module>jharness-llm</module>
     <module>jharness-agent</module>
+    <module>jharness-cli</module>
     <module>jharness-testkit</module>
   </modules>
 

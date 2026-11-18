@@ -11,8 +11,8 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 2 — CLI
 
-- [ ] T003 Create `jharness-cli` with picocli `Main`: options, exit codes, headless `-p`, hidden `--replay` and `--home` (AC-01, AC-02)
-- [ ] T004 Write `Tui` and `TerminalPrompter` with JLine; tests on a dumb terminal over streams (AC-03, AC-04, AC-05)
+- [x] T003 Create `jharness-cli` with picocli `Main`: options, exit codes, headless `-p`, hidden `--replay` and `--home` (AC-01, AC-02)
+- [x] T004 Write `Tui` and `TerminalPrompter` with JLine; tests on a dumb terminal over streams (AC-03, AC-04, AC-05)
 
 ## Group 3 — Native
 
