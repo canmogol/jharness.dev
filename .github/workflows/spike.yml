@@ -113,11 +113,13 @@ jobs:
           mkdir -p results
           mvn -B -ntp verify
           cp="target/classes:$(mvn -q -ntp dependency:build-classpath -Dmdep.outputFile=/dev/stdout)"
-          jvm() { java --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -cp "$cp" dev.jharness.spike.Main model "$@"; }
+          # The KV cache for an 8k prompt does not fit the default heap (a quarter of the runner's 16 GB).
+          jvm() { java -Xmx8g --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -cp "$cp" dev.jharness.spike.Main model "$@"; }
           jvm --gen 8 --prompt-tokens 128 | tee results/model-jvm-small.jsonl
           jvm | tee results/model-jvm-8k.jsonl
 
       - name: Native model run
+        if: always()
         run: |
           mvn -B -ntp -Pnative package -DskipTests
           ./target/spike model --gen 8 --prompt-tokens 128 | tee results/model-native-small.jsonl

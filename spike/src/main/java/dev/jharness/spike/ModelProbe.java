@@ -121,7 +121,7 @@ final class ModelProbe implements Main.Probe {
                     "maxTokens", gen, "metrics", metrics(m),
                     "text", text.length() > 400 ? text.substring(0, 400) + "..." : text));
             return true;
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | OutOfMemoryError e) {
             out.write(error("generate", e));
             return false;
         }
@@ -144,7 +144,7 @@ final class ModelProbe implements Main.Probe {
             out.write(JsonLines.obj("probe", NAME, "check", "prompt8k", "status", "pass",
                     "promptTokens", tokens, "metrics", metrics(m)));
             return true;
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | OutOfMemoryError e) {
             out.write(error("prompt8k", e));
             return false;
         }
@@ -263,7 +263,7 @@ final class ModelProbe implements Main.Probe {
         }
     }
 
-    private static Map<String, Object> error(String check, Exception e) {
+    private static Map<String, Object> error(String check, Throwable e) {
         return JsonLines.obj("probe", NAME, "check", check, "status", "error",
                 "error", e.getClass().getName() + ": " + e.getMessage());
     }

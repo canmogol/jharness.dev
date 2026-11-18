@@ -35,11 +35,11 @@ Last updated: 2026-11-18
 
 | Provider | Implementation | Use |
 | --- | --- | --- |
-| Local, in-process | ModelJars + Integrallis Models (`backend-java` first) | Default for local use; Java 25 Vector API; native-image fit verified in P0 |
-| OpenAI-compatible | Own thin Chat Completions client | Ollama, llama.cpp, vLLM, other providers; fallback for local models |
+| OpenAI-compatible | Own thin Chat Completions client | Ollama, llama.cpp, vLLM, other providers; the way local models run in v0.1 |
 | Claude | Own thin Anthropic Messages client | Native client, because the OpenAI-compatible endpoint is for testing and drops prompt caching |
+| Local, in-process | ModelJars + Integrallis Models | After v0.1: too slow in the native image in P0 (D-035) |
 
-Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative DeepSeek-Coder-V2-Lite-Instruct.
+Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative DeepSeek-Coder-V2-Lite-Instruct. Served by Ollama or llama.cpp in v0.1 (D-035).
 
 Models are chosen through named profiles in `settings.json` (D-032).
 
@@ -67,7 +67,7 @@ Every value below can be changed in the `sandbox` section of `settings.json`, pe
 | `sandbox.MaxASTDepth` | 100 | 100 |
 | `sandbox.MaxOutputStreamSize` | 256 KB | 256 KB |
 | `sandbox.MaxErrorStreamSize` | 256 KB | 256 KB |
-| `engine.MemoryProtection` (`engine.IsolateMemoryProtection` in polyglot 25.0, experimental) | Linux with protection keys only (D-018, pending P0 results) | Same |
+| `engine.MemoryProtection` (`engine.IsolateMemoryProtection` in polyglot 25.0, experimental) | Off in v0.1 (D-036) | Same |
 
 ## Operation timeouts and output (D-028)
 

@@ -23,12 +23,12 @@ Last updated: 2026-11-18
 | D-010 | State-changing operations ask for approval; approvals can be made permanent per project | Accepted |
 | D-011 | Project trust gates project code and project settings; trusted settings may override user rules | Accepted |
 | D-012 | Users define network allow and deny rules for domains and IPs | Accepted |
-| D-013 | Three model providers: in-process ModelJars, OpenAI-compatible, native Claude | Accepted |
+| D-013 | Model providers: OpenAI-compatible and native Claude in v0.1; in-process ModelJars after v0.1 (D-035) | Accepted |
 | D-014 | Default local models: Qwen2.5-Coder-7B, DeepSeek-Coder-V2-Lite | Accepted |
 | D-015 | Synchronous `api`; virtual threads for host I/O; isolates on platform threads | Accepted |
 | D-016 | macOS (Apple Silicon) and Linux first; Windows later | Accepted |
 | D-017 | Extensions are plain folders in v1 | Accepted |
-| D-018 | Memory protection keys: Linux only, optional | Accepted |
+| D-018 | Memory protection keys: off in v0.1 (D-036) | Accepted |
 | D-019 | Name: JHarness; instructions file `JHARNESS.md`; config in `.jharness/` | Accepted |
 | D-020 | Oracle GraalVM under GFTC; the product is free and open source | Accepted |
 | D-021 | Develop on the JVM, build native in CI | Accepted |
@@ -45,6 +45,8 @@ Last updated: 2026-11-18
 | D-032 | Named model profiles in `settings.json`; switch per session or per agent | Accepted |
 | D-033 | Offline mode | Accepted |
 | D-034 | Internal isolate mode comes from the engine default, checked at startup; no experimental options | Accepted |
+| D-035 | ModelJars in the native image: no-go for v0.1; local models through Ollama or llama.cpp | Accepted |
+| D-036 | Memory protection keys off in v0.1 | Accepted |
 
 ---
 
@@ -164,10 +166,10 @@ Last updated: 2026-11-18
 
 ## D-013 — Three model providers
 
-**Decision.** A provider interface with three implementations:
-1. **ModelJars / Integrallis Models** — local models running inside the JHarness process.
-2. **OpenAI-compatible Chat Completions** — Ollama, llama.cpp, vLLM and other providers.
-3. **Native Anthropic Messages** — Claude.
+**Decision.** A provider interface. v0.1 ships two implementations; the third waits (changed by D-035 on 2026-11-18):
+1. **OpenAI-compatible Chat Completions** — Ollama, llama.cpp, vLLM and other providers. Local models in v0.1 run this way.
+2. **Native Anthropic Messages** — Claude.
+3. **ModelJars / Integrallis Models** — local models inside the JHarness process. After v0.1, when D-035's conditions are met.
 
 **Why.**
 - ModelJars keeps local use in one process (D-002's goal) and pins weights by SHA-256.
@@ -204,7 +206,7 @@ Last updated: 2026-11-18
 
 ## D-018 — Memory protection keys
 
-**Decision.** Turn on `engine.MemoryProtection=true` (named `engine.IsolateMemoryProtection` in polyglot 25.0, where it is experimental; whether to allow that is settled with the P0 results) on Linux when the CPU supports protection keys, detected at startup. Not available on macOS or Windows.
+**Decision.** Off in v0.1 (changed by D-036 on 2026-11-18). Originally: turn on `engine.MemoryProtection=true` (`engine.IsolateMemoryProtection` in polyglot 25.0) on Linux when the CPU supports protection keys, detected at startup. Not available on macOS or Windows.
 
 **Why.** Extra defense in depth where possible; the isolate and limits remain the main boundary.
 
@@ -474,6 +476,31 @@ The reviewer endpoint is allowed through the proxy automatically, like the model
 
 **Source.** User answer while specifying 001-p0-spike, 2026-11-18.
 
+## D-035 — ModelJars in the native image: no-go for v0.1
+
+**Decision.** v0.1 does not run models in-process. Local models run through the OpenAI-compatible client against Ollama or llama.cpp; the default local models stay Qwen2.5-Coder-7B-Instruct and DeepSeek-Coder-V2-Lite-Instruct, served that way. This changes D-013. In-process ModelJars is revisited after v0.1 when all of these hold:
+- ModelJars runs in the native binary at no less than 70% of its JVM speed (D-030);
+- it starts no child process (constitution Article IV);
+- the default coder models are in its catalog and qualified on the backend used.
+
+**Why.** Measured in P0 (`docs/p0-results.md`):
+- The pure-Java backend runs in the native image at 0.4–1.2% of its JVM speed, even with `-H:+VectorAPISupport`.
+- The Rust FFM backend (`backend-native`) uses `Arena.ofShared`, which Native Image rejects in an image with runtime compilation, and the JS isolates need Truffle.
+- Qwen2.5-Coder-7B and DeepSeek-Coder-V2-Lite are not in the ModelJars catalog.
+- `vectors-core` runs `/usr/sbin/sysctl` through `ProcessBuilder` on macOS.
+
+The plan named this fallback in advance (D-013 Why, `plan.md` risks), so P1 continues.
+
+**Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18.
+
+## D-036 — Memory protection keys off in v0.1
+
+**Decision.** Agent engines do not set `engine.IsolateMemoryProtection` in v0.1. This changes D-018. Revisit when the option is no longer experimental and has been tested on a Linux machine with protection keys.
+
+**Why.** In polyglot 25.0 the option is experimental, so turning it on means `allowExperimentalOptions(true)`, which D-034 rules out. Forced on a Linux amd64 CPU without protection keys it makes isolate creation fail rather than being ignored. No machine with protection keys was available in P0. The isolate and its limits remain the boundary (D-002, D-003).
+
+**Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18.
+
 ---
 
 ## Questions and answers
@@ -520,6 +547,8 @@ Questions raised during design, the answers given, and why each mattered.
 | Q36 | How is Kev or Jev configured? | `reviewer` section: provider, URL, key, confidence thresholds, timeout, fail to ask | | D-031 |
 | Q37 | Can a Java developer work offline with a local model and Kev? | Yes, with everything cached; an explicit offline mode | Works without a connection | D-033 |
 | Q38 | `engine.IsolateMode` is experimental in polyglot 25.0: set it or rely on the default? | Rely on the default `internal`, checked at startup; no experimental options | Keeps one process without unlocking experimental options | D-034 |
+| Q39 | Does ModelJars run in the native binary fast enough (D-030)? | No: 0.4–1.2% of JVM speed; the Rust backend can't be built in; no 7B coder model in the catalog | v0.1 runs local models through Ollama or llama.cpp | D-035 |
+| Q40 | Turn on memory protection keys? | Not in v0.1: experimental, and breaks isolate creation on CPUs without keys | Keeps D-034 and avoids a failure mode | D-036 |
 
 ---
 

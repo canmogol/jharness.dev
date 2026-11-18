@@ -37,13 +37,13 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 4 — Local model
 
-- [ ] T017 [P] Search the ModelJars catalog for Qwen2.5-Coder-7B and DeepSeek-Coder-V2-Lite; record coordinates (AC-09)
-- [ ] T018 Add ModelJars Runtime and `backend-java`; load the smallest qualified Qwen GGUF on the JVM (AC-06)
-- [ ] T019 Build the same in the native image with `--add-modules=jdk.incubator.vector`; generate 128 tokens (AC-06)
+- [x] T017 [P] Search the ModelJars catalog for Qwen2.5-Coder-7B and DeepSeek-Coder-V2-Lite; record coordinates (AC-09)
+- [x] T018 Add ModelJars Runtime and `backend-java`; load the smallest qualified Qwen GGUF on the JVM (AC-06)
+- [x] T019 Build the same in the native image with `--add-modules=jdk.incubator.vector`; generate 128 tokens (AC-06)
 - [ ] T020 Time an 8k-token prompt and generation, native and JVM, on macos-aarch64 and linux-amd64 (AC-07)
-- [ ] T021 Repeat T019–T020 with Qwen2.5-Coder-7B if it is in the catalog (AC-06, AC-07)
-- [ ] T022 Try opening a model without its marker JAR: by coordinates, then from the cache path (AC-08)
-- [ ] T023 [P] If native speed misses the threshold, try `backend-native` once and record the extra shipping cost (AC-07)
+- [x] T021 Repeat T019–T020 with Qwen2.5-Coder-7B if it is in the catalog (AC-06, AC-07)
+- [x] T022 Try opening a model without its marker JAR: by coordinates, then from the cache path (AC-08)
+- [x] T023 [P] If native speed misses the threshold, try `backend-native` once and record the extra shipping cost (AC-07)
 
 ## Group 5 — Terminal
 

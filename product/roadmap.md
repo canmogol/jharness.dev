@@ -3,7 +3,7 @@
 Features in build order. Each phase ends with a gate it must pass before the next starts. No dates are set yet.
 How each phase is built and tested is in `../plan.md`; why each choice was made is in `decisions.md`.
 
-Last updated: 2026-11-15
+Last updated: 2026-11-18
 
 ---
 
@@ -25,7 +25,7 @@ Spec: `../specs/001-p0-spike/`
 
 ## Phase 1 — Core loop MVP
 
-- [ ] Model providers: ModelJars, OpenAI-compatible, Claude (native)
+- [ ] Model providers: OpenAI-compatible (local models through Ollama or llama.cpp), Claude (native) (D-035)
 - [ ] Model profiles in `settings.json`; `--model` and `/model` (D-032)
 - [ ] Agent loop: stream reply, extract the JS block, run it, return result or error with line numbers
 - [ ] Isolate manager: one Engine per agent, fresh Context per run, limits, watchdog
@@ -97,4 +97,5 @@ Spec: `../specs/001-p0-spike/`
 - More build tools: pnpm, yarn, Python (uv, pip, pytest), Go, Cargo, make, Docker
 - Image input and web search
 - A Java SDK for embedding JHarness
+- In-process local models with ModelJars, when D-035's conditions are met
 - IDE integration

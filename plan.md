@@ -3,7 +3,7 @@
 How JHarness gets built: architecture, modules, phases with exit gates, the testing approach and the spec-driven workflow for each feature.
 Product scope lives in `product/mission.md`, feature order in `product/roadmap.md`, technology in `product/tech-stack.md`, and the reasons behind each choice in `product/decisions.md`.
 
-Last updated: 2026-11-15
+Last updated: 2026-11-18
 
 ---
 
@@ -17,7 +17,7 @@ Terminal UI / headless CLI
 ┌─────────▼────────────────────── Host process (Java, GraalVM native image) ──────────────┐
 │  Agent loop ──► Event bus ──► UI, session log (JSONL), hooks                             │
 │      │                                                                                   │
-│      ├─► Model providers: ModelJars (in-process) │ OpenAI-compatible │ Claude (native)    │
+│      ├─► Model providers: OpenAI-compatible (local and hosted) │ Claude (native)          │
 │      │                                                                                   │
 │      └─► Isolate manager: one Engine per agent, fresh Context per RunJS block            │
 │              │   (UNTRUSTED policy, CPU/heap/wall-clock limits, 1 thread)                │
@@ -65,7 +65,7 @@ Maven multi-module build. Dependencies flow downward.
 | `jharness-proxy` | Egress proxy: rules-file parser, rule matching, DNS pinning, CONNECT and plain-HTTP forwarding, per-session credentials | config, events |
 | `jharness-process` | `ProcessRunner`, typed git / Maven / Gradle / npm / rg operations, OS sandbox launchers | security |
 | `jharness-sandbox` | Isolate manager, `api` facade, limits, watchdog, `api.d.ts` generation | security, process |
-| `jharness-llm` | Provider interface; ModelJars, OpenAI-compatible and Claude providers; streaming | events |
+| `jharness-llm` | Provider interface; OpenAI-compatible and Claude providers (ModelJars after v0.1, D-035); streaming | events |
 | `jharness-agent` | Agent loop, JS block extraction, subagents, hooks, slash commands, checkpoints | sandbox, llm |
 | `jharness-mcp` | MCP client (stdio, streamable HTTP) | security |
 | `jharness-cli` | picocli entry point, JLine TUI, headless mode, native-image config | agent |
@@ -153,7 +153,7 @@ Next specs: `002-event-bus-and-session-log`, `003-isolate-sandbox-and-api`, `004
 | Risk | Mitigation |
 | --- | --- |
 | Maven plugins and npm scripts run project code outside the isolate | Approval by default, project trust, `--ignore-scripts`, OS sandbox |
-| ModelJars may not run, or run fast enough, in a native image | Settle in P0; OpenAI-compatible client as fallback |
+| ModelJars may not run, or run fast enough, in a native image | Settled in P0: no-go for v0.1; local models through the OpenAI-compatible client (D-035) |
 | A library fails under Native Image (JLine, MCP SDK) | Native builds from P0; thin clients of our own |
 | Isolate start time and memory per agent | Measure in P0; cap concurrent agents |
 | Small local models write poor JS | `api.d.ts` and examples in the prompt; errors with line numbers; model profiles |

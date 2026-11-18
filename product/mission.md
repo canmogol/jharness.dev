@@ -1,6 +1,6 @@
 # JHarness — Mission
 
-Last updated: 2026-11-15
+Last updated: 2026-11-18
 
 ## Pitch
 
@@ -27,7 +27,7 @@ JHarness is a free, open-source terminal coding agent, in the spirit of Claude C
 - **One binary.** A Java host compiled with GraalVM Native Image. Nothing else to install.
 - **The model acts only by writing JavaScript.** Each JS block runs in a GraalJS polyglot isolate with its own heap, CPU and memory limits, and no access to anything except a small `api`.
 - **The host owns every side effect.** Files, network, git, Maven, Gradle and npm are reached only through typed, permission-checked host operations. There is no shell for the agent.
-- **Local models in-process.** ModelJars runs models inside the JHarness process; Claude and any OpenAI-compatible server work too.
+- **Local or hosted models.** Local models through Ollama or llama.cpp, Claude, and any OpenAI-compatible server. In-process local models (ModelJars) come after v0.1 (D-035).
 - **Everything is an event.** A JSON event log drives the UI, hooks, audit and session resume.
 
 ## What makes it different

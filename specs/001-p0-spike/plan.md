@@ -31,7 +31,7 @@ docs/p0-results.md              results template (below)
 | I One binary | One native executable; no helper processes | Yes |
 | II Host owns side effects | `SpikeApi` is the only exported surface | Yes |
 | III Untrusted | Contexts use `SandboxPolicy.UNTRUSTED` with all required limits. Limit values are configurable; the policy, isolate mode and thread count are not, and no limit can be removed | Yes |
-| IV No shell | No processes started | Yes |
+| IV No shell | The spike starts no process. Finding: ModelJars' `vectors-core` runs `/usr/sbin/sysctl` on macOS, recorded and one reason for D-035 | Exception (spike, library) |
 | V Proxy | Not in scope; the spike only downloads model weights from the host. Noted as an exception for the spike only | Exception (spike) |
 | VI Strings | `echo` takes and returns `String` | Yes |
 | VII Safe by default | Not applicable | — |
@@ -126,12 +126,13 @@ The exact option set UNTRUSTED requires is checked against the GraalVM version u
 
 ### Local model (ModelProbe)
 
-- Dependencies: `org.modeljars:modeljars` (JVM Runtime) and `com.integrallis:backend-java`; the smallest qualified Qwen GGUF marker for the first run.
+- Dependencies: `org.modeljars:modeljars` (JVM Runtime) and `com.integrallis:backend-java`; the smallest qualified Qwen GGUF marker for the first run. Used: ModelJars 0.1.80 without audio, decisions and `backend-native`; Qwen3-0.6B Q4_0, the smallest Qwen GGUF qualified on pure Java. `-Dnomarker` builds without the marker; the `rust-backend` profile adds `backend-native` for T023.
 - Native build flag: `--add-modules=jdk.incubator.vector`.
 - Steps: open with `ModelJars.openRuntime(...)`; render a chat template; generate 128 tokens at temperature 0; time prompt processing on a fixed 8k-token prompt and generation separately.
 - AC-08: build a second variant without the marker JAR and try opening by coordinates string, then from the local cache path.
 - Run each on the JVM too, for comparison.
-- AC-09: `modeljars search qwen2.5-coder` and `modeljars search deepseek-coder` with the ModelJars CLI.
+- AC-09: `modeljars search qwen2.5-coder` and `modeljars search deepseek-coder` with the ModelJars CLI. Done by reading the catalog JAR and the `org/modeljars/huggingface/` listing on Maven Central instead.
+- A native 8k prompt is out of reach (about 13.5 hours at the measured rate), so native speed is compared with the JVM on a 219-token prompt; the JVM also runs the 8k prompt.
 
 ### JLine (JLineProbe)
 
@@ -181,7 +182,7 @@ A no-go on ModelJars keeps the plan intact: local models then run through the Op
 
 ## CI
 
-GitHub Actions matrix (ubuntu x64, ubuntu arm64, macOS arm64) with Oracle GraalVM set up; the job builds the native image, runs `spike all --json`, and uploads results as an artifact. Model probes run only on manual dispatch (large downloads).
+GitHub Actions matrix (ubuntu x64, ubuntu arm64, macOS arm64) with Oracle GraalVM set up; the job builds the native image, runs `spike all --json`, and uploads results as an artifact. Model probes run only on manual dispatch (large downloads), in a separate linux-amd64 `model` job.
 
 ## Risks
 
