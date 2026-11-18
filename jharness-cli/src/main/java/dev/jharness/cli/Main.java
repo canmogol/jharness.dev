@@ -14,6 +14,7 @@ import dev.jharness.config.ConfigException;
 import dev.jharness.config.Settings;
 import dev.jharness.llm.ReplayProvider;
 import dev.jharness.security.Prompter;
+import dev.jharness.security.TrustStore;
 
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -62,18 +63,18 @@ public final class Main implements Callable<Integer> {
     public Integer call() {
         Path h = home != null ? home : Path.of(System.getProperty("user.home"));
         Path ws = (cwd != null ? cwd : Path.of("")).toAbsolutePath().normalize();
-        Settings settings;
-        try {
-            settings = Settings.load(h);
-        } catch (ConfigException e) {
-            err.println("jharness: " + e.getMessage());
+        if (!java.nio.file.Files.isDirectory(ws)) {
+            err.println("jharness: " + ws + " is not a folder");
             return 2;
         }
         try {
+            TrustStore trust = TrustStore.load(h);
             if (prompt != null) {
-                return headless(h, ws, settings);
+                // Headless runs never ask: a folder not marked trusted is untrusted (D-043).
+                boolean trusted = trust.trusted(ws).orElse(false);
+                return headless(h, ws, layered(h, ws, trusted), trusted);
             }
-            return interactive(h, ws, settings);
+            return interactive(h, ws, trust);
         } catch (ConfigException e) {
             err.println("jharness: " + e.getMessage());
             return 2;
@@ -83,16 +84,36 @@ public final class Main implements Callable<Integer> {
         }
     }
 
-    private Session open(Path h, Path ws, Settings settings, Session.Access access) throws ConfigException, IOException {
-        if (replay != null) {
-            Path file = replay.toAbsolutePath();
-            return Session.open(h, ws, settings, access, (bus, turns) -> ReplayProvider.load(file, bus, turns));
+    /** User, project and session layers; {@code --model} is the session layer (D-043). */
+    private Settings.Layered layered(Path h, Path ws, boolean trusted) throws ConfigException {
+        var session = dev.jharness.events.Json.object();
+        if (model != null) {
+            session.put("model", model);
         }
-        return Session.open(h, ws, settings, model, access);
+        return Settings.layered(h, ws, trusted, session);
     }
 
-    private int headless(Path h, Path ws, Settings settings) throws ConfigException, IOException {
-        try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()))) {
+    private Session open(Path h, Path ws, Settings.Layered layered, Session.Access access) throws ConfigException, IOException {
+        Session s;
+        if (replay != null) {
+            Path file = replay.toAbsolutePath();
+            s = Session.open(h, ws, layered.settings(), access, (bus, turns) -> ReplayProvider.load(file, bus, turns));
+        } else {
+            s = Session.open(h, ws, layered.settings(), null, access);
+        }
+        if (!layered.ignored().isEmpty()) {
+            var keys = dev.jharness.events.Json.array();
+            layered.ignored().forEach(keys::add);
+            var body = dev.jharness.events.Json.object();
+            body.set("keys", keys);
+            body.put("reason", "the project is not trusted");
+            s.bus().publish(dev.jharness.events.Origin.main(0), "settings.ignored", body);
+        }
+        return s;
+    }
+
+    private int headless(Path h, Path ws, Settings.Layered settings, boolean trusted) throws ConfigException, IOException {
+        try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()).trusted(trusted))) {
             s.bus().subscribe(e -> {
                 if (e.type().equals("loop.result")) {
                     out.println();
@@ -114,11 +135,20 @@ public final class Main implements Callable<Integer> {
         }
     }
 
-    private int interactive(Path h, Path ws, Settings settings) throws ConfigException, IOException {
+    private int interactive(Path h, Path ws, TrustStore trust) throws ConfigException, IOException {
         Terminal t = terminal != null ? terminal : TerminalBuilder.builder().system(true).provider("ffm").build();
         try {
             Tui tui = new Tui(t, h.resolve(".jharness").resolve("history"));
-            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()))) {
+            var saved = trust.trusted(ws);
+            boolean trusted = saved.orElseGet(() -> tui.askTrust(ws));
+            if (saved.isEmpty()) {
+                trust.record(ws, trusted);
+            }
+            Settings.Layered settings = layered(h, ws, trusted);
+            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()).trusted(trusted))) {
+                if (saved.isEmpty()) {
+                    s.bus().publish(dev.jharness.events.Origin.main(0), "project.trusted", dev.jharness.events.Json.object().put("trusted", trusted));
+                }
                 tui.run(s);
             }
             return 0;

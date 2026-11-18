@@ -59,13 +59,18 @@ public final class Session implements AutoCloseable {
      * How the session decides permissions: the permission engine from settings with a prompter (the
      * normal case), or a fixed gate (tests).
      */
-    public record Access(PermissionGate gate, Prompter prompter) {
+    public record Access(PermissionGate gate, Prompter prompter, boolean trusted) {
         public static Access prompter(Prompter p) {
-            return new Access(null, p);
+            return new Access(null, p, false);
         }
 
         public static Access gate(PermissionGate g) {
-            return new Access(g, null);
+            return new Access(g, null, false);
+        }
+
+        /** Whether the project is trusted (D-011); recorded in {@code session.started}. */
+        public Access trusted(boolean t) {
+            return new Access(gate, prompter, t);
         }
     }
 
@@ -94,7 +99,7 @@ public final class Session implements AutoCloseable {
         TurnCounter turns = new TurnCounter("main");
         ModelProvider provider = providers.create(bus, turns);
         bus.publish(turns.get(), "session.started", Json.object().put("workspace", ws.root().toString())
-                .put("provider", provider.provider()).put("model", provider.model()));
+                .put("provider", provider.provider()).put("model", provider.model()).put("trusted", access.trusted()));
         ProcessRunner runner = new ProcessRunner(bus, turns, settings.timeouts().outputChars());
         Optional<Executable> git = Executables.resolve("git", ws.root());
         GitOperations gitOps = git.map(g -> new GitOperations(runner, g, ws, settings.timeouts().process())).orElse(null);
@@ -106,7 +111,8 @@ public final class Session implements AutoCloseable {
         ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
-        String system = SystemPrompt.build(ctx.ok() ? ctx.value() : null);
+        String system = SystemPrompt.build(ctx.ok() ? ctx.value() : null, SystemPrompt.readMemory(ws.root().resolve("JHARNESS.md")),
+                SystemPrompt.readMemory(home.resolve(".jharness").resolve("JHARNESS.md")));
         AgentLoop loop = new AgentLoop(provider, isolate, services, bus, turns, system, settings.agent().maxSteps(),
                 settings.timeouts().outputChars());
         return new Session(bus, log, isolate, loop, ws, turns, settings);

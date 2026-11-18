@@ -57,6 +57,11 @@ public final class ModelProfiles {
     }
 
     static ModelProfiles parse(JsonNode model, JsonNode models, String source) throws ConfigException {
+        return parse(model, models, source, true);
+    }
+
+    /** @param requireDefault false when checking one layer alone: its "model" may name a profile from another layer */
+    static ModelProfiles parse(JsonNode model, JsonNode models, String source, boolean requireDefault) throws ConfigException {
         Map<String, ModelProfile> out = new LinkedHashMap<>();
         if (models != null) {
             if (!models.isObject()) {
@@ -72,7 +77,7 @@ public final class ModelProfiles {
                 throw new ConfigException(source + ": \"model\" must be a profile name");
             }
             def = model.asText();
-            if (!out.containsKey(def)) {
+            if (requireDefault && !out.containsKey(def)) {
                 throw new ConfigException(source + ": \"model\" names \"" + def + "\", which is not in \"models\"");
             }
         }

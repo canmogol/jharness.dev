@@ -51,6 +51,34 @@ final class Tui {
         this.out = terminal.writer();
     }
 
+    /** The trust question (AC-01, AC-02); end of input means no. */
+    boolean askTrust(Path workspace) {
+        out.println("Do you trust " + workspace + "?");
+        out.println("Trusting it lets its .jharness/settings.json loosen JHarness rules (permission mode, sandbox limits, mounts, models).");
+        out.println("Untrusted projects can only make JHarness stricter.");
+        out.flush();
+        while (true) {
+            String a;
+            try {
+                a = reader.readLine("[y] trust  [n] don't trust: ");
+            } catch (UserInterruptException | EndOfFileException e) {
+                return false;
+            }
+            switch (a.strip().toLowerCase()) {
+                case "y", "yes" -> {
+                    return true;
+                }
+                case "n", "no" -> {
+                    return false;
+                }
+                default -> {
+                    out.println("Please answer y or n.");
+                    out.flush();
+                }
+            }
+        }
+    }
+
     TerminalPrompter prompter() {
         return new TerminalPrompter(reader);
     }

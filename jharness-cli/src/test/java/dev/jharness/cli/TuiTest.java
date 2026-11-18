@@ -81,6 +81,17 @@ class TuiTest {
     }
 
     @Test
+    void trustQuestion() throws Exception {
+        Tui tui = new Tui(terminal("maybe\ny\nn\n"), null);
+        assertTrue(tui.askTrust(tmp));
+        assertFalse(tui.askTrust(tmp));
+        assertFalse(tui.askTrust(tmp), "end of input means no");
+        String sc = screen();
+        assertTrue(sc.contains("Do you trust " + tmp + "?"), sc);
+        assertTrue(sc.contains("loosen JHarness rules") && sc.contains("Please answer y or n."), sc);
+    }
+
+    @Test
     void ctrlDQuits() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws2"));
         Tui tui = new Tui(terminal(""), null);

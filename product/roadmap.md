@@ -36,11 +36,11 @@ Spec: `../specs/001-p0-spike/`
 - [x] `api.d.ts` and examples in the system prompt
 - [x] Permissions: ask, accept-edits, read-only (plan), bypass; permanent approvals per project
 - [x] Approvals inside a running JS block (watchdog pauses while waiting)
-- [ ] Project trust prompt
+- [x] Project trust prompt
 - [ ] Checkpoints, `/undo`, `/rewind`; diff review; Esc to interrupt
 - [x] File policy: workspace read-write, mounted folders read-only, deny list
 - [x] Event bus and JSONL session log
-- [ ] `JHARNESS.md` project memory; layered JSON settings
+- [x] `JHARNESS.md` project memory; layered JSON settings
 - [x] JLine TUI
 - [x] Secrets from environment variables or a 0600 file
 - [x] Replay provider for deterministic tests

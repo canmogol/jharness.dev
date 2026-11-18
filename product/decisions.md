@@ -53,6 +53,7 @@ Last updated: 2026-11-18
 | D-040 | Permanent approvals are saved in the user folder per project, never in the repository | Accepted |
 | D-041 | Permission modes ask, accept-edits, plan and bypass; the file policy applies in every mode | Accepted |
 | D-042 | Secrets come from the environment, then `~/.jharness/secrets` (KEY=value, 0600 only) | Accepted |
+| D-043 | Trust answers in `~/.jharness/trusted.json`; settings layers user, project, session; untrusted projects only tighten | Accepted |
 
 ---
 
@@ -571,6 +572,18 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** Recommended option accepted while the user was away, specifying 005-cli-and-tui, 2026-11-18.
 
+## D-043 — Trust store and settings layers
+
+**Decision.**
+- The trust answer for a folder is saved in `~/.jharness/trusted.json` (0600), keyed by the folder's real path, with the date. The terminal UI asks the first time a folder is opened; the question says that trusting lets the project's `.jharness/settings.json` loosen rules. Headless runs never ask: a folder not marked trusted is untrusted.
+- Settings are layered: user `~/.jharness/settings.json`, then project `.jharness/settings.json`, then the session (command-line flags such as `--model`). Objects are merged key by key and later layers win; `files.deny` lists are joined, so a layer can only add denies.
+- From an untrusted project only these apply: `files.deny` (joined) and `permissions.mode` when it is `plan`. Every other key is ignored, and the session log records which with a `settings.ignored` event.
+- `JHARNESS.md` from the workspace root and `~/.jharness/JHARNESS.md` go into the system prompt as project and user instructions, each up to 32 KB. They are read whether or not the project is trusted: they are text for the model, not settings, and the guest's file reads are no different.
+
+**Why.** D-011 says trust gates project settings that loosen rules and that untrusted projects may only add denies. A user-folder store keeps the answer out of the repository, as D-038 and D-040 do for logs and approvals.
+
+**Source.** Recommended option accepted while the user was away, specifying 006-trust-settings-and-memory, 2026-11-18.
+
 ---
 
 ## Questions and answers
@@ -626,6 +639,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q45 | Where are "always for this project" approvals saved? | The user folder, per project hash | A repo can't ship its own approvals | D-040 |
 | Q46 | What do the permission modes allow, and does bypass skip the file policy? | Table in D-041; the file policy applies in every mode | Secrets and mounted folders stay protected | D-041 |
 | Q47 | Where do API keys come from besides the environment? | `~/.jharness/secrets`, `NAME=value` lines, 0600 only | One lookup for both sources; a readable file is refused | D-042 |
+| Q48 | Where are trust answers kept, how do settings layer, and what does an untrusted project's settings file do? | `~/.jharness/trusted.json`; user, project, session; untrusted: only `files.deny` and `plan` | A cloned repo can only make JHarness stricter | D-043 |
 
 ---
 

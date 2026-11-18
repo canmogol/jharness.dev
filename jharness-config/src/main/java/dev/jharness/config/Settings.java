@@ -5,10 +5,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.jharness.events.Json;
 
@@ -47,6 +51,10 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
     }
 
     public static Settings parse(String text, String source) throws ConfigException {
+        return parse(object(text, source), source, true);
+    }
+
+    private static ObjectNode object(String text, String source) throws ConfigException {
         JsonNode root;
         try {
             root = Json.parse(text);
@@ -56,17 +64,112 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
         if (!root.isObject()) {
             throw new ConfigException(source + ": top level must be an object");
         }
+        return (ObjectNode) root;
+    }
+
+    /** @param complete false to check one layer alone (its default model may come from another layer) */
+    static Settings parse(ObjectNode root, String source, boolean complete) throws ConfigException {
         for (Map.Entry<String, JsonNode> e : root.properties()) {
             if (!TOP.contains(e.getKey())) {
                 throw new ConfigException(source + ": unknown key \"" + e.getKey() + "\" (known: model, models, sandbox, timeouts, agent, permissions, files)");
             }
         }
         return new Settings(
-                ModelProfiles.parse(root.get("model"), root.get("models"), source),
+                ModelProfiles.parse(root.get("model"), root.get("models"), source, complete),
                 SandboxSettings.parse(root.get("sandbox"), source),
                 Timeouts.parse(root.get("timeouts"), source),
                 AgentSettings.parse(root.get("agent"), source),
                 PermissionSettings.parse(root.get("permissions"), source),
                 FileSettings.parse(root.get("files"), source));
+    }
+
+    // --- Layers (D-043) ------------------------------------------------------------------------
+
+    /** Merged settings and the project keys ignored because the project is not trusted. */
+    public record Layered(Settings settings, List<String> ignored) {}
+
+    public static Path projectFile(Path workspace) {
+        return workspace.resolve(".jharness").resolve("settings.json");
+    }
+
+    /**
+     * User, then project, then session settings, merged key by key with later layers winning;
+     * {@code files.deny} lists are joined. For an untrusted project only {@code files.deny} and
+     * {@code permissions.mode: plan} are taken from its file (D-011, D-043).
+     */
+    public static Layered layered(Path home, Path workspace, boolean trusted, ObjectNode session) throws ConfigException {
+        Path uf = userFile(home);
+        Path pf = projectFile(workspace);
+        ObjectNode user = read(uf);
+        ObjectNode project = read(pf);
+        parse(user, uf.toString(), false);
+        List<String> ignored = new ArrayList<>();
+        if (!trusted) {
+            project = untrusted(project, ignored);
+        }
+        parse(project, pf.toString(), false);
+        ObjectNode merged = user.deepCopy();
+        merge(merged, project, "");
+        if (session != null) {
+            merge(merged, session, "");
+        }
+        return new Layered(parse(merged, uf + " + " + pf + (session == null || session.isEmpty() ? "" : " + command line"), true),
+                List.copyOf(ignored));
+    }
+
+    private static ObjectNode read(Path f) throws ConfigException {
+        try {
+            return object(Files.readString(f, StandardCharsets.UTF_8), f.toString());
+        } catch (NoSuchFileException e) {
+            return Json.object();
+        } catch (IOException e) {
+            throw new ConfigException("cannot read " + f + ": " + e.getMessage());
+        }
+    }
+
+    /** Keeps what only tightens: {@code files.deny} and {@code permissions.mode} when it is {@code plan}. */
+    static ObjectNode untrusted(ObjectNode project, List<String> ignored) {
+        ObjectNode kept = Json.object();
+        for (Map.Entry<String, JsonNode> top : project.properties()) {
+            String k = top.getKey();
+            JsonNode v = top.getValue();
+            if (!v.isObject()) {
+                ignored.add(k);
+                continue;
+            }
+            for (Map.Entry<String, JsonNode> e : v.properties()) {
+                String path = k + "." + e.getKey();
+                boolean keep = path.equals("files.deny")
+                        || path.equals("permissions.mode") && e.getValue().isTextual() && e.getValue().asText().equals("plan");
+                if (keep) {
+                    ((ObjectNode) kept.withObjectProperty(k)).set(e.getKey(), e.getValue());
+                } else {
+                    ignored.add(path);
+                }
+            }
+        }
+        return kept;
+    }
+
+    /** Merges {@code from} into {@code into}: objects key by key, arrays replaced, except {@code files.deny}, which is joined. */
+    static void merge(ObjectNode into, ObjectNode from, String path) {
+        for (Map.Entry<String, JsonNode> e : from.properties()) {
+            String p = path.isEmpty() ? e.getKey() : path + "." + e.getKey();
+            JsonNode cur = into.get(e.getKey());
+            JsonNode v = e.getValue();
+            if (cur != null && cur.isObject() && v.isObject()) {
+                merge((ObjectNode) cur, (ObjectNode) v, p);
+            } else if (p.equals("files.deny") && cur != null && cur.isArray() && v.isArray()) {
+                ArrayNode joined = ((ArrayNode) cur).deepCopy();
+                for (JsonNode x : v) {
+                    if (!joined.toString().contains(x.toString())) {
+                        joined.add(x);
+                    }
+                }
+                into.set(e.getKey(), joined);
+            } else {
+                into.set(e.getKey(), v.deepCopy());
+            }
+        }
     }
 }
