@@ -31,6 +31,18 @@ class JsBlocksTest {
     }
 
     @Test
+    void countsLaterJsBlocks() {
+        assertEquals(Optional.of(new JsBlocks.Found("a", 0)), JsBlocks.find("```js\na\n```"));
+        assertEquals(Optional.of(new JsBlocks.Found("a", 2)), JsBlocks.find("```js\na\n```\ntext\n```javascript\nb\n```\n~~~JS\nc\n~~~"));
+        assertEquals(Optional.of(new JsBlocks.Found("a", 0)),
+                JsBlocks.find("```json\n{}\n```\n```js\na\n```\n```ts\nb\n```\n```\nc\n```\n```python\nd\n```"));
+        assertEquals(Optional.of(new JsBlocks.Found("a", 1)), JsBlocks.find("```js\na\n```\n```js\nb\n"), "an unclosed last block counts");
+        assertEquals(Optional.of(new JsBlocks.Found("const s = \"```js\";", 0)), JsBlocks.find("````js\nconst s = \"```js\";\n````"));
+        assertEquals(Optional.empty(), JsBlocks.find("```ts\nx\n```"));
+        assertEquals(Optional.empty(), JsBlocks.find(null));
+    }
+
+    @Test
     void unclosedBlockRunsToTheEnd() {
         assertEquals(Optional.of("api.grep({pattern: 'x'})"), JsBlocks.first("```js\napi.grep({pattern: 'x'})\n"));
         assertEquals(Optional.of(""), JsBlocks.first("```js\n```"));

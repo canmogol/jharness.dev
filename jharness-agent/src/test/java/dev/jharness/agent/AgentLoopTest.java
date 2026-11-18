@@ -115,6 +115,33 @@ class AgentLoopTest {
     }
 
     @Test
+    void laterBlocksDontRunAndTheModelIsTold() throws Exception {
+        open("{}", "```js\n'first'\n```\nand\n```js\n'second'\n```\n```javascript\n'third'\n```", "```js\n'second'\n```", "done");
+        TurnResult r = session.loop().turn("go", d -> {});
+        assertEquals("done", r.stopReason());
+        assertEquals(2, r.steps());
+        String fed = lastUserMessage(1);
+        assertTrue(fed.contains("first"), fed);
+        assertFalse(fed.contains("third"), fed);
+        assertTrue(fed.endsWith("\n\nNote: your reply had 2 more js block(s) after the first; they did not run. "
+                + "Send the next one in your next reply."), fed);
+        assertFalse(lastUserMessage(2).contains("Note:"), lastUserMessage(2));
+        List<Event> code = events.stream().filter(e -> e.type().equals("loop.code")).toList();
+        assertEquals(2, code.get(0).body().get("ignoredBlocks").asInt());
+        assertFalse(code.get(1).body().has("ignoredBlocks"), code.get(1).body().toString());
+    }
+
+    @Test
+    void theNoteIsNeverCut() throws Exception {
+        open("{\"timeouts\":{\"outputChars\":100}}", "```js\n'x'.repeat(1000) + 'END'\n```\n```js\n'next'\n```", "ok");
+        session.loop().turn("big", d -> {});
+        String fed = lastUserMessage(1);
+        assertTrue(fed.contains("characters cut"), fed);
+        assertTrue(fed.contains("END\n\nNote: your reply had 1 more js block(s)"), fed);
+        assertTrue(fed.endsWith("Send the next one in your next reply."), fed);
+    }
+
+    @Test
     void conversationAndTurnNumbersCarryAcrossTurns() throws Exception {
         open("{}", "first answer", "second answer");
         session.loop().turn("one", d -> {});
