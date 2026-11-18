@@ -16,7 +16,7 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 3 — Native
 
-- [ ] T005 Add the native profile for `jharness` and the CI steps (AC-07)
+- [x] T005 Add the native profile for `jharness` and the CI steps (AC-07)
 
 ## Traceability
 

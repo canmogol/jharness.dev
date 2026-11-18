@@ -61,11 +61,33 @@ jobs:
           ls -l jharness-testkit/target/jharness-smoke
           ./jharness-testkit/target/jharness-smoke | tee smoke-${{ matrix.target }}.jsonl
 
+      - name: Native jharness binary
+        run: mvn -B -ntp -Pnative -pl jharness-cli package -DskipTests
+
+      # A headless run with a recorded reply: the CLI, session, isolate and api in the native binary.
+      - name: Run native jharness
+        run: |
+          bin=jharness-cli/target/jharness
+          ls -l "$bin"
+          "$bin" --version
+          tmp=$(mktemp -d)
+          mkdir -p "$tmp/home" "$tmp/ws"
+          echo "hello from the workspace" > "$tmp/ws/a.txt"
+          printf '%s\n' '{"reply":"```js\napi.readFile(\"a.txt\")\n```"}' '{"reply":"The file says hello."}' > "$tmp/replay.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/replay.jsonl" -p "read a.txt" | tee "$tmp/out.txt"
+          grep -q "The file says hello." "$tmp/out.txt"
+          grep -q "hello from the workspace" "$tmp"/home/.jharness/sessions/*/*.jsonl
+
+      # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
+      - name: TUI pseudo-terminal check
+        run: python3 -I scripts/tui-pty-check.py jharness-cli/target/jharness
+
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: smoke-${{ matrix.target }}
           path: |
             smoke-*.jsonl
+            jharness-cli/target/jharness
             **/target/surefire-reports/*.txt
           if-no-files-found: ignore

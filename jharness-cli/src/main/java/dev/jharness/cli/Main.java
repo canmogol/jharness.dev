@@ -93,6 +93,11 @@ public final class Main implements Callable<Integer> {
 
     private int headless(Path h, Path ws, Settings settings) throws ConfigException, IOException {
         try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()))) {
+            s.bus().subscribe(e -> {
+                if (e.type().equals("loop.result")) {
+                    out.println();
+                }
+            });
             TurnResult r = s.loop().turn(prompt, d -> {
                 out.print(d);
                 out.flush();
