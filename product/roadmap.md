@@ -100,4 +100,6 @@ Spec: `../specs/001-p0-spike/`
 - Image input and web search
 - A Java SDK for embedding JHarness
 - In-process local models with ModelJars, when D-035's conditions are met
+- Spike a model helper binary with the Rust backend, started over stdio; first for a small reviewer model (D-035, D-031)
+- Test memory protection keys on a Linux machine that has them; make `auto` the default if it works (D-036)
 - IDE integration

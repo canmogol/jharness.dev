@@ -28,7 +28,7 @@ Last updated: 2026-11-18
 | D-015 | Synchronous `api`; virtual threads for host I/O; isolates on platform threads | Accepted |
 | D-016 | macOS (Apple Silicon) and Linux first; Windows later | Accepted |
 | D-017 | Extensions are plain folders in v1 | Accepted |
-| D-018 | Memory protection keys: off in v0.1 (D-036) | Accepted |
+| D-018 | Memory protection keys: off by default in v0.1, opt-in `auto` or `on` (D-036) | Accepted |
 | D-019 | Name: JHarness; instructions file `JHARNESS.md`; config in `.jharness/` | Accepted |
 | D-020 | Oracle GraalVM under GFTC; the product is free and open source | Accepted |
 | D-021 | Develop on the JVM, build native in CI | Accepted |
@@ -45,8 +45,8 @@ Last updated: 2026-11-18
 | D-032 | Named model profiles in `settings.json`; switch per session or per agent | Accepted |
 | D-033 | Offline mode | Accepted |
 | D-034 | Internal isolate mode comes from the engine default, checked at startup; no experimental options | Accepted |
-| D-035 | ModelJars in the native image: no-go for v0.1; local models through Ollama or llama.cpp | Accepted |
-| D-036 | Memory protection keys off in v0.1 | Accepted |
+| D-035 | ModelJars in the native image: no-go for v0.1; local models through Ollama or llama.cpp; after v0.1, a Rust-backend model helper process | Accepted |
+| D-036 | Memory protection keys off by default in v0.1; `auto` (probe at startup) and `on` are opt-in | Accepted |
 | D-037 | The wall-clock watchdog escalates: context close, then engine close, then a recorded failure | Accepted |
 
 ---
@@ -207,7 +207,7 @@ Last updated: 2026-11-18
 
 ## D-018 — Memory protection keys
 
-**Decision.** Off in v0.1 (changed by D-036 on 2026-11-18). Originally: turn on `engine.MemoryProtection=true` (`engine.IsolateMemoryProtection` in polyglot 25.0) on Linux when the CPU supports protection keys, detected at startup. Not available on macOS or Windows.
+**Decision.** Off by default in v0.1, with `auto` and `on` as opt-in settings (changed by D-036 on 2026-11-18). Originally: turn on `engine.MemoryProtection=true` (`engine.IsolateMemoryProtection` in polyglot 25.0) on Linux when the CPU supports protection keys, detected at startup. Not available on macOS or Windows.
 
 **Why.** Extra defense in depth where possible; the isolate and limits remain the main boundary.
 
@@ -484,6 +484,8 @@ The reviewer endpoint is allowed through the proxy automatically, like the model
 - it starts no child process (constitution Article IV);
 - the default coder models are in its catalog and qualified on the backend used.
 
+The path to revisit is a separate native helper binary that runs the Rust FFM backend without Truffle, so the shared-arena limit doesn't apply. JHarness starts it through `ProcessRunner` and talks to it over stdio, like a stdio MCP server; no socket. Its first use is a small reviewer model for D-031 (Kev-class, about 0.8B), so the reviewer works when the user runs no Kev server and doesn't use Jev. Most users are expected to run coding models through Ollama or llama.cpp, or use Claude. Before adoption: prove the helper builds and runs natively on linux-amd64 and macos-aarch64, and settle in that spec the constitution Article IV exception for the helper process and for `vectors-core`'s `sysctl` call inside it. Added 2026-11-18.
+
 **Why.** Measured in P0 (`docs/p0-results.md`):
 - The pure-Java backend runs in the native image at 0.1–1.2% of its JVM speed, even with `-H:+VectorAPISupport`.
 - The Rust FFM backend (`backend-native`) uses `Arena.ofShared`, which Native Image rejects in an image with runtime compilation, and the JS isolates need Truffle.
@@ -496,11 +498,16 @@ The plan named this fallback in advance (D-013 Why, `plan.md` risks), so P1 cont
 
 ## D-036 — Memory protection keys off in v0.1
 
-**Decision.** Agent engines do not set `engine.IsolateMemoryProtection` in v0.1. This changes D-018. Revisit when the option is no longer experimental and has been tested on a Linux machine with protection keys.
+**Decision.** The setting `engine.MemoryProtection` takes `off`, `auto` or `on`; the default is `off` in v0.1. This changes D-018.
+- `off`: agent engines do not set `engine.IsolateMemoryProtection`.
+- `auto`: at startup JHarness builds one probe engine with the option on and creates an isolate. If that works, agent engines use it; if it fails, they run without it and JHarness emits an event saying so.
+- `on`: as `auto`, but startup fails if the probe fails.
 
-**Why.** In polyglot 25.0 the option is experimental, so turning it on means `allowExperimentalOptions(true)`, which D-034 rules out. Forced on a Linux amd64 CPU without protection keys it makes isolate creation fail rather than being ignored. No machine with protection keys was available in P0. The isolate and its limits remain the boundary (D-002, D-003).
+With `auto` or `on`, agent engines allow experimental options, an exception to D-034 that only the user's setting turns on; guest code cannot set engine options. Make `auto` the default once the option has been tested on a Linux machine with protection keys.
 
-**Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18.
+**Why.** Protection keys are a nice-to-have; JHarness must run without them. In P0 both failure modes were ordinary errors at isolate creation, so a startup probe can detect them: linux-amd64 without `pku` fails with "Setting the protection of the heap memory failed", and linux-aarch64 and macOS report "Memory Protection not available". The option is experimental in polyglot 25.0 and the case where it works is untested, because no machine with protection keys was available, so it stays opt-in. The isolate and its limits remain the boundary (D-002, D-003).
+
+**Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18; changed to off-by-default with opt-in `auto` and `on` by user answer, 2026-11-18.
 
 ## D-037 — Watchdog escalation
 
@@ -557,8 +564,9 @@ Questions raised during design, the answers given, and why each mattered.
 | Q37 | Can a Java developer work offline with a local model and Kev? | Yes, with everything cached; an explicit offline mode | Works without a connection | D-033 |
 | Q38 | `engine.IsolateMode` is experimental in polyglot 25.0: set it or rely on the default? | Rely on the default `internal`, checked at startup; no experimental options | Keeps one process without unlocking experimental options | D-034 |
 | Q39 | Does ModelJars run in the native binary fast enough (D-030)? | No: 0.1–1.2% of JVM speed; the Rust backend can't be built in; no 7B coder model in the catalog | v0.1 runs local models through Ollama or llama.cpp | D-035 |
-| Q40 | Turn on memory protection keys? | Not in v0.1: experimental, and breaks isolate creation on CPUs without keys | Keeps D-034 and avoids a failure mode | D-036 |
+| Q40 | Turn on memory protection keys? | Off by default in v0.1; `auto` probes at startup and continues without them, `on` requires them | Nice to have, experimental, and untested where it works | D-036 |
 | Q41 | What if the watchdog's context close doesn't stop a run? | Escalate to engine close, then a recorded failure | One P0 run hung for 28 minutes after context close | D-037 |
+| Q42 | Can the faster Rust model backend be used despite the Truffle conflict? | After v0.1, in a separate helper binary over stdio; first for a small reviewer model | In-process models are rare; most users run Ollama, llama.cpp or Claude | D-035 |
 
 ---
 

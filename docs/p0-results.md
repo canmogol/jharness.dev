@@ -30,7 +30,7 @@ Sources: CI run 44189315472 (native matrix, all three targets), CI run 442187968
 | Config overrides AC-13 | Pass | Pass | Pass |
 | Blocked time not counted as CPU, AC-14 | Pass | Pass | Pass |
 | Memory protection AC-05 | Fails isolate creation (no `pku`) | Not available | n/a |
-| Model prompt speed, native / JVM (tok/s, 219-token prompt) | 0.04 / 32.7 | not measured | 0.17 / 14.3 |
+| Model prompt speed, native / JVM (tok/s, 219-token prompt) | 0.04 / 32.7 | not measured (not needed) | 0.17 / 14.3 |
 | Model generation speed, native / JVM (tok/s) | 0.02 / 16.1 | not measured | 0.11 / 30.7 |
 | Model 8k-token prompt, JVM (prefill s / decode tok/s) | 3,151 / 2.9 | not measured | 1,394 / 4.7 |
 | Open without marker JAR AC-08 | | | By coordinates: no. From cache path: yes |
@@ -50,7 +50,7 @@ On a local Mac with a cold file cache the first `isolate --noop` took 1.67 s and
 | linux-aarch64 | "Memory Protection not available" |
 | macos-aarch64 | "Memory Protection not available" |
 
-No machine with protection keys was available, so the "works" case is untested.
+No machine with protection keys was available, so the "works" case is untested. Both failures are ordinary errors at isolate creation, so v0.1 offers an opt-in `auto` setting that probes at startup and continues without protection keys (D-036).
 
 ## Limits (AC-03, AC-13, AC-14)
 
@@ -135,8 +135,10 @@ Same on the JVM and native:
 
 ## Terminal (AC-10)
 
-JLine 3.30.17 with the FFM terminal provider (no JNI library, no `stty`). `spike/scripts/jline-pty-check.py` drives the native binary through a pseudo-terminal: type a line, edit it with Left and insert, recall it with Up, end with Ctrl-D. Pass on all three targets in CI and locally on macOS.
+JLine 3.30.17 with the FFM terminal provider (no JNI library, no `stty`). `spike/scripts/jline-pty-check.py` drives the native binary through a pseudo-terminal: type a line, edit it with Left and insert, recall it with Up, end with Ctrl-D. Pass on all three targets in CI and locally on macOS. Checked by hand by the user on macOS on 2026-11-18 with `./spike/target/spike jline`: works as expected.
 
 ## Decisions taken from these results
 
-See `../product/decisions.md`: D-034 (isolate mode), D-035 (ModelJars no-go for v0.1, changing D-013), D-036 (memory protection off in v0.1, changing D-018), D-037 (watchdog escalation).
+See `../product/decisions.md`: D-034 (isolate mode), D-035 (ModelJars no-go for v0.1, changing D-013; Rust-backend helper process after v0.1), D-036 (memory protection off by default, `auto` and `on` opt-in, changing D-018), D-037 (watchdog escalation).
+
+linux-aarch64 model speed was not measured: Linux x86-64 and macOS on Apple Silicon cover almost all target machines, and the decision does not depend on it.

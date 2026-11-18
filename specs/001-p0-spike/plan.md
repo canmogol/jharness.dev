@@ -1,6 +1,6 @@
 # Plan 001 — P0 Spike
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-16
+Spec: `spec.md` · Status: Done · Created: 2026-11-16
 
 ## Approach
 
