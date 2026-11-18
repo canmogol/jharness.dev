@@ -1,6 +1,6 @@
 # Plan 002 — Host foundations
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-18
+Spec: `spec.md` · Status: Done · Created: 2026-11-18
 
 ## Approach
 
@@ -114,8 +114,8 @@ Errors are thrown as host exceptions with a clear message; the guest sees a JS e
 
 ## Checks
 
-- [ ] `mvn -B -ntp verify`
-- [ ] `mvn -B -ntp -Pnative -pl jharness-testkit -am package -DskipTests && jharness-testkit/target/jharness-smoke`
+- [x] `mvn -B -ntp verify`
+- [x] `mvn -B -ntp -Pnative -pl jharness-testkit -am package -DskipTests && jharness-testkit/target/jharness-smoke`
 
 ## Risks
 
