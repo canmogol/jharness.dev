@@ -28,7 +28,7 @@ Spec: `../specs/001-p0-spike/`
 ## Phase 1 — Core loop MVP
 
 - [x] Model providers: OpenAI-compatible (local models through Ollama or llama.cpp), Claude (native) (D-035)
-- [ ] Model profiles in `settings.json`; `--model` and `/model` (D-032)
+- [x] Model profiles in `settings.json`; `--model` and `/model` (D-032)
 - [x] Agent loop: stream reply, extract the JS block, run it, return result or error with line numbers
 - [x] Isolate manager: one Engine per agent, fresh Context per run, limits, watchdog
 - [x] `api`: readContext, readFile, writeFile, editFile, listFiles, grep, git, emit
@@ -41,8 +41,8 @@ Spec: `../specs/001-p0-spike/`
 - [x] File policy: workspace read-write, mounted folders read-only, deny list
 - [x] Event bus and JSONL session log
 - [ ] `JHARNESS.md` project memory; layered JSON settings
-- [ ] JLine TUI
-- [ ] Secrets from environment variables or a 0600 file
+- [x] JLine TUI
+- [x] Secrets from environment variables or a 0600 file
 - [x] Replay provider for deterministic tests
 
 **Gate:** fixes a seeded bug in a sample repo end to end, with a local model and with Claude.

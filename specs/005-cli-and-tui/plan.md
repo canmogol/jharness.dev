@@ -1,6 +1,6 @@
 # Plan 005 — CLI and TUI
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-18
+Spec: `spec.md` · Status: Done · Created: 2026-11-18
 
 ## Approach
 
@@ -52,8 +52,8 @@ The file check: regular file, owner is the current user, permissions exactly `rw
 
 ## Checks
 
-- [ ] `mvn -B -ntp verify`
-- [ ] `mvn -B -ntp -Pnative -pl jharness-cli package -DskipTests && jharness-cli/target/jharness --version`
+- [x] `mvn -B -ntp verify`
+- [x] `mvn -B -ntp -Pnative -pl jharness-cli package -DskipTests && jharness-cli/target/jharness --version`
 
 ## Risks
 
