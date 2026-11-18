@@ -1,0 +1,72 @@
+package dev.jharness.testkit;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Constitution quality gate: no {@code ProcessBuilder} or {@code Runtime.exec} outside
+ * {@code ProcessRunner}, and no {@code HttpClient} or socket outside {@code HttpClients} (AC-01).
+ * Scans the main sources of every product module; test code and this testkit are not product code.
+ */
+class ArchitectureTest {
+
+    record Rule(String name, Pattern pattern, String allowedFile) {}
+
+    static final List<Rule> RULES = List.of(
+            new Rule("process start", Pattern.compile("new\\s+ProcessBuilder\\b|Runtime\\s*\\.\\s*getRuntime\\s*\\(\\s*\\)\\s*\\.\\s*exec|\\.exec\\s*\\(\\s*new\\s+String"),
+                    "jharness-process/src/main/java/dev/jharness/process/ProcessRunner.java"),
+            new Rule("HTTP client", Pattern.compile("HttpClient\\s*\\.\\s*(newBuilder|newHttpClient)\\b"),
+                    "jharness-llm/src/main/java/dev/jharness/llm/http/HttpClients.java"),
+            new Rule("socket", Pattern.compile("new\\s+(Server)?Socket\\s*\\(|(Server)?SocketChannel\\s*\\.\\s*open|new\\s+DatagramSocket|HttpServer\\s*\\.\\s*create"),
+                    null));
+
+    static Path root() {
+        Path p = Path.of("").toAbsolutePath();
+        while (p != null && !Files.exists(p.resolve("jharness-events"))) {
+            p = p.getParent();
+        }
+        return p;
+    }
+
+    @Test
+    void sideEffectsStayInTheirModules() throws IOException {
+        Path root = root();
+        assertNotNull(root);
+        List<String> violations = new ArrayList<>();
+        int scanned = 0;
+        for (String module : List.of("jharness-events", "jharness-config", "jharness-security", "jharness-process", "jharness-sandbox", "jharness-llm")) {
+            Path src = root.resolve(module).resolve("src/main/java");
+            try (Stream<Path> files = Files.walk(src)) {
+                for (Path f : files.filter(x -> x.toString().endsWith(".java")).toList()) {
+                    scanned++;
+                    String rel = root.relativize(f).toString().replace('\\', '/');
+                    String text = Files.readString(f);
+                    for (Rule r : RULES) {
+                        if (r.pattern().matcher(text).find() && !rel.equals(r.allowedFile())) {
+                            violations.add(r.name() + " in " + rel);
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(scanned > 30, "scanned only " + scanned + " files");
+        assertEquals(List.of(), violations);
+    }
+
+    @Test
+    void rulesCatchViolations() {
+        assertTrue(RULES.get(0).pattern().matcher("var p = new ProcessBuilder(cmd);").find());
+        assertTrue(RULES.get(0).pattern().matcher("Runtime.getRuntime().exec(\"ls\")").find());
+        assertTrue(RULES.get(1).pattern().matcher("HttpClient.newHttpClient()").find());
+        assertTrue(RULES.get(2).pattern().matcher("new Socket(\"h\", 80)").find());
+    }
+}

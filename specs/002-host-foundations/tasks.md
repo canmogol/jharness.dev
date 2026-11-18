@@ -34,14 +34,14 @@ Order and grouping: the recommended module-by-module order, accepted on the user
 
 ## Group 5 — Model providers
 
-- [ ] T015 Write `HttpClients`, `Sse` and `ModelProvider` (AC-01, AC-13)
-- [ ] T016 [P] Write `OpenAiCompatibleProvider` and its stub-server tests (AC-13)
-- [ ] T017 [P] Write `AnthropicProvider` and its stub-server tests (AC-13)
-- [ ] T018 Add live tests that run only when `OLLAMA_URL` or `ANTHROPIC_API_KEY` is set (AC-13)
+- [x] T015 Write `HttpClients`, `Sse` and `ModelProvider` (AC-01, AC-13)
+- [x] T016 [P] Write `OpenAiCompatibleProvider` and its stub-server tests (AC-13)
+- [x] T017 [P] Write `AnthropicProvider` and its stub-server tests (AC-13)
+- [x] T018 Add live tests that run only when `OLLAMA_URL` or `ANTHROPIC_API_KEY` is set (AC-13)
 
 ## Group 6 — Architecture and native
 
-- [ ] T019 Write the architecture test for `ProcessBuilder`, `Runtime.exec`, `HttpClient` and `Socket` use (AC-01)
+- [x] T019 Write the architecture test for `ProcessBuilder`, `Runtime.exec`, `HttpClient` and `Socket` use (AC-01)
 - [ ] T020 Write the `Smoke` main and the `native` profile in `jharness-testkit` (AC-14)
 - [ ] T021 Add the CI workflow: JVM tests, `rg` installed, native smoke on all three targets (AC-01, AC-12, AC-14)
 
