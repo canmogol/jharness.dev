@@ -138,6 +138,15 @@ public final class Smoke {
             check("anthropic", b.equals("Hello, world"), b);
         }
 
+        // The agent loop with recorded replies: the P1 gate scenario.
+        Path repo = SampleRepo.create(tmp.resolve("repo"));
+        try (dev.jharness.agent.Session session = dev.jharness.agent.Session.open(home, repo, Settings.defaults(),
+                PermissionGate.allowAll(), (b, turns) -> dev.jharness.llm.ReplayProvider.ofReplies(SampleRepo.gateReplies(), b, turns))) {
+            var t = session.loop().turn(SampleRepo.TASK, d -> {});
+            check("agent loop", t.stopReason().equals("done") && t.steps() == 4 && SampleRepo.fixed(repo)
+                    && SampleRepo.log(repo).getFirst().equals("Fix Calculator.add to add"), t);
+        }
+
         log.close();
         List<JsonNode> back = SessionLog.read(log.path());
         check("session log", back.size() == events.size() && back.getLast().equals(events.getLast().toJson()),

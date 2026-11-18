@@ -22,9 +22,9 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 4 — Gate scenario
 
-- [ ] T008 Write the seeded-bug sample repository and the replay gate test (AC-08)
-- [ ] T009 [P] Write the live loop tests (AC-09)
-- [ ] T010 Add a replay loop run to the smoke binary (AC-01, AC-08)
+- [x] T008 Write the seeded-bug sample repository and the replay gate test (AC-08)
+- [x] T009 [P] Write the live loop tests (AC-09)
+- [x] T010 Add a replay loop run to the smoke binary (AC-01, AC-08)
 
 ## Traceability
 
