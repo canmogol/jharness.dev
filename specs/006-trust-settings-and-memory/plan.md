@@ -1,6 +1,6 @@
 # Plan 006 — Project trust, layered settings and JHARNESS.md
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-18
+Spec: `spec.md` · Status: Done · Created: 2026-11-18
 
 ## Approach
 
@@ -52,8 +52,8 @@ Untrusted projects can only make JHarness stricter.  [y] trust  [n] don't trust:
 
 ## Checks
 
-- [ ] `mvn -B -ntp verify`
-- [ ] `mvn -B -ntp -Pnative -pl jharness-cli package -DskipTests && python3 -I scripts/tui-pty-check.py jharness-cli/target/jharness`
+- [x] `mvn -B -ntp verify`
+- [x] `mvn -B -ntp -Pnative -pl jharness-cli package -DskipTests && python3 -I scripts/tui-pty-check.py jharness-cli/target/jharness`
 
 ## Risks
 

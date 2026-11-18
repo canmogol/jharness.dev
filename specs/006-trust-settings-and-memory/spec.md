@@ -1,6 +1,6 @@
 # Spec 006 — Project trust, layered settings and JHARNESS.md
 
-Status: Draft · Phase: P1 · Created: 2026-11-18
+Status: Done · Phase: P1 · Created: 2026-11-18
 
 ## Summary
 
