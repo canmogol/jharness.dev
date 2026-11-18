@@ -1,0 +1,372 @@
+{
+  "reflection": [
+    {
+      "type": "byte[]"
+    },
+    {
+      "type": "com.integrallis.models.backend.nativekernel.RustFfmBackend",
+      "methods": [
+        {
+          "name": "load",
+          "parameterTypes": [
+            "java.nio.file.Path"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.integrallis.vectors.core.PanamaVectorUtilSupportProvider"
+    },
+    {
+      "type": "com.integrallis.vectors.core.ScalarVectorUtilSupportProvider"
+    },
+    {
+      "type": "float[]"
+    },
+    {
+      "type": "int[]"
+    },
+    {
+      "type": "java.lang.Boolean",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getBoolean",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.foreign.MemorySegment",
+      "methods": [
+        {
+          "name": "ofArray",
+          "parameterTypes": [
+            "float[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "jdk.incubator.vector.FloatVector"
+    },
+    {
+      "type": "jdk.incubator.vector.VectorOperators",
+      "fields": [
+        {
+          "name": "B2D"
+        },
+        {
+          "name": "B2F"
+        },
+        {
+          "name": "B2I"
+        },
+        {
+          "name": "B2L"
+        },
+        {
+          "name": "B2S"
+        },
+        {
+          "name": "D2B"
+        },
+        {
+          "name": "D2F"
+        },
+        {
+          "name": "D2I"
+        },
+        {
+          "name": "D2L"
+        },
+        {
+          "name": "D2S"
+        },
+        {
+          "name": "F2B"
+        },
+        {
+          "name": "F2D"
+        },
+        {
+          "name": "F2I"
+        },
+        {
+          "name": "F2L"
+        },
+        {
+          "name": "F2S"
+        },
+        {
+          "name": "I2B"
+        },
+        {
+          "name": "I2D"
+        },
+        {
+          "name": "I2F"
+        },
+        {
+          "name": "I2L"
+        },
+        {
+          "name": "I2S"
+        },
+        {
+          "name": "L2B"
+        },
+        {
+          "name": "L2D"
+        },
+        {
+          "name": "L2F"
+        },
+        {
+          "name": "L2I"
+        },
+        {
+          "name": "L2S"
+        },
+        {
+          "name": "REINTERPRET_D2L"
+        },
+        {
+          "name": "REINTERPRET_F2I"
+        },
+        {
+          "name": "REINTERPRET_I2F"
+        },
+        {
+          "name": "REINTERPRET_L2D"
+        },
+        {
+          "name": "S2B"
+        },
+        {
+          "name": "S2D"
+        },
+        {
+          "name": "S2F"
+        },
+        {
+          "name": "S2I"
+        },
+        {
+          "name": "S2L"
+        },
+        {
+          "name": "ZERO_EXTEND_B2I"
+        },
+        {
+          "name": "ZERO_EXTEND_B2L"
+        },
+        {
+          "name": "ZERO_EXTEND_B2S"
+        },
+        {
+          "name": "ZERO_EXTEND_I2L"
+        },
+        {
+          "name": "ZERO_EXTEND_S2I"
+        },
+        {
+          "name": "ZERO_EXTEND_S2L"
+        }
+      ]
+    },
+    {
+      "type": "short[]"
+    },
+    {
+      "type": "sun.management.VMManagementImpl",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "compTimeMonitoringSupport"
+        },
+        {
+          "name": "currentThreadCpuTimeSupport"
+        },
+        {
+          "name": "objectMonitorUsageSupport"
+        },
+        {
+          "name": "otherThreadCpuTimeSupport"
+        },
+        {
+          "name": "remoteDiagnosticCommandsSupport"
+        },
+        {
+          "name": "synchronizerUsageSupport"
+        },
+        {
+          "name": "threadAllocatedMemorySupport"
+        },
+        {
+          "name": "threadContentionMonitoringSupport"
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA2$SHA256",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en"
+    }
+  ],
+  "resources": [
+    {
+      "glob": "META-INF/modeljars/registry.properties"
+    },
+    {
+      "glob": "META-INF/models/native/macos-aarch64/libjmodels_kernels.dylib"
+    },
+    {
+      "glob": "META-INF/models/native/macos-aarch64/native.properties"
+    },
+    {
+      "glob": "META-INF/services/com.integrallis.vectors.core.VectorUtilSupportProvider"
+    },
+    {
+      "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
+    },
+    {
+      "glob": "sandbox-defaults.json"
+    },
+    {
+      "module": "java.logging",
+      "glob": "sun/util/logging/resources/logging_en.properties"
+    },
+    {
+      "module": "java.logging",
+      "glob": "sun/util/logging/resources/logging_en_NL.properties"
+    },
+    {
+      "module": "jdk.jfr",
+      "glob": "jdk/jfr/internal/types/metadata.bin"
+    },
+    {
+      "bundle": "sun.util.logging.resources.logging"
+    }
+  ],
+  "foreign": {
+    "downcalls": [
+      {
+        "returnType": "jint",
+        "parameterTypes": [
+          "void*",
+          "jlong",
+          "jint",
+          "void*",
+          "jlong",
+          "jint",
+          "void*",
+          "jlong",
+          "jint",
+          "jint"
+        ],
+        "options": {
+          "critical": {
+            "allowHeapAccess": true
+          }
+        }
+      },
+      {
+        "returnType": "jint",
+        "parameterTypes": [
+          "void*",
+          "void*",
+          "void*",
+          "void*",
+          "void*",
+          "void*",
+          "jint",
+          "void*",
+          "jlong",
+          "void*",
+          "jlong",
+          "jint"
+        ]
+      },
+      {
+        "returnType": "jint",
+        "parameterTypes": [
+          "void*",
+          "jint",
+          "void*",
+          "jlong",
+          "void*",
+          "jlong",
+          "void*",
+          "jlong",
+          "jint",
+          "jint",
+          "jint"
+        ]
+      },
+      {
+        "returnType": "jlong",
+        "parameterTypes": [
+          "void*",
+          "jlong"
+        ]
+      },
+      {
+        "returnType": "void*",
+        "parameterTypes": [
+          "jint"
+        ]
+      },
+      {
+        "returnType": "jint",
+        "parameterTypes": [
+          "void*"
+        ]
+      },
+      {
+        "returnType": "jint",
+        "parameterTypes": [
+          "void*",
+          "jint"
+        ]
+      },
+      {
+        "returnType": "jint",
+        "parameterTypes": []
+      },
+      {
+        "returnType": "jlong",
+        "parameterTypes": []
+      },
+      {
+        "returnType": "jint",
+        "parameterTypes": [
+          "void*",
+          "void*",
+          "void*",
+          "void*",
+          "void*",
+          "jint",
+          "void*",
+          "jlong",
+          "void*",
+          "jlong",
+          "jint",
+          "jint"
+        ]
+      }
+    ]
+  }
+}

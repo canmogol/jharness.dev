@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: "Also run the model probe (large downloads)"
+        description: "Also run the model job on linux-amd64 (400 MB download, about 2 hours)"
         type: boolean
         default: false
 
@@ -72,13 +72,9 @@ jobs:
             './target/spike isolate --noop' './target/spike isolate --echo'
 
       - name: Run probes
-        env:
-          RUN_MODEL: ${{ inputs.model && 'true' || 'false' }}
         run: |
-          # jline needs a terminal: it runs in the pty check below (AC-10).
-          probes="isolate limits"
-          if [ "$RUN_MODEL" = "true" ]; then probes="$probes model"; fi
-          for probe in $probes; do
+          # jline needs a terminal: it runs in the pty check below (AC-10). The model probe has its own job.
+          for probe in isolate limits; do
             ./target/spike "$probe" --json | tee -a results/probes.jsonl
           done
 
@@ -88,5 +84,46 @@ jobs:
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: spike-results-${{ matrix.target }}
+          path: spike/results/
+          retention-days: 30
+
+  # T020 on linux-amd64, manual only. Native pure-Java inference runs at well under 1% of JVM speed,
+  # so the native run uses a small prompt; the JVM runs both the 8k prompt and the small one.
+  model:
+    if: github.event_name == 'workflow_dispatch' && inputs.model
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+        working-directory: spike
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: graalvm/setup-graalvm@v1.6.8
+        with:
+          java-version: "25"
+          distribution: graalvm
+          cache: maven
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: JVM model runs
+        run: |
+          mkdir -p results
+          mvn -B -ntp verify
+          cp="target/classes:$(mvn -q -ntp dependency:build-classpath -Dmdep.outputFile=/dev/stdout)"
+          jvm() { java --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -cp "$cp" dev.jharness.spike.Main model "$@"; }
+          jvm --gen 8 --prompt-tokens 128 | tee results/model-jvm-small.jsonl
+          jvm | tee results/model-jvm-8k.jsonl
+
+      - name: Native model run
+        run: |
+          mvn -B -ntp -Pnative package -DskipTests
+          ./target/spike model --gen 8 --prompt-tokens 128 | tee results/model-native-small.jsonl
+
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: spike-model-linux-amd64
           path: spike/results/
           retention-days: 30

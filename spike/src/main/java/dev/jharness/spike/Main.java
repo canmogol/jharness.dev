@@ -10,8 +10,8 @@ import java.util.Map;
 /**
  * Spike entry point: {@code spike <isolate|limits|model|jline|all> [--config FILE] [--set P.KEY=VALUE]... [args...]}.
  *
- * <p>Every result is one JSON object per line on stdout, so CI can collect them. Probes not yet
- * written report {@code "status":"pending"}. A bad config stops start-up with exit code 2 (AC-13).
+ * <p>Every result is one JSON object per line on stdout, so CI can collect them. A bad config stops
+ * start-up with exit code 2 (AC-13).
  */
 public final class Main {
 
@@ -25,7 +25,7 @@ public final class Main {
     static {
         PROBES.put("isolate", new IsolateProbe());
         PROBES.put("limits", new LimitsProbe());
-        PROBES.put("model", pending("model", "AC-06, AC-07, AC-08"));
+        PROBES.put("model", new ModelProbe());
         PROBES.put("jline", new JLineProbe());
     }
 
@@ -95,13 +95,6 @@ public final class Main {
             out.write(JsonLines.obj("probe", name, "status", "error", "error", String.valueOf(e)));
             return false;
         }
-    }
-
-    private static Probe pending(String name, String criteria) {
-        return (args, config, out) -> {
-            out.write(JsonLines.obj("probe", name, "status", "pending", "criteria", criteria));
-            return true;
-        };
     }
 
     private static Map<String, Object> environment() {

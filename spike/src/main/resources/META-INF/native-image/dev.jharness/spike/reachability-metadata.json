@@ -10,7 +10,9 @@
     }
   ],
   "resources": [
-    { "glob": "sandbox-defaults.json" }
+    { "glob": "sandbox-defaults.json" },
+    { "glob": "META-INF/modeljars/**" },
+    { "glob": "META-INF/services/**" }
   ],
   "foreign": {
     "downcalls": [
