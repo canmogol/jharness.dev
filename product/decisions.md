@@ -52,6 +52,7 @@ Last updated: 2026-11-18
 | D-039 | Until the egress proxy (P2), git runs local operations only | Accepted |
 | D-040 | Permanent approvals are saved in the user folder per project, never in the repository | Accepted |
 | D-041 | Permission modes ask, accept-edits, plan and bypass; the file policy applies in every mode | Accepted |
+| D-042 | Secrets come from the environment, then `~/.jharness/secrets` (KEY=value, 0600 only) | Accepted |
 
 ---
 
@@ -562,6 +563,14 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** Recommended option accepted while the user was away, specifying 004-permissions-and-file-policy, 2026-11-18.
 
+## D-042 — Secrets file
+
+**Decision.** A secret named by a profile's `apiKeyEnv` is looked up in the environment first, then in `~/.jharness/secrets`: one `NAME=value` per line, `#` for comments, blank lines ignored. JHarness refuses to read the file unless it is a regular file owned by the user with mode 0600, and says how to fix it. Secret values never go into prompts, the guest, events or the session log.
+
+**Why.** D-032 names environment variables or a 0600 file. A plain `NAME=value` file is easy to edit and matches the environment variable names, so a profile works with either source.
+
+**Source.** Recommended option accepted while the user was away, specifying 005-cli-and-tui, 2026-11-18.
+
 ---
 
 ## Questions and answers
@@ -616,6 +625,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q44 | Which git operations before the proxy exists? | Local ones only; network operations come with the proxy in P2 | Article V: no connection skips the proxy | D-039 |
 | Q45 | Where are "always for this project" approvals saved? | The user folder, per project hash | A repo can't ship its own approvals | D-040 |
 | Q46 | What do the permission modes allow, and does bypass skip the file policy? | Table in D-041; the file policy applies in every mode | Secrets and mounted folders stay protected | D-041 |
+| Q47 | Where do API keys come from besides the environment? | `~/.jharness/secrets`, `NAME=value` lines, 0600 only | One lookup for both sources; a readable file is refused | D-042 |
 
 ---
 
