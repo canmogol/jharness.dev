@@ -1,6 +1,6 @@
 # Plan 004 — Permissions and file policy
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-18
+Spec: `spec.md` · Status: Done · Created: 2026-11-18
 
 ## Approach
 
@@ -74,8 +74,8 @@ Order of checks for a state-changing operation: `plan` denies; `bypass` allows; 
 
 ## Checks
 
-- [ ] `mvn -B -ntp verify`
-- [ ] `mvn -B -ntp -Pnative -pl jharness-testkit package -DskipTests && jharness-testkit/target/jharness-smoke`
+- [x] `mvn -B -ntp verify`
+- [x] `mvn -B -ntp -Pnative -pl jharness-testkit package -DskipTests && jharness-testkit/target/jharness-smoke`
 
 ## Risks
 

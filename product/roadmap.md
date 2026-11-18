@@ -34,11 +34,11 @@ Spec: `../specs/001-p0-spike/`
 - [x] `api`: readContext, readFile, writeFile, editFile, listFiles, grep, git, emit
 - [x] `ProcessRunner` with git and `rg` (search), Java search fallback when `rg` is missing
 - [x] `api.d.ts` and examples in the system prompt
-- [ ] Permissions: ask, accept-edits, read-only (plan), bypass; permanent approvals per project
-- [ ] Approvals inside a running JS block (watchdog pauses while waiting)
+- [x] Permissions: ask, accept-edits, read-only (plan), bypass; permanent approvals per project
+- [x] Approvals inside a running JS block (watchdog pauses while waiting)
 - [ ] Project trust prompt
 - [ ] Checkpoints, `/undo`, `/rewind`; diff review; Esc to interrupt
-- [ ] File policy: workspace read-write, mounted folders read-only, deny list
+- [x] File policy: workspace read-write, mounted folders read-only, deny list
 - [x] Event bus and JSONL session log
 - [ ] `JHARNESS.md` project memory; layered JSON settings
 - [ ] JLine TUI
