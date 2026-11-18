@@ -140,11 +140,11 @@ Product-level docs (`product/`) are written once and kept current. `product/cons
 4. **Tasks** — `specs/NNN-feature/tasks.md`: ordered, testable tasks, each linked to an acceptance criterion.
 5. **Implement and verify** — code, tests, and a check that every acceptance criterion has a passing test.
 
-Written so far: `001-p0-spike`.
+Written so far: `001-p0-spike`, `002-host-foundations` (events and session log, settings, permission gate, `ProcessRunner` with git and `rg`, isolate manager and `api`, model providers).
 
-Next specs: `002-event-bus-and-session-log`, `003-isolate-sandbox-and-api`, `004-model-providers`, `005-agent-loop-runjs`, `006-file-api-and-permissions`, `007-git-operations`, `008-project-trust-and-checkpoints`, `009-tui`, then `010-network-proxy` in P2.
+Next specs: `003-agent-loop-runjs` (loop, `api.d.ts`, system prompt, replay provider), then permissions and file policy, project trust and checkpoints, settings and secrets, the TUI, then the network proxy in P2.
 
-**Contracts to write inside those specs** (none exist yet): `api.d.ts` (003), the event schema (002), the settings and rules-file formats (006, 010), the system prompt (005), and the CLI flags and slash commands (009).
+**Contracts:** the event envelope, the `api` methods and the user settings format are in `specs/002-host-foundations/plan.md`. Still to write: `api.d.ts` and the system prompt (003), the permission rules format, the network rules format, and the CLI flags and slash commands.
 
 ---
 
