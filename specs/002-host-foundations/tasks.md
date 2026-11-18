@@ -8,23 +8,23 @@ Order and grouping: the recommended module-by-module order, accepted on the user
 
 ## Group 1 — Build and events
 
-- [ ] T001 Create the root `pom.xml` (Java 25, dependency management, modules) and empty module poms; `mvn verify` passes (AC-01)
-- [ ] T002 Write `Event`, `EventTypes` and envelope stamping with size and guest-type checks (AC-02)
-- [ ] T003 Write `EventBus` with ordered delivery to subscribers (AC-02)
-- [ ] T004 Write `SessionLog`: path from D-038, 0700/0600, append and read back (AC-03)
+- [x] T001 Create the root `pom.xml` (Java 25, dependency management, modules) and empty module poms; `mvn verify` passes (AC-01)
+- [x] T002 Write `Event`, `EventTypes` and envelope stamping with size and guest-type checks (AC-02)
+- [x] T003 Write `EventBus` with ordered delivery to subscribers (AC-02)
+- [x] T004 Write `SessionLog`: path from D-038, 0700/0600, append and read back (AC-03)
 
 ## Group 2 — Settings and security
 
-- [ ] T005 Write the `Settings` loader with `sandbox` and `timeouts` validation and the API-key rule (AC-04)
-- [ ] T006 [P] Write `ModelProfiles` resolution by name and default (AC-05)
-- [ ] T007 [P] Write `PermissionGate`, `Operation`, `Decision` and `DefaultGate` (AC-06)
-- [ ] T008 [P] Write `Workspace` confinement with tests for absolute, `..` and symlink escapes (AC-07)
+- [x] T005 Write the `Settings` loader with `sandbox` and `timeouts` validation and the API-key rule (AC-04)
+- [x] T006 [P] Write `ModelProfiles` resolution by name and default (AC-05)
+- [x] T007 [P] Write `PermissionGate`, `Operation`, `Decision` and `DefaultGate` (AC-06)
+- [x] T008 [P] Write `Workspace` confinement with tests for absolute, `..` and symlink escapes (AC-07)
 
 ## Group 3 — Processes, git and search
 
-- [ ] T009 Write `Executables` and `ProcessRunner`: argv only, clean environment, timeout with tree kill, output cap, `process.*` events (AC-10)
-- [ ] T010 Write `GitOperations` for the D-039 operations with the hardening prefix and argument checks (AC-11)
-- [ ] T011 [P] Write `RipgrepSearch` and `JavaSearch` behind `Search`, same result format, flag checks (AC-12)
+- [x] T009 Write `Executables` and `ProcessRunner`: argv only, clean environment, timeout with tree kill, output cap, `process.*` events (AC-10)
+- [x] T010 Write `GitOperations` for the D-039 operations with the hardening prefix and argument checks (AC-11)
+- [x] T011 [P] Write `RipgrepSearch` and `JavaSearch` behind `Search`, same result format, flag checks (AC-12)
 
 ## Group 4 — Isolates and api
 

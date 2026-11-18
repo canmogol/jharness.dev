@@ -1,0 +1,49 @@
+package dev.jharness.process;
+
+import java.nio.file.Path;
+import java.util.Optional;
+import java.util.function.Supplier;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import dev.jharness.config.Timeouts;
+import dev.jharness.events.EventBus;
+import dev.jharness.events.Origin;
+import dev.jharness.security.Workspace;
+
+/**
+ * Backs {@code api.grep} and {@code api.listFiles}. Both implementations return the same shapes:
+ * {@code {"matches":[{"path","line","text"}],"truncated"}} and {@code {"files":[…],"truncated"}}, with
+ * workspace-relative paths sorted by path (D-027).
+ */
+public interface Search {
+
+    int DEFAULT_MAX = 200;
+    int MAX = 5000;
+    int LINE_CHARS = 500;
+
+    /** @param dir a real path inside the workspace; @param glob optional; @param max results */
+    ObjectNode grep(String pattern, Path dir, String glob, boolean ignoreCase, int max);
+
+    ObjectNode listFiles(Path dir, String glob, int max);
+
+    /** Which implementation, for events and tests: {@code rg} or {@code java}. */
+    String engine();
+
+    /** {@code rg} when it is installed, else the Java fallback. */
+    static Search create(Workspace ws, EventBus bus, Supplier<Origin> origin, Timeouts timeouts) {
+        Optional<Executable> rg = Executables.resolve("rg", ws.root());
+        if (rg.isPresent()) {
+            return new RipgrepSearch(new ProcessRunner(bus, origin, timeouts.outputChars()), rg.get(), ws, timeouts.rg());
+        }
+        return new JavaSearch(ws);
+    }
+
+    static String clip(String line) {
+        String s = line.endsWith("\n") ? line.substring(0, line.length() - 1) : line;
+        if (s.endsWith("\r")) {
+            s = s.substring(0, s.length() - 1);
+        }
+        return s.length() > LINE_CHARS ? s.substring(0, LINE_CHARS) + "…" : s;
+    }
+}
