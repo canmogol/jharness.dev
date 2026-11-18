@@ -21,6 +21,7 @@ import dev.jharness.process.OperationException;
 import dev.jharness.process.ProcessResult;
 import dev.jharness.process.Search;
 import dev.jharness.security.Decision;
+import dev.jharness.security.FilePolicy;
 import dev.jharness.security.Operation;
 import dev.jharness.security.Workspace;
 
@@ -114,6 +115,16 @@ public final class HostApi {
         return n.asText();
     }
 
+    /** Drops results the deny list hides; a second line of defence behind the search exclusions. */
+    private void filter(ObjectNode result, String field, java.util.function.Function<JsonNode, String> path) {
+        var arr = (com.fasterxml.jackson.databind.node.ArrayNode) result.get(field);
+        for (int i = arr.size() - 1; i >= 0; i--) {
+            if (s.files().hidden(path.apply(arr.get(i)))) {
+                arr.remove(i);
+            }
+        }
+    }
+
     private static int max(ObjectNode a) {
         JsonNode n = a.get("max");
         if (n == null) {
@@ -151,9 +162,12 @@ public final class HostApi {
             } else {
                 o.putNull("git");
             }
+            var mounts = o.putArray("mounts");
+            s.files().mounts().forEach(m -> mounts.add(m.toString()));
             var files = o.putArray("files");
             try (Stream<Path> st = Files.list(s.workspace().root())) {
-                st.map(p -> p.getFileName().toString() + (Files.isDirectory(p) ? "/" : "")).sorted().limit(200).forEach(files::add);
+                st.filter(p -> !s.files().hidden(p.getFileName().toString()))
+                        .map(p -> p.getFileName().toString() + (Files.isDirectory(p) ? "/" : "")).sorted().limit(200).forEach(files::add);
             }
             return Json.write(o);
         });
@@ -162,12 +176,14 @@ public final class HostApi {
     @HostAccess.Export
     public String readFile(String path) {
         Path p;
+        String rel;
         try {
-            p = s.workspace().resolve(path);
+            FilePolicy.Target t = s.files().read(path);
+            p = t.path();
+            rel = t.display();
         } catch (RuntimeException e) {
             return reject("readFile", e);
         }
-        String rel = s.workspace().relative(p);
         return call("readFile", Operation.Kind.READ, "read " + rel, Json.object().put("path", rel), () -> {
             if (!Files.isRegularFile(p)) {
                 throw new IllegalArgumentException(Files.isDirectory(p) ? rel + " is a folder" : "no such file: " + rel);
@@ -188,15 +204,17 @@ public final class HostApi {
     @HostAccess.Export
     public String writeFile(String path, String content) {
         Path p;
+        String rel;
         try {
-            p = s.workspace().resolve(path);
+            FilePolicy.Target t = s.files().write(path);
+            p = t.path();
+            rel = t.display();
             if (content == null) {
                 throw new IllegalArgumentException("content is missing");
             }
         } catch (RuntimeException e) {
             return reject("writeFile", e);
         }
-        String rel = s.workspace().relative(p);
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
         return call("writeFile", Operation.Kind.WRITE, "write " + rel + " (" + bytes.length + " bytes)",
                 Json.object().put("path", rel).put("bytes", bytes.length), () -> {
@@ -215,15 +233,17 @@ public final class HostApi {
     @HostAccess.Export
     public String editFile(String path, String oldText, String newText) {
         Path p;
+        String rel;
         try {
-            p = s.workspace().resolve(path);
+            FilePolicy.Target t = s.files().write(path);
+            p = t.path();
+            rel = t.display();
             if (oldText == null || oldText.isEmpty() || newText == null) {
                 throw new IllegalArgumentException("editFile needs a non-empty oldText and a newText");
             }
         } catch (RuntimeException e) {
             return reject("editFile", e);
         }
-        String rel = s.workspace().relative(p);
         return call("editFile", Operation.Kind.WRITE, "edit " + rel, Json.object().put("path", rel), () -> {
             if (!Files.isRegularFile(p)) {
                 throw new IllegalArgumentException("no such file: " + rel);
@@ -252,22 +272,26 @@ public final class HostApi {
     public String listFiles(String json) {
         ObjectNode a;
         Path dir;
+        String rel;
         int max;
         String glob;
         try {
             a = args(json);
-            dir = s.workspace().resolve(a.has("path") ? optText(a, "path") : ".");
+            FilePolicy.Target t = s.files().read(a.has("path") ? optText(a, "path") : ".");
+            dir = t.path();
+            rel = t.display();
             glob = optText(a, "glob");
             max = max(a);
         } catch (RuntimeException e) {
             return reject("listFiles", e);
         }
-        String rel = s.workspace().relative(dir);
         return call("listFiles", Operation.Kind.READ, "list " + rel + (glob == null ? "" : " " + glob), a, () -> {
             if (!Files.isDirectory(dir)) {
                 throw new IllegalArgumentException(rel + " is not a folder");
             }
-            return Json.write(s.search().listFiles(dir, glob, max));
+            ObjectNode r = s.search().listFiles(dir, glob, max);
+            filter(r, "files", n -> n.asText());
+            return Json.write(r);
         });
     }
 
@@ -275,6 +299,7 @@ public final class HostApi {
     public String grep(String json) {
         ObjectNode a;
         Path dir;
+        String rel;
         String pattern;
         String glob;
         int max;
@@ -285,7 +310,9 @@ public final class HostApi {
             if (pattern == null || pattern.isEmpty()) {
                 throw new IllegalArgumentException("grep needs a \"pattern\"");
             }
-            dir = s.workspace().resolve(a.has("path") ? optText(a, "path") : ".");
+            FilePolicy.Target t = s.files().read(a.has("path") ? optText(a, "path") : ".");
+            dir = t.path();
+            rel = t.display();
             glob = optText(a, "glob");
             max = max(a);
             JsonNode ic = a.get("ignoreCase");
@@ -296,9 +323,11 @@ public final class HostApi {
         } catch (RuntimeException e) {
             return reject("grep", e);
         }
-        String rel = s.workspace().relative(dir);
-        return call("grep", Operation.Kind.READ, "grep " + pattern + " in " + rel, a,
-                () -> Json.write(s.search().grep(pattern, dir, glob, ignoreCase, max)));
+        return call("grep", Operation.Kind.READ, "grep " + pattern + " in " + rel, a, () -> {
+            ObjectNode r = s.search().grep(pattern, dir, glob, ignoreCase, max);
+            filter(r, "matches", n -> n.path("path").asText());
+            return Json.write(r);
+        });
     }
 
     @HostAccess.Export
@@ -311,6 +340,14 @@ public final class HostApi {
             }
             a = args(json);
             kind = GitOperations.kind(a);
+            for (JsonNode p : a.path("paths")) {
+                // add and restore change files; every path must pass the file policy.
+                if (kind == Operation.Kind.GIT_WRITE) {
+                    s.files().write(p.asText());
+                } else {
+                    s.files().read(p.asText());
+                }
+            }
         } catch (RuntimeException e) {
             return reject("git", e);
         }

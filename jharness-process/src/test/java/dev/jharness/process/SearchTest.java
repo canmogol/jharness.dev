@@ -33,6 +33,8 @@ class SearchTest {
         Files.createDirectories(root.resolve(".hidden"));
         Files.writeString(root.resolve(".hidden/secret.txt"), "TODO hidden\n");
         Files.write(root.resolve("bin.dat"), new byte[] {'T', 'O', 'D', 'O', 0, 1, 2});
+        Files.createDirectories(root.resolve("keys"));
+        Files.writeString(root.resolve("keys/server.pem"), "TODO secret key\n");
         ws = new Workspace(root);
     }
 
@@ -59,7 +61,7 @@ class SearchTest {
 
     @Test
     void javaFallback() {
-        sameShape(new JavaSearch(ws), ws);
+        sameShape(new JavaSearch(ws, new dev.jharness.security.DenyList(List.of())), ws);
         assertThrows(OperationException.class, () -> new JavaSearch(ws).grep("(", ws.root(), null, false, 10));
     }
 
@@ -70,7 +72,8 @@ class SearchTest {
     @Test
     void ripgrepSameResults() {
         assumeTrue(rg().isPresent(), "rg not installed; CI covers this path");
-        RipgrepSearch s = new RipgrepSearch(new ProcessRunner(new EventBus("s"), () -> Origin.main(1), 30_000), rg().get(), ws, Duration.ofSeconds(60));
+        RipgrepSearch s = new RipgrepSearch(new ProcessRunner(new EventBus("s"), () -> Origin.main(1), 30_000), rg().get(), ws, Duration.ofSeconds(60),
+                new dev.jharness.security.DenyList(List.of()));
         sameShape(s, ws);
     }
 
@@ -91,6 +94,8 @@ class SearchTest {
             }
         }
         List<String> l = s.listArgs(ws.resolve("src"), null);
-        assertEquals(List.of("--files", "--no-config", "--sort=path", "--no-messages", "--", "src"), l);
+        assertEquals(List.of("--files", "--no-config", "--sort=path", "--no-messages"), l.subList(0, 4));
+        assertEquals(List.of("--", "src"), l.subList(l.size() - 2, l.size()));
+        assertTrue(l.contains("!*.pem") && l.get(l.indexOf("!*.pem") - 1).equals("-g"), "deny globs become -g exclusions");
     }
 }

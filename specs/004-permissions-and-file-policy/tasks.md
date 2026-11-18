@@ -15,9 +15,9 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 3 — Wiring
 
-- [ ] T004 Use `FilePolicy` in `HostApi` and search (deny exclusions for `rg` and Java), mounts in `readContext`, `api.d.ts` update (AC-05, AC-06)
-- [ ] T005 Build the engine in `Session`; test approvals inside a running block with the watchdog paused (AC-02, AC-04)
-- [ ] T006 Run the gate scenario in `ask` mode; add denial and saved-rule checks to the smoke binary (AC-08)
+- [x] T004 Use `FilePolicy` in `HostApi` and search (deny exclusions for `rg` and Java), mounts in `readContext`, `api.d.ts` update (AC-05, AC-06)
+- [x] T005 Build the engine in `Session`; test approvals inside a running block with the watchdog paused (AC-02, AC-04)
+- [x] T006 Run the gate scenario in `ask` mode; add denial and saved-rule checks to the smoke binary (AC-08)
 
 ## Traceability
 

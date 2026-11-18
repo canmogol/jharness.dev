@@ -27,7 +27,7 @@ class LiveLoopTest {
         Path repo = SampleRepo.create(tmp.resolve("repo"));
         Settings s = Settings.parse(settingsJson, "live");
         TurnResult r;
-        try (Session session = Session.open(tmp.resolve("home"), repo, s, null, PermissionGate.allowAll())) {
+        try (Session session = Session.open(tmp.resolve("home"), repo, s, null, Session.Access.gate(PermissionGate.allowAll()))) {
             r = session.loop().turn(SampleRepo.TASK, System.out::print);
             System.out.println("\n[live] stop=" + r.stopReason() + " steps=" + r.steps() + " log=" + session.logPath());
         }

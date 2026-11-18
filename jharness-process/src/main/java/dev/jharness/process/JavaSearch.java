@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.jharness.events.Json;
+import dev.jharness.security.DenyList;
 import dev.jharness.security.Workspace;
 
 /**
@@ -34,9 +35,21 @@ public final class JavaSearch implements Search {
     private static final long MAX_FILE_BYTES = 10L << 20;
 
     private final Workspace ws;
+    private final DenyList deny;
 
     public JavaSearch(Workspace ws) {
+        this(ws, new DenyList(List.of()));
+    }
+
+    public JavaSearch(Workspace ws, DenyList deny) {
         this.ws = ws;
+        this.deny = deny;
+    }
+
+    /** Path relative to the root being searched, for deny matching. */
+    private String rel(Path root, Path p) {
+        Path base = p.startsWith(ws.root()) ? ws.root() : root;
+        return base.relativize(p).toString().replace('\\', '/');
     }
 
     @Override
@@ -59,17 +72,18 @@ public final class JavaSearch implements Search {
 
     private List<Path> walk(Path dir, String glob) {
         PathMatcher matcher = glob(glob);
+        Path base = dir.startsWith(ws.root()) ? ws.root() : dir;
         List<Path> out = new ArrayList<>();
         try {
             Files.walkFileTree(dir, new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path d, BasicFileAttributes a) {
-                    return !d.equals(dir) && hidden(d) ? FileVisitResult.SKIP_SUBTREE : FileVisitResult.CONTINUE;
+                    return !d.equals(dir) && (hidden(d) || deny.denied(rel(base, d))) ? FileVisitResult.SKIP_SUBTREE : FileVisitResult.CONTINUE;
                 }
 
                 @Override
                 public FileVisitResult visitFile(Path f, BasicFileAttributes a) {
-                    if (a.isRegularFile() && !hidden(f) && matcher.matches(ws.root().relativize(f))) {
+                    if (a.isRegularFile() && !hidden(f) && !deny.denied(rel(base, f)) && matcher.matches(base.relativize(f))) {
                         out.add(f);
                     }
                     return FileVisitResult.CONTINUE;
@@ -81,7 +95,7 @@ public final class JavaSearch implements Search {
                 }
             });
         } catch (IOException e) {
-            throw new OperationException("cannot list " + ws.relative(dir) + ": " + e.getMessage());
+            throw new OperationException("cannot list " + Search.display(ws, dir) + ": " + e.getMessage());
         }
         out.sort(null);
         return out;
@@ -101,7 +115,7 @@ public final class JavaSearch implements Search {
                 truncated = true;
                 break;
             }
-            files.add(ws.relative(f));
+            files.add(Search.display(ws, f));
         }
         out.put("truncated", truncated);
         return out;
@@ -134,7 +148,7 @@ public final class JavaSearch implements Search {
                                 out.put("truncated", true);
                                 return out;
                             }
-                            matches.addObject().put("path", ws.relative(f)).put("line", n).put("text", Search.clip(line));
+                            matches.addObject().put("path", Search.display(ws, f)).put("line", n).put("text", Search.clip(line));
                         }
                     }
                 }

@@ -93,7 +93,7 @@ public final class Smoke {
         check("java search", new JavaSearch(ws).grep("TODO", ws.root(), null, false, 10).get("matches").size() == 1, "1 match");
 
         IsolateManager isolates = new IsolateManager(settings.sandbox(), bus, () -> o);
-        ApiServices api = new ApiServices(ws, PermissionGate.allowAll(), bus, () -> o, search, git);
+        ApiServices api = new ApiServices(dev.jharness.security.FilePolicy.workspaceOnly(ws), PermissionGate.allowAll(), bus, () -> o, search, git);
         try (AgentIsolate iso = isolates.create("main", "main")) {
             RunResult r = iso.run("""
                     const ctx = JSON.parse(api.readContext());
@@ -141,11 +141,30 @@ public final class Smoke {
         // The agent loop with recorded replies: the P1 gate scenario.
         Path repo = SampleRepo.create(tmp.resolve("repo"));
         try (dev.jharness.agent.Session session = dev.jharness.agent.Session.open(home, repo, Settings.defaults(),
-                PermissionGate.allowAll(), (b, turns) -> dev.jharness.llm.ReplayProvider.ofReplies(SampleRepo.gateReplies(), b, turns))) {
+                dev.jharness.agent.Session.Access.gate(PermissionGate.allowAll()), (b, turns) -> dev.jharness.llm.ReplayProvider.ofReplies(SampleRepo.gateReplies(), b, turns))) {
             var t = session.loop().turn(SampleRepo.TASK, d -> {});
             check("agent loop", t.stopReason().equals("done") && t.steps() == 4 && SampleRepo.fixed(repo)
                     && SampleRepo.log(repo).getFirst().equals("Fix Calculator.add to add"), t);
         }
+
+        // Permissions: ask mode with a user who denies, then one who approves for the project.
+        Path permRepo = Files.createDirectories(tmp.resolve("perm"));
+        Files.writeString(permRepo.resolve("a.txt"), "old");
+        List<String> code = List.of("```js\napi.writeFile('a.txt', 'new')\n```", "ok");
+        try (dev.jharness.agent.Session session = dev.jharness.agent.Session.open(home, permRepo, Settings.defaults(),
+                dev.jharness.agent.Session.Access.prompter(op -> dev.jharness.security.Prompter.Answer.DENY),
+                (b, turns) -> dev.jharness.llm.ReplayProvider.ofReplies(code, b, turns))) {
+            session.loop().turn("write", d -> {});
+            check("permission denied", Files.readString(permRepo.resolve("a.txt")).equals("old"), "a.txt unchanged");
+        }
+        try (dev.jharness.agent.Session session = dev.jharness.agent.Session.open(home, permRepo, Settings.defaults(),
+                dev.jharness.agent.Session.Access.prompter(op -> dev.jharness.security.Prompter.Answer.ALWAYS),
+                (b, turns) -> dev.jharness.llm.ReplayProvider.ofReplies(code, b, turns))) {
+            session.loop().turn("write", d -> {});
+        }
+        Path rules = dev.jharness.security.ProjectRules.fileFor(home, permRepo);
+        check("saved rule", Files.readString(permRepo.resolve("a.txt")).equals("new") && Files.readString(rules).contains("a.txt"),
+                rules);
 
         log.close();
         List<JsonNode> back = SessionLog.read(log.path());
