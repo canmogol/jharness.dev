@@ -6,12 +6,12 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 1 — Checkpoints and diffs
 
-- [ ] T001 Write `Checkpoints` with save, restore, conflicts, git notes and diff, and its tests (AC-01, AC-02, AC-03, AC-04)
-- [ ] T002 Call it from `HostApi`; add diffs to operations and `file.changed` (AC-01, AC-05)
+- [x] T001 Write `Checkpoints` with save, restore, conflicts, git notes and diff, and its tests (AC-01, AC-02, AC-03, AC-04)
+- [x] T002 Call it from `HostApi`; add diffs to operations and `file.changed` (AC-01, AC-05)
 
 ## Group 2 — Loop
 
-- [ ] T003 Add `undo`, `rewind` and conversation cuts to `AgentLoop` (AC-02)
+- [x] T003 Add `undo`, `rewind` and conversation cuts to `AgentLoop` (AC-02)
 - [ ] T004 Add `interrupt` to `AgentLoop` and `cancel` to `AgentIsolate`; tests for a running block and a hanging model stream (AC-06)
 
 ## Group 3 — TUI

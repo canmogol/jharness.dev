@@ -14,6 +14,7 @@ import dev.jharness.llm.ModelException;
 import dev.jharness.llm.ModelProvider;
 import dev.jharness.sandbox.AgentIsolate;
 import dev.jharness.sandbox.ApiServices;
+import dev.jharness.sandbox.Checkpoints;
 import dev.jharness.sandbox.RunResult;
 
 /**
@@ -34,6 +35,46 @@ public final class AgentLoop {
     private final int maxSteps;
     private final int resultChars;
     private final List<ChatMessage> conversation = new ArrayList<>();
+    /** Turns still in the conversation, oldest first, with the conversation size when each started. */
+    private final java.util.TreeMap<Integer, Integer> liveTurns = new java.util.TreeMap<>();
+    private Checkpoints checkpoints;
+
+    public void useCheckpoints(Checkpoints c) {
+        checkpoints = c;
+    }
+
+    /** The turns that {@code /rewind} can go back to. */
+    public synchronized List<Integer> turns() {
+        return List.copyOf(liveTurns.keySet());
+    }
+
+    /** {@code /undo}: restores the last turn's files and removes the turn from the conversation (D-044). */
+    public synchronized Checkpoints.Restore undo(boolean force) {
+        if (liveTurns.isEmpty()) {
+            return new Checkpoints.Restore(true, List.of(), List.of(), List.of(), List.of(), List.of());
+        }
+        return rewind(liveTurns.lastKey() - 1, force);
+    }
+
+    /** {@code /rewind N}: undoes every turn after turn {@code n}. */
+    public synchronized Checkpoints.Restore rewind(int n, boolean force) {
+        var after = liveTurns.tailMap(n, false);
+        if (after.isEmpty()) {
+            return new Checkpoints.Restore(true, List.of(), List.of(), List.of(), List.of(), List.of());
+        }
+        Checkpoints.Restore r = checkpoints != null ? checkpoints.restore(n, force)
+                : new Checkpoints.Restore(true, List.of(), List.of(), List.of(), List.of(), List.copyOf(after.keySet()));
+        if (r.done()) {
+            int cut = after.firstEntry().getValue();
+            List<Integer> undone = List.copyOf(after.keySet());
+            while (conversation.size() > cut) {
+                conversation.removeLast();
+            }
+            after.clear();
+            return new Checkpoints.Restore(true, r.restored(), r.conflicts(), r.notRestorable(), r.gitOps(), undone);
+        }
+        return r;
+    }
 
     public AgentLoop(ModelProvider provider, AgentIsolate isolate, ApiServices services, EventBus bus, TurnCounter turns,
             String system, int maxSteps, int resultChars) {
@@ -68,6 +109,7 @@ public final class AgentLoop {
     public synchronized TurnResult turn(String prompt, Consumer<String> onDelta) {
         turns.next();
         bus.publish(turns.get(), "turn.started", Json.object().put("prompt", prompt));
+        liveTurns.put(turns.current(), conversation.size());
         conversation.add(ChatMessage.user(prompt));
         int steps = 0;
         String last = "";
