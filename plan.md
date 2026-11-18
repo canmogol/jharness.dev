@@ -140,9 +140,9 @@ Product-level docs (`product/`) are written once and kept current. `product/cons
 4. **Tasks** — `specs/NNN-feature/tasks.md`: ordered, testable tasks, each linked to an acceptance criterion.
 5. **Implement and verify** — code, tests, and a check that every acceptance criterion has a passing test.
 
-Written so far: `001-p0-spike`, `002-host-foundations` (events and session log, settings, permission gate, `ProcessRunner` with git and `rg`, isolate manager and `api`, model providers), `003-agent-loop-runjs` (agent loop, `api.d.ts`, system prompt, replay provider), `004-permissions-and-file-policy` (permission modes, saved approvals, mounts and deny list), `005-cli-and-tui` (the `jharness` command, JLine TUI, `--model` and `/model`, secrets), `006-trust-settings-and-memory` (project trust, layered settings, `JHARNESS.md`).
+Written so far: `001-p0-spike`, `002-host-foundations` (events and session log, settings, permission gate, `ProcessRunner` with git and `rg`, isolate manager and `api`, model providers), `003-agent-loop-runjs` (agent loop, `api.d.ts`, system prompt, replay provider), `004-permissions-and-file-policy` (permission modes, saved approvals, mounts and deny list), `005-cli-and-tui` (the `jharness` command, JLine TUI, `--model` and `/model`, secrets), `006-trust-settings-and-memory` (project trust, layered settings, `JHARNESS.md`), `007-checkpoints-and-undo` (checkpoints, `/undo`, `/rewind`, diff review, Esc).
 
-Next specs: `007-checkpoints-and-undo` (checkpoints, `/undo`, `/rewind`, diff review, Esc), then the network proxy in P2.
+Every P1 roadmap item has a spec. Next: the P1 gate (live runs with a local model and Claude), then P2 specs, starting with the network proxy.
 
 **Contracts:** the event envelope, the `api` methods and the user settings format are in `specs/002-host-foundations/plan.md`. `api.d.ts` and the system prompt are in `jharness-sandbox` and `jharness-agent` (spec 003). The permission rules format is in D-040. The CLI flags and slash commands are in spec 005. Still to write: the network rules format.
 

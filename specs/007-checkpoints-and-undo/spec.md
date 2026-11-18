@@ -1,6 +1,6 @@
 # Spec 007 — Checkpoints, undo and interrupt
 
-Status: Draft · Phase: P1 · Created: 2026-11-18
+Status: Done · Phase: P1 · Created: 2026-11-18
 
 ## Summary
 

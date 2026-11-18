@@ -37,7 +37,7 @@ Spec: `../specs/001-p0-spike/`
 - [x] Permissions: ask, accept-edits, read-only (plan), bypass; permanent approvals per project
 - [x] Approvals inside a running JS block (watchdog pauses while waiting)
 - [x] Project trust prompt
-- [ ] Checkpoints, `/undo`, `/rewind`; diff review; Esc to interrupt
+- [x] Checkpoints, `/undo`, `/rewind`; diff review; Esc to interrupt
 - [x] File policy: workspace read-write, mounted folders read-only, deny list
 - [x] Event bus and JSONL session log
 - [x] `JHARNESS.md` project memory; layered JSON settings
