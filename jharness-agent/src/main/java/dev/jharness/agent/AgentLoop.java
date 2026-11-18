@@ -25,7 +25,7 @@ public final class AgentLoop {
 
     static final String RESULT_PREFIX = "Result of your code:\n";
 
-    private final ModelProvider provider;
+    private volatile ModelProvider provider;
     private final AgentIsolate isolate;
     private final ApiServices services;
     private final EventBus bus;
@@ -45,6 +45,15 @@ public final class AgentLoop {
         this.system = system;
         this.maxSteps = maxSteps;
         this.resultChars = resultChars;
+    }
+
+    /** Switches the model between turns (and before the next step of a running turn). */
+    public void useProvider(ModelProvider next) {
+        provider = next;
+    }
+
+    public ModelProvider provider() {
+        return provider;
     }
 
     public synchronized List<ChatMessage> conversation() {

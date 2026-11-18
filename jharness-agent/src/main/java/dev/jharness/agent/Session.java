@@ -6,6 +6,8 @@ import java.util.Optional;
 
 import dev.jharness.config.ConfigException;
 import dev.jharness.config.ModelProfile;
+import dev.jharness.config.ModelProfiles;
+import dev.jharness.config.Secrets;
 import dev.jharness.config.Settings;
 import dev.jharness.events.EventBus;
 import dev.jharness.events.Json;
@@ -37,13 +39,20 @@ public final class Session implements AutoCloseable {
     private final AgentIsolate isolate;
     private final AgentLoop loop;
     private final Workspace workspace;
+    private final TurnCounter turns;
+    private final Settings settings;
+    private Secrets secrets;
+    private String profile;
 
-    private Session(EventBus bus, SessionLog log, AgentIsolate isolate, AgentLoop loop, Workspace workspace) {
+    private Session(EventBus bus, SessionLog log, AgentIsolate isolate, AgentLoop loop, Workspace workspace, TurnCounter turns,
+            Settings settings) {
         this.bus = bus;
         this.log = log;
         this.isolate = isolate;
         this.loop = loop;
         this.workspace = workspace;
+        this.turns = turns;
+        this.settings = settings;
     }
 
     /**
@@ -64,7 +73,11 @@ public final class Session implements AutoCloseable {
     public static Session open(Path home, Path workspace, Settings settings, String profileName, Access access)
             throws ConfigException, IOException {
         ModelProfile p = settings.models().resolve(profileName);
-        return open(home, workspace, settings, access, (bus, turns) -> ModelProviders.create(p, bus, turns));
+        Secrets secrets = Secrets.load(home, System::getenv);
+        Session s = open(home, workspace, settings, access, (bus, turns) -> ModelProviders.create(p, bus, turns, secrets));
+        s.secrets = secrets;
+        s.profile = p.name();
+        return s;
     }
 
     /** Builds the provider once the bus exists; tests pass a replay provider. */
@@ -96,7 +109,28 @@ public final class Session implements AutoCloseable {
         String system = SystemPrompt.build(ctx.ok() ? ctx.value() : null);
         AgentLoop loop = new AgentLoop(provider, isolate, services, bus, turns, system, settings.agent().maxSteps(),
                 settings.timeouts().outputChars());
-        return new Session(bus, log, isolate, loop, ws);
+        return new Session(bus, log, isolate, loop, ws, turns, settings);
+    }
+
+    /** The profiles that {@link #switchModel} can pick from. */
+    public ModelProfiles models() {
+        return settings.models();
+    }
+
+    /** The current profile's name, or null when the session was opened with a provider factory (tests, replay). */
+    public String profile() {
+        return profile;
+    }
+
+    /** {@code /model NAME}: use another profile for the rest of the session; the conversation is kept (D-032). */
+    public synchronized void switchModel(String name) throws ConfigException {
+        ModelProfile p = settings.models().resolve(name);
+        Secrets s = secrets != null ? secrets : Secrets.load(Path.of(System.getProperty("user.home")), System::getenv);
+        ModelProvider provider = ModelProviders.create(p, bus, turns, s);
+        loop.useProvider(provider);
+        profile = p.name();
+        bus.publish(turns.get(), "session.model_changed", Json.object().put("profile", p.name())
+                .put("provider", provider.provider()).put("model", provider.model()));
     }
 
     public EventBus bus() {

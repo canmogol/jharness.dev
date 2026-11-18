@@ -6,8 +6,8 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 1 — Secrets and model switching
 
-- [ ] T001 Write `Secrets` with the file checks and use it in the providers; test redaction in events and the log (AC-06)
-- [ ] T002 [P] Add provider swapping to `AgentLoop` and `Session.switchModel` with `session.model_changed` (AC-05)
+- [x] T001 Write `Secrets` with the file checks and use it in the providers; test redaction in events and the log (AC-06)
+- [x] T002 [P] Add provider swapping to `AgentLoop` and `Session.switchModel` with `session.model_changed` (AC-05)
 
 ## Group 2 — CLI
 
