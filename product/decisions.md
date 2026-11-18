@@ -48,6 +48,8 @@ Last updated: 2026-11-18
 | D-035 | ModelJars in the native image: no-go for v0.1; local models through Ollama or llama.cpp; after v0.1, a Rust-backend model helper process | Accepted |
 | D-036 | Memory protection keys off by default in v0.1; `auto` (probe at startup) and `on` are opt-in | Accepted |
 | D-037 | The wall-clock watchdog escalates: context close, then engine close, then a recorded failure | Accepted |
+| D-038 | Session logs live in the user folder, not the project | Accepted |
+| D-039 | Until the egress proxy (P2), git runs local operations only | Accepted |
 
 ---
 
@@ -517,6 +519,22 @@ With `auto` or `on`, agent engines allow experimental options, an exception to D
 
 **Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18.
 
+## D-038 — Session logs in the user folder
+
+**Decision.** Each session's JSONL log is `~/.jharness/sessions/<project-hash>/<session-id>.jsonl`, where `<project-hash>` is the first 16 hex characters of the SHA-256 of the workspace's real path. Folders are created with mode 0700 and log files with 0600.
+
+**Why.** The repository stays clean, and an untrusted repository can't plant, read or replace session logs. Session logs can hold file contents and command output, so only the user may read them.
+
+**Source.** User answer while specifying 002-host-foundations, 2026-11-18.
+
+## D-039 — Local git only until the egress proxy
+
+**Decision.** Until the egress proxy lands in P2 (D-025), `api.git` offers only operations that don't touch the network: `status`, `diff`, `log`, `show`, `add`, `commit`, `restore` and `branch` listing. `fetch`, `pull`, `push` and `clone` arrive with the proxy. Every call runs with hooks, `core.fsmonitor` and the `ext::` protocol disabled, and with `protocol.allow=never` so no transport can run.
+
+**Why.** Constitution Article V allows no network connection that skips the proxy. Local operations are enough for the P1 gate (fix a seeded bug and commit it).
+
+**Source.** User answer while specifying 002-host-foundations, 2026-11-18.
+
 ---
 
 ## Questions and answers
@@ -567,6 +585,8 @@ Questions raised during design, the answers given, and why each mattered.
 | Q40 | Turn on memory protection keys? | Off by default in v0.1; `auto` probes at startup and continues without them, `on` requires them | Nice to have, experimental, and untested where it works | D-036 |
 | Q41 | What if the watchdog's context close doesn't stop a run? | Escalate to engine close, then a recorded failure | One P0 run hung for 28 minutes after context close | D-037 |
 | Q42 | Can the faster Rust model backend be used despite the Truffle conflict? | After v0.1, in a separate helper binary over stdio; first for a small reviewer model | In-process models are rare; most users run Ollama, llama.cpp or Claude | D-035 |
+| Q43 | Where is the session log written? | `~/.jharness/sessions/<project-hash>/<session-id>.jsonl`, 0600 | Keeps repos clean; untrusted repos can't touch logs | D-038 |
+| Q44 | Which git operations before the proxy exists? | Local ones only; network operations come with the proxy in P2 | Article V: no connection skips the proxy | D-039 |
 
 ---
 
