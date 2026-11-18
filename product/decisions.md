@@ -50,6 +50,8 @@ Last updated: 2026-11-18
 | D-037 | The wall-clock watchdog escalates: context close, then engine close, then a recorded failure | Accepted |
 | D-038 | Session logs live in the user folder, not the project | Accepted |
 | D-039 | Until the egress proxy (P2), git runs local operations only | Accepted |
+| D-040 | Permanent approvals are saved in the user folder per project, never in the repository | Accepted |
+| D-041 | Permission modes ask, accept-edits, plan and bypass; the file policy applies in every mode | Accepted |
 
 ---
 
@@ -535,6 +537,31 @@ With `auto` or `on`, agent engines allow experimental options, an exception to D
 
 **Source.** User answer while specifying 002-host-foundations, 2026-11-18.
 
+## D-040 — Permanent approvals in the user folder
+
+**Decision.** "Always for this project" approvals are saved to `~/.jharness/projects/<project-hash>/permissions.json` (the hash as in D-038), with folders 0700 and the file 0600. A rule names what was approved: the kind of operation plus the file path for writes (`{"kind":"write","path":"src/App.java"}`), or the git operation (`{"kind":"git-write","op":"commit"}`). Nothing in the repository can add an allow rule.
+
+**Why.** US-3.2 asks for approvals saved per project. Keeping them out of the repository means a cloned repo can't ship its own approvals; project settings that loosen rules come only with project trust (D-011).
+
+**Source.** Recommended option accepted while the user was away, specifying 004-permissions-and-file-policy, 2026-11-18.
+
+## D-041 — Permission modes and the file policy
+
+**Decision.** The `permissions.mode` setting picks one of four modes:
+
+| Mode | Reads | File writes and edits | git add, commit, restore |
+| --- | --- | --- | --- |
+| `ask` (default) | allowed | ask unless a saved rule allows | ask unless a saved rule allows |
+| `accept-edits` | allowed | allowed | ask unless a saved rule allows |
+| `plan` (read-only) | allowed | denied | denied |
+| `bypass` | allowed | allowed | allowed |
+
+The file policy applies in every mode, `bypass` included: paths stay inside the workspace or a mounted folder; mounted folders (`files.mounts`, absolute paths) are read-only; deny-list files can't be read or written and are left out of `listFiles` and `grep`. The built-in deny list is `.env` and `.env.*`, `*.pem`, `*.key`, `id_rsa*`, `id_ecdsa*`, `id_ed25519*` and `.git/**`; `files.deny` adds globs, and none can be removed. Writes to `.jharness/**` are always denied, so the agent can't change project settings. When no one can answer (headless), `ask` denies.
+
+**Why.** D-010 makes state-changing operations ask by default; the other modes are the usual trade-offs between speed and control. The file policy guards secrets and reference folders whatever the mode.
+
+**Source.** Recommended option accepted while the user was away, specifying 004-permissions-and-file-policy, 2026-11-18.
+
 ---
 
 ## Questions and answers
@@ -587,6 +614,8 @@ Questions raised during design, the answers given, and why each mattered.
 | Q42 | Can the faster Rust model backend be used despite the Truffle conflict? | After v0.1, in a separate helper binary over stdio; first for a small reviewer model | In-process models are rare; most users run Ollama, llama.cpp or Claude | D-035 |
 | Q43 | Where is the session log written? | `~/.jharness/sessions/<project-hash>/<session-id>.jsonl`, 0600 | Keeps repos clean; untrusted repos can't touch logs | D-038 |
 | Q44 | Which git operations before the proxy exists? | Local ones only; network operations come with the proxy in P2 | Article V: no connection skips the proxy | D-039 |
+| Q45 | Where are "always for this project" approvals saved? | The user folder, per project hash | A repo can't ship its own approvals | D-040 |
+| Q46 | What do the permission modes allow, and does bypass skip the file policy? | Table in D-041; the file policy applies in every mode | Secrets and mounted folders stay protected | D-041 |
 
 ---
 
