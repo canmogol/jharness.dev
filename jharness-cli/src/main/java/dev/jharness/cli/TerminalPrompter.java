@@ -11,6 +11,9 @@ import dev.jharness.security.Prompter;
 final class TerminalPrompter implements Prompter {
 
     private final LineReader reader;
+    volatile EscWatcher watcher;
+    /** The path whose diff the last question showed, so the TUI doesn't print it twice. */
+    volatile String shownPath;
 
     TerminalPrompter(LineReader reader) {
         this.reader = reader;
@@ -18,8 +21,27 @@ final class TerminalPrompter implements Prompter {
 
     @Override
     public Answer ask(Operation op) {
+        EscWatcher w = watcher;
+        if (w != null) {
+            w.pause();
+        }
+        try {
+            return question(op);
+        } finally {
+            if (w != null) {
+                w.resume();
+            }
+        }
+    }
+
+    private Answer question(Operation op) {
         var w = reader.getTerminal().writer();
         w.println();
+        String diff = op.detail().path("diff").asText("");
+        if (!diff.isEmpty()) {
+            w.print(diff);
+            shownPath = op.detail().path("path").asText(null);
+        }
         w.println("Allow " + op.api() + ": " + op.summary() + "?");
         w.flush();
         while (true) {

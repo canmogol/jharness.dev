@@ -57,6 +57,14 @@ public final class AgentLoop {
         checkpoints = c;
     }
 
+    /** {@code /diff}: the last turn's file changes as unified diffs. */
+    public synchronized String lastTurnDiff() {
+        if (checkpoints == null || liveTurns.isEmpty()) {
+            return "";
+        }
+        return checkpoints.diff(liveTurns.lastKey());
+    }
+
     /** The turns that {@code /rewind} can go back to. */
     public synchronized List<Integer> turns() {
         return List.copyOf(liveTurns.keySet());

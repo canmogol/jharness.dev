@@ -11,6 +11,7 @@ import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.UserInterruptException;
+import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
 
 import dev.jharness.agent.Session;
@@ -26,6 +27,10 @@ final class Tui {
             Commands:
               /model          list model profiles
               /model NAME     switch to another profile
+              /diff           show the last turn's file changes
+              /undo           undo the last turn's file changes and remove it from the conversation
+              /rewind N       undo every turn after turn N (add --force to overwrite your own edits)
+              Esc             stop the running turn
               /help           show this help
               /exit           quit (or Ctrl-D)
             """;
@@ -33,6 +38,7 @@ final class Tui {
     private final Terminal terminal;
     private final LineReader reader;
     private final PrintWriter out;
+    private TerminalPrompter prompter;
 
     Tui(Terminal terminal, Path historyFile) throws IOException {
         this.terminal = terminal;
@@ -80,7 +86,10 @@ final class Tui {
     }
 
     TerminalPrompter prompter() {
-        return new TerminalPrompter(reader);
+        if (prompter == null) {
+            prompter = new TerminalPrompter(reader);
+        }
+        return prompter;
     }
 
     void run(Session session) {
@@ -106,10 +115,7 @@ final class Tui {
                 }
                 continue;
             }
-            TurnResult r = session.loop().turn(t, d -> {
-                out.print(d);
-                out.flush();
-            });
+            TurnResult r = turn(session, t);
             out.println();
             if (!r.stopReason().equals("done")) {
                 out.println("[" + r.stopReason() + (r.error() == null ? "" : ": " + r.error()) + "]");
@@ -124,6 +130,36 @@ final class Tui {
         out.flush();
     }
 
+    /** Runs a turn with Esc watched (not on dumb terminals, which have no raw input). */
+    private TurnResult turn(Session session, String text) {
+        boolean watch = !terminal.getType().startsWith("dumb");
+        Attributes saved = null;
+        EscWatcher w = null;
+        if (watch) {
+            saved = terminal.getAttributes();
+            Attributes a = new Attributes(saved);
+            a.setLocalFlag(Attributes.LocalFlag.ICANON, false);
+            a.setLocalFlag(Attributes.LocalFlag.ECHO, false);
+            a.setControlChar(Attributes.ControlChar.VMIN, 0);
+            a.setControlChar(Attributes.ControlChar.VTIME, 1);
+            terminal.setAttributes(a);
+            w = new EscWatcher(terminal.reader(), session.loop()::interrupt);
+            prompter().watcher = w;
+        }
+        try {
+            return session.loop().turn(text, d -> {
+                out.print(d);
+                out.flush();
+            });
+        } finally {
+            if (w != null) {
+                prompter().watcher = null;
+                w.close();
+                terminal.setAttributes(saved);
+            }
+        }
+    }
+
     private static String modelName(Session s) {
         return s.profile() != null ? s.profile() : s.loop().provider().provider();
     }
@@ -136,6 +172,19 @@ final class Tui {
                 return false;
             }
             case "/help" -> out.print(HELP);
+            case "/diff" -> {
+                String d = session.loop().lastTurnDiff();
+                out.print(d.isEmpty() ? "No file changes in the last turn.\n" : d);
+            }
+            case "/undo" -> out.println(session.loop().undo(line.contains("--force")).message());
+            case "/rewind" -> {
+                String[] a = line.split("\\s+");
+                if (a.length < 2 || !a[1].matches("[0-9]+")) {
+                    out.println("Usage: /rewind N [--force]. Turns: " + session.loop().turns());
+                } else {
+                    out.println(session.loop().rewind(Integer.parseInt(a[1]), line.contains("--force")).message());
+                }
+            }
             case "/model" -> {
                 if (parts.length == 1) {
                     if (session.models().all().isEmpty()) {
@@ -166,6 +215,18 @@ final class Tui {
                 out.println();
                 out.println("▸ step " + e.body().get("step").asInt() + ": running " + e.body().get("lines").asInt() + " lines");
                 out.flush();
+            }
+            case "file.changed" -> {
+                String path = e.body().get("path").asText();
+                String diff = e.body().get("diff").asText();
+                TerminalPrompter p = prompter;
+                if (p != null && path.equals(p.shownPath)) {
+                    p.shownPath = null;
+                } else if (!diff.isEmpty()) {
+                    out.println();
+                    out.print(diff);
+                    out.flush();
+                }
             }
             case "loop.result" -> {
                 String limit = e.body().has("limit") ? " (" + e.body().get("limit").asText() + ")" : "";

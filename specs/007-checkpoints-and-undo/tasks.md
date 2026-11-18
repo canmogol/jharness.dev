@@ -16,7 +16,7 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 3 — TUI
 
-- [ ] T005 Add `/undo`, `/rewind`, `/diff`, diff display and the Esc watcher; extend the pty check (AC-02, AC-05, AC-06, AC-07)
+- [x] T005 Add `/undo`, `/rewind`, `/diff`, diff display and the Esc watcher; extend the pty check (AC-02, AC-05, AC-06, AC-07)
 
 ## Traceability
 
