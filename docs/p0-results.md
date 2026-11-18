@@ -2,7 +2,7 @@
 
 Spec: `../specs/001-p0-spike/` · Measured: 2026-11-17 and 2026-11-18 · GraalVM: Oracle GraalVM 25.0.4 (JDK 25.0.4), polyglot 25.0.5
 
-Sources: CI run 44189315472 (native matrix, all three targets), CI run 44207351094 (model job, linux-amd64), and local runs on an Apple Silicon Mac (10 cores) for the model numbers on macos-aarch64. CI runners: `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26`.
+Sources: CI run 44189315472 (native matrix, all three targets), CI run 44218796821 (model job, linux-amd64), and local runs on an Apple Silicon Mac (10 cores) for the model numbers on macos-aarch64. CI runners: `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26`.
 
 ## Summary
 
@@ -11,7 +11,7 @@ Sources: CI run 44189315472 (native matrix, all three targets), CI run 442073510
 | Polyglot isolates in native | AC-02 and AC-03 pass on all three targets | Pass on all three | Go |
 | Cold start-up | Under 2 s to first output | 5–95 ms in CI; 1.67 s once on a Mac with an empty file cache | Go |
 | Isolate creation | Under 300 ms median | 3.7–4.7 ms median; 10–20 ms for the first isolate in a process | Go |
-| ModelJars in native | Runs, at no less than 70% of JVM speed | Runs, at 0.4–1.2% of JVM speed | **No-go** |
+| ModelJars in native | Runs, at no less than 70% of JVM speed | Runs, at 0.1–1.2% of JVM speed | **No-go** |
 | Local 7B model | Soft target | Not measurable: no 7B coder model in the ModelJars catalog | Use Ollama or llama.cpp |
 | JLine | AC-10 on macOS and Linux | Pass on all three | Go |
 
@@ -30,8 +30,9 @@ Sources: CI run 44189315472 (native matrix, all three targets), CI run 442073510
 | Config overrides AC-13 | Pass | Pass | Pass |
 | Blocked time not counted as CPU, AC-14 | Pass | Pass | Pass |
 | Memory protection AC-05 | Fails isolate creation (no `pku`) | Not available | n/a |
-| Model prompt speed, native / JVM (tok/s) | see below | not measured | 0.17 / 14.3 |
-| Model generation speed, native / JVM (tok/s) | see below | not measured | 0.11 / 30.7 |
+| Model prompt speed, native / JVM (tok/s, 219-token prompt) | 0.04 / 32.7 | not measured | 0.17 / 14.3 |
+| Model generation speed, native / JVM (tok/s) | 0.02 / 16.1 | not measured | 0.11 / 30.7 |
+| Model 8k-token prompt, JVM (prefill s / decode tok/s) | 3,151 / 2.9 | not measured | 1,394 / 4.7 |
 | Open without marker JAR AC-08 | | | By coordinates: no. From cache path: yes |
 | JLine AC-10 | Pass | Pass | Pass |
 
@@ -70,6 +71,7 @@ Same result on all three targets. Each limit surfaces as a `PolyglotException`, 
 
 Findings:
 - With valid config the heap limit always trips first; the isolate limit is a backstop that also works.
+- Once in CI (run 44218796821, `macos-26`, 3 vCPU) the heap-500 MB / isolate-512 MB allocation hung for 28 minutes: the 60 s watchdog's `Context.close(true)` did not end it, and the job timed out. It did not happen in 14 other runs (8 local in a row, 6 in CI). The probe's watchdog now escalates: context close at the wall clock, engine close 10 s later, then a recorded failure and process stop 30 s after that (D-037).
 - A CPU limit can only stop guest code when a host call returns, so a long host call overruns it. Host operations need their own timeouts (D-028 already plans them).
 - AC-14 passes, so the CPU and wall-clock design in D-003 and D-028 stands.
 
@@ -105,7 +107,16 @@ Almost every text model is qualified on the Rust FFM backend only; ModelJars ref
 
 ### Speed, linux-amd64 (AC-07)
 
-Filled from CI run 44207351094, see below.
+CI runner `ubuntu-24.04` (4 vCPU, 16 GB; the JVM ran with `-Xmx8g`, because the 8k KV cache ran out of the default 3.9 GB heap in an earlier run).
+
+| Run | Prompt | Prefill (tok/s) | Decode (tok/s) |
+| --- | --- | --- | --- |
+| JVM, pure Java | 28 tokens, 128 generated | 8.7 | 16.5 |
+| JVM, pure Java | 219 tokens, 60 generated | 32.7 | 16.1 |
+| JVM, pure Java | 8,283 tokens, 64 generated | 2.6 (3,151 s) | 2.9 |
+| Native, pure Java | 219 tokens, 60 generated | 0.04 | 0.02 |
+
+Native runs at 0.1% of the JVM here; the 219-token prompt took 100 minutes.
 
 ### Open without the marker JAR (AC-08)
 
@@ -128,4 +139,4 @@ JLine 3.30.17 with the FFM terminal provider (no JNI library, no `stty`). `spike
 
 ## Decisions taken from these results
 
-See `../product/decisions.md`: D-034 (isolate mode), D-035 (ModelJars no-go for v0.1, changing D-013), D-036 (memory protection off in v0.1, changing D-018).
+See `../product/decisions.md`: D-034 (isolate mode), D-035 (ModelJars no-go for v0.1, changing D-013), D-036 (memory protection off in v0.1, changing D-018), D-037 (watchdog escalation).

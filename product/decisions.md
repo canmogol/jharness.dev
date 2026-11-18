@@ -47,6 +47,7 @@ Last updated: 2026-11-18
 | D-034 | Internal isolate mode comes from the engine default, checked at startup; no experimental options | Accepted |
 | D-035 | ModelJars in the native image: no-go for v0.1; local models through Ollama or llama.cpp | Accepted |
 | D-036 | Memory protection keys off in v0.1 | Accepted |
+| D-037 | The wall-clock watchdog escalates: context close, then engine close, then a recorded failure | Accepted |
 
 ---
 
@@ -484,7 +485,7 @@ The reviewer endpoint is allowed through the proxy automatically, like the model
 - the default coder models are in its catalog and qualified on the backend used.
 
 **Why.** Measured in P0 (`docs/p0-results.md`):
-- The pure-Java backend runs in the native image at 0.4–1.2% of its JVM speed, even with `-H:+VectorAPISupport`.
+- The pure-Java backend runs in the native image at 0.1–1.2% of its JVM speed, even with `-H:+VectorAPISupport`.
 - The Rust FFM backend (`backend-native`) uses `Arena.ofShared`, which Native Image rejects in an image with runtime compilation, and the JS isolates need Truffle.
 - Qwen2.5-Coder-7B and DeepSeek-Coder-V2-Lite are not in the ModelJars catalog.
 - `vectors-core` runs `/usr/sbin/sysctl` through `ProcessBuilder` on macOS.
@@ -498,6 +499,14 @@ The plan named this fallback in advance (D-013 Why, `plan.md` risks), so P1 cont
 **Decision.** Agent engines do not set `engine.IsolateMemoryProtection` in v0.1. This changes D-018. Revisit when the option is no longer experimental and has been tested on a Linux machine with protection keys.
 
 **Why.** In polyglot 25.0 the option is experimental, so turning it on means `allowExperimentalOptions(true)`, which D-034 rules out. Forced on a Linux amd64 CPU without protection keys it makes isolate creation fail rather than being ignored. No machine with protection keys was available in P0. The isolate and its limits remain the boundary (D-002, D-003).
+
+**Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18.
+
+## D-037 — Watchdog escalation
+
+**Decision.** When a run reaches its wall clock, the watchdog calls `Context.close(true)`. If the run has not ended 10 s later, it closes the agent's `Engine` with `close(true)`. If that has not ended it 30 s later, it records a failure event and stops the agent. Each step is an event. The delays are configuration values next to `wallClock` in P1.
+
+**Why.** In one P0 CI run, a guest that filled most of its isolate heap was not stopped by `Context.close(true)` for 28 minutes. It did not reproduce in 14 other runs, so the next step must not depend on the first one working.
 
 **Source.** P0 results, accepted with the user's instruction to use the recommended options, 2026-11-18.
 
@@ -547,8 +556,9 @@ Questions raised during design, the answers given, and why each mattered.
 | Q36 | How is Kev or Jev configured? | `reviewer` section: provider, URL, key, confidence thresholds, timeout, fail to ask | | D-031 |
 | Q37 | Can a Java developer work offline with a local model and Kev? | Yes, with everything cached; an explicit offline mode | Works without a connection | D-033 |
 | Q38 | `engine.IsolateMode` is experimental in polyglot 25.0: set it or rely on the default? | Rely on the default `internal`, checked at startup; no experimental options | Keeps one process without unlocking experimental options | D-034 |
-| Q39 | Does ModelJars run in the native binary fast enough (D-030)? | No: 0.4–1.2% of JVM speed; the Rust backend can't be built in; no 7B coder model in the catalog | v0.1 runs local models through Ollama or llama.cpp | D-035 |
+| Q39 | Does ModelJars run in the native binary fast enough (D-030)? | No: 0.1–1.2% of JVM speed; the Rust backend can't be built in; no 7B coder model in the catalog | v0.1 runs local models through Ollama or llama.cpp | D-035 |
 | Q40 | Turn on memory protection keys? | Not in v0.1: experimental, and breaks isolate creation on CPUs without keys | Keeps D-034 and avoids a failure mode | D-036 |
+| Q41 | What if the watchdog's context close doesn't stop a run? | Escalate to engine close, then a recorded failure | One P0 run hung for 28 minutes after context close | D-037 |
 
 ---
 

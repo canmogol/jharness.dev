@@ -192,3 +192,4 @@ GitHub Actions matrix (ubuntu x64, ubuntu arm64, macOS arm64) with Oracle GraalV
 | `js-isolate` artifact missing for a target | Record it; affects platform list in D-016 |
 | ModelJars needs the Rust/FFM backend for usable speed | Try `backend-native` as a second run; record shipping cost |
 | CI runners lack protection keys | Test memory protection on a known machine by hand |
+| A run is not stopped by `Context.close(true)` (seen once in CI) | Watchdog escalates to engine close, then a recorded failure and process stop (D-037) |

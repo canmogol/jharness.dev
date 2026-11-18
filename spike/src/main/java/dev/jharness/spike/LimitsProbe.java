@@ -38,12 +38,23 @@ final class LimitsProbe implements Main.Probe {
 
     enum Kind { COMPLETED, RESOURCE_EXHAUSTED, CANCELLED, ERROR }
 
-    record Outcome(Kind kind, double ms, String value, String message, long outputBytes) {
+    /** {@code escalation}: "none", or "engine" when closing the context did not stop the run and the engine was closed. */
+    record Outcome(Kind kind, double ms, String value, String message, long outputBytes, String escalation) {
+        Outcome(Kind kind, double ms, String value, String message, long outputBytes) {
+            this(kind, ms, value, message, outputBytes, "none");
+        }
+
         Map<String, Object> json() {
             return JsonLines.obj("outcome", kind.name().toLowerCase(), "ms", ms, "value", value,
-                    "message", message, "outputBytes", outputBytes);
+                    "message", message, "outputBytes", outputBytes, "escalation", escalation);
         }
     }
+
+    /** After the wall clock: context close, then engine close, then stop the process. */
+    private static final long ENGINE_CLOSE_AFTER_MS = 10_000;
+    private static final long HARD_STOP_AFTER_MS = 30_000;
+
+    private JsonLines out;
 
     private final ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "spike-watchdog");
@@ -53,6 +64,7 @@ final class LimitsProbe implements Main.Probe {
 
     @Override
     public boolean run(List<String> args, SandboxConfig config, JsonLines out) throws Exception {
+        this.out = out;
         boolean ok = cpu(config, out);
         ok &= memory(config, out);
         ok &= isolateMemory(config, out);
@@ -245,27 +257,44 @@ final class LimitsProbe implements Main.Probe {
 
     // ---------------------------------------------------------------------------------------------
 
-    /** Runs {@code code} in a fresh context on {@code engine} under the profile's wall-clock watchdog. */
+    /**
+     * Runs {@code code} in a fresh context on {@code engine} under the profile's wall-clock watchdog.
+     * If closing the context does not end the run, the watchdog closes the engine; if that does not
+     * end it either, it writes a failure line and stops the process, so a hang is recorded, not silent.
+     */
     private Outcome run(Engine engine, SandboxConfig.Profile p, String code) {
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         long t0 = System.nanoTime();
+        long wall = p.wallClock().toMillis();
+        java.util.concurrent.atomic.AtomicBoolean engineClosed = new java.util.concurrent.atomic.AtomicBoolean();
         Context ctx = null;
-        ScheduledFuture<?> timer = null;
+        List<ScheduledFuture<?>> timers = new java.util.ArrayList<>();
         try {
             ctx = Sandbox.newContext(engine, p, stdout, OutputStream.nullOutputStream());
             Context c = ctx;
-            timer = watchdog.schedule(() -> c.close(true), p.wallClock().toMillis(), TimeUnit.MILLISECONDS);
+            timers.add(watchdog.schedule(() -> c.close(true), wall, TimeUnit.MILLISECONDS));
+            timers.add(watchdog.schedule(() -> {
+                engineClosed.set(true);
+                engine.close(true);
+            }, wall + ENGINE_CLOSE_AFTER_MS, TimeUnit.MILLISECONDS));
+            timers.add(watchdog.schedule(() -> {
+                out.write(JsonLines.obj("probe", NAME, "check", "watchdog", "status", "fail",
+                        "error", "run not stopped by context close or engine close", "afterMs", ms(t0),
+                        "code", code));
+                Runtime.getRuntime().halt(3);
+            }, wall + ENGINE_CLOSE_AFTER_MS + HARD_STOP_AFTER_MS, TimeUnit.MILLISECONDS));
             Value v = ctx.eval("js", code);
             String value = v.isString() ? v.asString() : String.valueOf(v);
-            return new Outcome(Kind.COMPLETED, ms(t0), value, null, stdout.size());
+            return new Outcome(Kind.COMPLETED, ms(t0), value, null, stdout.size(), escalation(engineClosed));
         } catch (PolyglotException e) {
             Kind k = e.isResourceExhausted() ? Kind.RESOURCE_EXHAUSTED : e.isCancelled() ? Kind.CANCELLED : Kind.ERROR;
-            return new Outcome(k, ms(t0), null, e.getMessage(), stdout.size());
+            return new Outcome(k, ms(t0), null, e.getMessage(), stdout.size(), escalation(engineClosed));
         } catch (RuntimeException e) {
-            return new Outcome(Kind.ERROR, ms(t0), null, e.getClass().getName() + ": " + e.getMessage(), stdout.size());
+            return new Outcome(Kind.ERROR, ms(t0), null, e.getClass().getName() + ": " + e.getMessage(), stdout.size(),
+                    escalation(engineClosed));
         } finally {
-            if (timer != null) {
-                timer.cancel(false);
+            for (ScheduledFuture<?> t : timers) {
+                t.cancel(false);
             }
             if (ctx != null) {
                 try {
@@ -275,6 +304,10 @@ final class LimitsProbe implements Main.Probe {
                 }
             }
         }
+    }
+
+    private static String escalation(java.util.concurrent.atomic.AtomicBoolean engineClosed) {
+        return engineClosed.get() ? "engine" : "none";
     }
 
     private static boolean freshOk(Outcome after) {

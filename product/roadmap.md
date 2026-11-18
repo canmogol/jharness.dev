@@ -11,17 +11,19 @@ Last updated: 2026-11-18
 
 Prove the risky parts before building features.
 
-- [ ] Native binary on Linux and macOS that runs JS in a `js-isolate` context under the UNTRUSTED policy and calls a host `api` method
-- [ ] Measure binary size, start-up time, isolate creation time and memory
-- [ ] Check memory protection keys on Linux
-- [ ] Load and run a ModelJars model inside the native binary; measure speed on an 8k-token prompt
-- [ ] Check that the default local models are available and qualified in the ModelJars catalog
+- [x] Native binary on Linux and macOS that runs JS in a `js-isolate` context under the UNTRUSTED policy and calls a host `api` method
+- [x] Measure binary size, start-up time, isolate creation time and memory
+- [x] Check memory protection keys on Linux
+- [x] Load and run a ModelJars model inside the native binary; measure speed on an 8k-token prompt
+- [x] Check that the default local models are available and qualified in the ModelJars catalog
 - [x] Repository and MIT license
-- [ ] CI skeleton, `SECURITY.md`, CONTRIBUTING
+- [x] CI skeleton, `SECURITY.md`, CONTRIBUTING
 
 Spec: `../specs/001-p0-spike/`
 
 **Gate:** numbers recorded; both OS builds run; go/no-go on ModelJars in the native image.
+
+**Gate passed 2026-11-18:** numbers in `../docs/p0-results.md`; native builds run on linux-amd64, linux-aarch64 and macos-aarch64; ModelJars is a no-go for v0.1 (D-035), so local models use the OpenAI-compatible client.
 
 ## Phase 1 — Core loop MVP
 
