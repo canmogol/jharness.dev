@@ -29,6 +29,10 @@ public final class EventTypes {
         HOST.put("model.delta", List.of("text"));
         HOST.put("model.completed", List.of("provider", "model", "stopReason"));
         HOST.put("model.error", List.of("provider", "message"));
+        HOST.put("turn.started", List.of("prompt"));
+        HOST.put("turn.completed", List.of("steps", "stopReason"));
+        HOST.put("loop.code", List.of("step", "lines"));
+        HOST.put("loop.result", List.of("step", "status"));
     }
 
     private EventTypes() {}

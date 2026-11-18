@@ -6,19 +6,19 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 1 — Contract and prompt
 
-- [ ] T001 Write `api.d.ts` and `ApiContractTest` (AC-05)
-- [ ] T002 [P] Write `system-prompt.md`, `examples.md` and `SystemPrompt` (AC-06)
+- [x] T001 Write `api.d.ts` and `ApiContractTest` (AC-05)
+- [x] T002 [P] Write `system-prompt.md`, `examples.md` and `SystemPrompt` (AC-06)
 
 ## Group 2 — Replay
 
-- [ ] T003 Write `ReplayProvider` and `RecordingProvider` with tests (AC-07)
+- [x] T003 Write `ReplayProvider` and `RecordingProvider` with tests (AC-07)
 
 ## Group 3 — Loop
 
-- [ ] T004 Create `jharness-agent`; write `JsBlocks` with tests (AC-01)
-- [ ] T005 Add the `agent` settings section and the new event types (AC-03, AC-04)
-- [ ] T006 Write `AgentLoop` and its tests: block, no block, errors, limits, max steps, model errors, result cap (AC-01, AC-02, AC-03, AC-04)
-- [ ] T007 Write `Session` (AC-01)
+- [x] T004 Create `jharness-agent`; write `JsBlocks` with tests (AC-01)
+- [x] T005 Add the `agent` settings section and the new event types (AC-03, AC-04)
+- [x] T006 Write `AgentLoop` and its tests: block, no block, errors, limits, max steps, model errors, result cap (AC-01, AC-02, AC-03, AC-04)
+- [x] T007 Write `Session` (AC-01)
 
 ## Group 4 — Gate scenario
 

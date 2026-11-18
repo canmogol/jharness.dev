@@ -56,6 +56,23 @@ public final class AgentIsolate implements AutoCloseable {
             })
             """;
 
+    /** The text of {@code api.d.ts}, for the system prompt. */
+    public static String apiDeclaration() {
+        try (var in = AgentIsolate.class.getResourceAsStream("api.d.ts")) {
+            if (in == null) {
+                throw new IllegalStateException("api.d.ts is missing from the build");
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    /** The shim's source, for the contract test. */
+    static String shim() {
+        return SHIM;
+    }
+
     private final String agent;
     private final SandboxSettings.Profile profile;
     private final EventBus bus;
