@@ -102,6 +102,18 @@ public final class AgentIsolate implements AutoCloseable {
         return memoryProtection;
     }
 
+    /** Esc: cancels the running block, if any; the run returns {@code cancelled} (US-2.5). */
+    public void cancel() {
+        Context c = current;
+        if (c != null) {
+            try {
+                c.close(true);
+            } catch (RuntimeException ignored) {
+                // Closing a running context from another thread may report the cancel here.
+            }
+        }
+    }
+
     /** True once the watchdog had to close the engine; the manager then builds a new isolate. */
     public boolean isDead() {
         return dead;

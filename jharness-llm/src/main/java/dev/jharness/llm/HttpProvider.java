@@ -30,6 +30,21 @@ abstract class HttpProvider implements ModelProvider {
     final EventBus bus;
     final Supplier<Origin> origin;
     final Function<String, String> env;
+    private volatile InputStream current;
+    private volatile boolean cancelled;
+
+    @Override
+    public void cancel() {
+        cancelled = true;
+        InputStream in = current;
+        if (in != null) {
+            try {
+                in.close();
+            } catch (IOException ignored) {
+                // Closing ends the blocked read.
+            }
+        }
+    }
 
     HttpProvider(ModelProfile profile, HttpClient http, EventBus bus, Supplier<Origin> origin, Function<String, String> env) {
         this.profile = profile;
@@ -81,6 +96,7 @@ abstract class HttpProvider implements ModelProvider {
 
     @Override
     public final ChatReply stream(ChatRequest req, Consumer<String> onDelta) throws ModelException {
+        cancelled = false;
         bus.publish(origin.get(), "model.request", Json.object().put("provider", provider()).put("model", model())
                 .put("profile", profile.name()).put("messages", req.messages().size()));
         try {
@@ -105,6 +121,10 @@ abstract class HttpProvider implements ModelProvider {
             }
             ChatReply reply;
             try (InputStream in = resp.body()) {
+                current = in;
+                if (cancelled) {
+                    throw new ModelException("interrupted");
+                }
                 reply = parse(in, t -> {
                     if (!t.isEmpty()) {
                         bus.publish(origin.get(), "model.delta", Json.object().put("text", t));
@@ -120,6 +140,10 @@ abstract class HttpProvider implements ModelProvider {
             error(e.getMessage());
             throw e;
         } catch (IOException e) {
+            if (cancelled) {
+                error("interrupted");
+                throw new ModelException("interrupted", e);
+            }
             String m = "cannot reach " + provider() + " at " + profile.baseUrl() + ": " + e.getClass().getSimpleName()
                     + (e.getMessage() == null ? "" : " " + e.getMessage());
             error(m);
@@ -128,6 +152,8 @@ abstract class HttpProvider implements ModelProvider {
             Thread.currentThread().interrupt();
             error("interrupted");
             throw new ModelException("interrupted", e);
+        } finally {
+            current = null;
         }
     }
 

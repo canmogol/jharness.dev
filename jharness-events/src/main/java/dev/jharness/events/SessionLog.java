@@ -2,13 +2,11 @@ package dev.jharness.events;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
+import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -33,11 +31,12 @@ public final class SessionLog implements Consumer<Event>, AutoCloseable {
     private static final Set<PosixFilePermission> FILE = PosixFilePermissions.fromString("rw-------");
 
     private final Path path;
-    private final FileChannel channel;
+    /** A plain stream, not a FileChannel: an interrupted thread (Esc) must not close the log. */
+    private final FileOutputStream out;
 
-    private SessionLog(Path path, FileChannel channel) {
+    private SessionLog(Path path, FileOutputStream out) {
         this.path = path;
-        this.channel = channel;
+        this.out = out;
     }
 
     /** First 16 hex characters of the SHA-256 of the workspace's real path. */
@@ -64,12 +63,13 @@ public final class SessionLog implements Consumer<Event>, AutoCloseable {
         FileAttribute<?>[] attrs = posix
                 ? new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(FILE)}
                 : new FileAttribute<?>[0];
-        FileChannel ch = FileChannel.open(file,
-                Set.of(StandardOpenOption.CREATE, StandardOpenOption.APPEND, StandardOpenOption.WRITE), attrs);
+        if (!Files.exists(file)) {
+            Files.createFile(file, attrs);
+        }
         if (posix) {
             Files.setPosixFilePermissions(file, FILE);
         }
-        return new SessionLog(file, ch);
+        return new SessionLog(file, new FileOutputStream(file.toFile(), true));
     }
 
     private static boolean posix() {
@@ -103,11 +103,8 @@ public final class SessionLog implements Consumer<Event>, AutoCloseable {
     public synchronized void accept(Event event) {
         byte[] line = (event.toJsonLine() + "\n").getBytes(StandardCharsets.UTF_8);
         try {
-            ByteBuffer b = ByteBuffer.wrap(line);
-            while (b.hasRemaining()) {
-                channel.write(b);
-            }
-            channel.force(false);
+            out.write(line);
+            out.getFD().sync();
         } catch (IOException e) {
             throw new UncheckedIOException("cannot write session log " + path, e);
         }
@@ -126,6 +123,6 @@ public final class SessionLog implements Consumer<Event>, AutoCloseable {
 
     @Override
     public synchronized void close() throws IOException {
-        channel.close();
+        out.close();
     }
 }

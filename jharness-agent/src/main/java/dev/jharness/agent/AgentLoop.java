@@ -38,6 +38,20 @@ public final class AgentLoop {
     /** Turns still in the conversation, oldest first, with the conversation size when each started. */
     private final java.util.TreeMap<Integer, Integer> liveTurns = new java.util.TreeMap<>();
     private Checkpoints checkpoints;
+    private volatile boolean interrupted;
+    private volatile Thread turnThread;
+
+    /** Esc (US-2.5): stops the model stream and the running block; the turn ends with {@code interrupted}. */
+    public void interrupt() {
+        interrupted = true;
+        ModelProvider p = provider;
+        p.cancel();
+        isolate.cancel();
+        Thread t = turnThread;
+        if (t != null) {
+            t.interrupt();
+        }
+    }
 
     public void useCheckpoints(Checkpoints c) {
         checkpoints = c;
@@ -108,6 +122,17 @@ public final class AgentLoop {
     /** One user turn. Never throws for model or guest problems; they end the turn with a stop reason. */
     public synchronized TurnResult turn(String prompt, Consumer<String> onDelta) {
         turns.next();
+        interrupted = false;
+        turnThread = Thread.currentThread();
+        try {
+            return runTurn(prompt, onDelta);
+        } finally {
+            turnThread = null;
+            Thread.interrupted();
+        }
+    }
+
+    private TurnResult runTurn(String prompt, Consumer<String> onDelta) {
         bus.publish(turns.get(), "turn.started", Json.object().put("prompt", prompt));
         liveTurns.put(turns.current(), conversation.size());
         conversation.add(ChatMessage.user(prompt));
@@ -118,7 +143,14 @@ public final class AgentLoop {
             try {
                 reply = provider.stream(new ChatRequest(system, conversation, 0), onDelta);
             } catch (ModelException e) {
+                if (interrupted) {
+                    return end(new TurnResult(last, "interrupted", steps, null));
+                }
                 return end(new TurnResult(last, "error", steps, e.getMessage()));
+            }
+            if (interrupted) {
+                conversation.add(ChatMessage.assistant(reply.text()));
+                return end(new TurnResult(reply.text(), "interrupted", steps, null));
             }
             last = reply.text();
             conversation.add(ChatMessage.assistant(last));
@@ -137,6 +169,10 @@ public final class AgentLoop {
                 result.put("limit", r.limit());
             }
             bus.publish(turns.get(), "loop.result", result);
+            if (interrupted) {
+                conversation.add(ChatMessage.user(RESULT_PREFIX + "The user stopped this code with Esc."));
+                return end(new TurnResult(last, "interrupted", steps, null));
+            }
             conversation.add(ChatMessage.user(RESULT_PREFIX + cap(forModel(r))));
         }
     }

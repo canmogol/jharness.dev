@@ -12,7 +12,7 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 ## Group 2 — Loop
 
 - [x] T003 Add `undo`, `rewind` and conversation cuts to `AgentLoop` (AC-02)
-- [ ] T004 Add `interrupt` to `AgentLoop` and `cancel` to `AgentIsolate`; tests for a running block and a hanging model stream (AC-06)
+- [x] T004 Add `interrupt` to `AgentLoop` and `cancel` to `AgentIsolate`; tests for a running block and a hanging model stream (AC-06)
 
 ## Group 3 — TUI
 
