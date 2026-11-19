@@ -162,4 +162,54 @@ class ProvidersTest {
                 () -> ModelProviders.create(s.models().resolve("p"), bus, () -> Origin.main(1), k -> null).stream(req(), t -> {}));
         assertTrue(down.getMessage().contains("cannot reach"), down.getMessage());
     }
+
+    private List<String> thinkingDeltas() {
+        return events.stream().filter(e -> e.type().equals("model.thinking_delta")).map(e -> e.body().get("text").asText()).toList();
+    }
+
+    private com.fasterxml.jackson.databind.node.ObjectNode completed() {
+        return events.stream().filter(e -> e.type().equals("model.completed")).findFirst().orElseThrow().body();
+    }
+
+    @Test
+    void openAiReasoningFieldsAreThinking() throws Exception {
+        stub.enqueue(Reply.sse(Streams.OPENAI_REASONING));
+        List<String> seen = new ArrayList<>();
+        ChatReply r = provider("openai-compatible", Map.of()).stream(req(), seen::add);
+        assertEquals("Hi!", r.text(), "leading blank lines dropped");
+        assertEquals("The user says hi. Greet back.", r.thinking());
+        assertEquals(List.of("Hi!"), seen);
+        assertEquals(List.of("The user says hi.", " Greet back."), thinkingDeltas());
+        assertEquals("Hi!", completed().get("text").asText());
+        assertEquals("The user says hi. Greet back.", completed().get("thinking").asText());
+    }
+
+    @Test
+    void openAiInlineThinkTagsAreThinking() throws Exception {
+        stub.enqueue(Reply.sse(Streams.OPENAI_THINK_TAGS));
+        ChatReply r = provider("openai-compatible", Map.of()).stream(req(), t -> {});
+        assertEquals("No code needed.", r.text());
+        assertTrue(r.thinking().contains("api.writeFile('x', 'y')"), r.thinking());
+        assertFalse(String.join("", deltas()).contains("think"), deltas().toString());
+        assertTrue(dev.jharness.agent.JsBlocks.first(r.text()).isEmpty(), "the code inside <think> is not in the reply");
+    }
+
+    @Test
+    void anthropicThinkingBlocks() throws Exception {
+        stub.enqueue(Reply.sse(Streams.ANTHROPIC_THINKING));
+        ChatReply r = provider("anthropic", Map.of("TEST_KEY", "k")).stream(req(), t -> {});
+        assertEquals("Done.", r.text());
+        assertEquals("Check the file.", r.thinking());
+        assertEquals(List.of("Check the file."), thinkingDeltas());
+        assertEquals("Check the file.", completed().get("thinking").asText());
+    }
+
+    @Test
+    void completedCarriesTheReplyWithoutThinkingWhenThereIsNone() throws Exception {
+        stub.enqueue(Reply.sse(Streams.OPENAI_OK));
+        provider("openai-compatible", Map.of()).stream(req(), t -> {});
+        assertEquals("```js\napi.readFile('a')\n```", completed().get("text").asText());
+        assertFalse(completed().has("thinking"));
+        assertFalse(completed().has("textCut"));
+    }
 }

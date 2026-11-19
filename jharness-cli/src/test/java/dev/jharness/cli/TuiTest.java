@@ -168,4 +168,23 @@ class TuiTest {
         assertEquals("first\nsecond\nthird", started.getFirst().get("prompt").asText());
         assertTrue(screen().contains("\u001b[1mthree\u001b[0m"), "colored reply: " + screen());
     }
+
+    @Test
+    void thinkingShownDimOrHidden() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws6"));
+        Tui tui = new Tui(terminal("one\n/thinking\ntwo\n/exit\n"), null);
+        List<com.fasterxml.jackson.databind.JsonNode> lines = List.of(
+                Json.object().put("thinking", "first idea\n").put("reply", "Answer one."),
+                Json.object().put("thinking", "second idea\n").put("reply", "Answer two."));
+        try (Session session = Session.open(tmp.resolve("home6"), ws, Settings.parse("{\"ui\":{\"thinking\":\"show\"}}", "t"),
+                Session.Access.prompter(tui.prompter()), (bus, turns) -> new ReplayProvider(lines, bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("first idea"), sc);
+        assertTrue(sc.indexOf("first idea") < sc.indexOf("Answer one."), sc);
+        assertTrue(sc.contains("Thinking: hidden"), sc);
+        assertFalse(sc.contains("second idea"), sc);
+        assertTrue(sc.contains("Answer two."), sc);
+    }
 }

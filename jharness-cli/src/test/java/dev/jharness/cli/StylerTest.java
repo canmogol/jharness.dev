@@ -58,6 +58,8 @@ class StylerTest {
         assertTrue(d.endsWith(" same\n"), d);
         assertEquals(ESC + "31mboom" + ESC + "0m", s.error("boom"));
         assertEquals(ESC + "36mstep" + ESC + "0m", s.step("step"));
+        assertEquals(ESC + "2m" + ESC + "3mhmm" + ESC + "0m", s.thinking("hmm"));
+        assertEquals("hmm", new Styler(false).thinking("hmm"));
     }
 
     @Test

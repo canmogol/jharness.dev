@@ -58,7 +58,7 @@ jharness --model claude       # another profile
 jharness -p "explain src/"    # one prompt, no UI; changes are denied
 ```
 
-In the UI, Alt+Enter or Ctrl-J starts a new line and Enter sends. Every event goes to the session log printed at start (`tail -f` it); `/events all` or `"ui": {"events": "all"}` in settings also shows them inline. `NO_COLOR=1` turns colors off.
+In the UI, Alt+Enter or Ctrl-J starts a new line and Enter sends. Every event goes to the session log printed at start (`tail -f` it); `/events all` or `"ui": {"events": "all"}` in settings also shows them inline. The log keeps each model reply, and its thinking text, whole on `model.completed`; `/thinking` or `"ui": {"thinking": "show"}` shows the thinking dim in the UI. `NO_COLOR=1` turns colors off.
 
 ## License
 

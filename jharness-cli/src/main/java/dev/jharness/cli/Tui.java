@@ -36,6 +36,7 @@ final class Tui {
               /rewind N       undo every turn after turn N (add --force to overwrite your own edits)
               /events         show the event level and the session log file
               /events LEVEL   show none, steps or all events
+              /thinking       show or hide the model's thinking
               Alt+Enter, Ctrl-J  new line; Enter sends
               Esc             stop the running turn
               /help           show this help
@@ -49,6 +50,8 @@ final class Tui {
     private final StringBuilder pending = new StringBuilder();
     private TerminalPrompter prompter;
     private String events = UiSettings.defaults().events();
+    private boolean showThinking;
+    private boolean thinkingOpen;
 
     Tui(Terminal terminal, Path historyFile) throws IOException {
         this(terminal, historyFile, System.getenv());
@@ -124,6 +127,7 @@ final class Tui {
 
     void run(Session session) {
         events = session.settings().ui().events();
+        showThinking = session.settings().ui().thinking().equals("show");
         session.bus().subscribe(this::onEvent);
         out.println("JHarness in " + session.workspace().root() + " · model " + modelName(session) + " · /help for commands");
         out.println(styler.dim("Session log: " + session.logPath()));
@@ -206,6 +210,16 @@ final class Tui {
         }
     }
 
+    /** Ends the thinking text with a blank line before whatever comes next. */
+    private void closeThinking() {
+        if (thinkingOpen) {
+            thinkingOpen = false;
+            out.println();
+            out.println();
+            out.flush();
+        }
+    }
+
     private void flushPending() {
         if (!pending.isEmpty()) {
             out.print(styler.line(pending.toString()));
@@ -257,6 +271,10 @@ final class Tui {
                     }
                 }
             }
+            case "/thinking" -> {
+                showThinking = !showThinking;
+                out.println("Thinking: " + (showThinking ? "shown" : "hidden"));
+            }
             case "/events" -> {
                 if (parts.length == 1) {
                     out.println("Events: " + events + " (none, steps or all). Session log: " + session.logPath());
@@ -274,6 +292,18 @@ final class Tui {
     }
 
     private void onEvent(Event e) {
+        if (e.type().equals("model.thinking_delta")) {
+            if (showThinking) {
+                if (!thinkingOpen) {
+                    out.println();
+                    thinkingOpen = true;
+                }
+                out.print(styler.thinking(e.body().get("text").asText()));
+                out.flush();
+            }
+            return;
+        }
+        closeThinking();
         if (e.type().equals("model.delta")) {
             return;
         }
