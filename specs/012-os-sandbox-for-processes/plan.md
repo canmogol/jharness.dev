@@ -52,7 +52,7 @@ public final class ChildSandbox {
 (allow file-ioctl (literal "/dev/null"))
 ```
 
-Paths are real paths (`/tmp` is `/private/tmp`) and quoted for SBPL. No `network*` rule, so all network is denied. Run as `sandbox-exec -p <profile> -- argv`.
+Paths are real paths (`/tmp` is `/private/tmp`) and quoted for SBPL (Sandbox Profile Language). No `network*` rule, so all network is denied. Run as `sandbox-exec -p <profile> -- argv`.
 
 ### bubblewrap arguments (Linux)
 
@@ -73,5 +73,5 @@ Paths are real paths (`/tmp` is `/private/tmp`) and quoted for SBPL. No `network
 | Risk | Response |
 | --- | --- |
 | GitHub's Ubuntu 24.04 runners restrict unprivileged user namespaces (AppArmor) | CI installs bubblewrap; if bwrap is refused, CI relaxes the sysctl for the test job; users see the reason and the fix |
-| Seatbelt (`sandbox-exec`) is deprecated by Apple | It still ships and is what other tools use; revisit if it disappears |
+| Seatbelt (`sandbox-exec`) is marked deprecated by Apple | It still ships, and Chrome, Codex CLI and Claude Code rely on it; no plan to replace it |
 | A tool needs a write outside the workspace (caches) | Comes with 013 per tool (Maven `~/.m2`, Gradle `~/.gradle`, npm cache) |
