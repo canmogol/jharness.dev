@@ -75,7 +75,7 @@ Every op also takes `timeoutMs`. `tests` matches `[A-Za-z0-9_.*#,+$-]{1,200}` an
 
 - [x] `mvn -pl jharness-process -am test`
 - [x] `mvn verify` on macOS; CI on Linux with bubblewrap
-- [ ] Native smoke binary on macOS and in CI
+- [x] Native smoke binary on macOS and in CI
 
 ## Risks
 
