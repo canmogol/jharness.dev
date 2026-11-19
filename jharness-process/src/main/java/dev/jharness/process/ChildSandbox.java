@@ -94,7 +94,8 @@ public final class ChildSandbox {
         if (p.exitCode() != 0) {
             String why = m.wire() + " did not start a process (exit " + p.exitCode() + "): " + clip(p.output());
             if (m == Mechanism.BUBBLEWRAP) {
-                why += "; allow unprivileged user namespaces (on Ubuntu 24.04: sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0)";
+                why += "; bubblewrap needs unprivileged user namespaces. On Ubuntu 24.04 allow them for bwrap only with an AppArmor"
+                        + " profile (see the JHarness README), or for every program with: sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0";
             }
             return unavailable(real, m, why);
         }

@@ -31,7 +31,21 @@ Phase 1 (core loop MVP) in progress. Done: the P0 spike (`specs/001-p0-spike/`),
 
 ## Build and run
 
-Needs Oracle GraalVM 25 (Java 25) and Maven; `rg` (ripgrep) is used when installed. Every process JHarness starts (git, `rg`) runs in an OS sandbox: Seatbelt on macOS (built in), bubblewrap on Linux (`sudo apt install bubblewrap`; on Ubuntu 24.04 also allow unprivileged user namespaces). Without it JHarness runs no processes and searches with its Java fallback.
+Needs Oracle GraalVM 25 (Java 25) and Maven; `rg` (ripgrep) is used when installed. Every process JHarness starts (git, `rg`) runs in an OS sandbox: Seatbelt on macOS (built in), bubblewrap on Linux (`sudo apt install bubblewrap`). Without it JHarness runs no processes and searches with its Java fallback.
+
+Ubuntu 24.04 blocks the user namespaces bubblewrap needs. Allow them for bwrap only:
+
+```
+sudo tee /etc/apparmor.d/bwrap <<'EOF'
+abi <abi/4.0>,
+include <tunables/global>
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+EOF
+sudo apparmor_parser -r /etc/apparmor.d/bwrap
+```
 
 ```
 mvn install                                          # build and test on the JVM
