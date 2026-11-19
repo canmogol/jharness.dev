@@ -21,7 +21,7 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 4 — TUI
 
-- [ ] T007 Network questions in `TerminalPrompter`; `/network list|allow|deny|remove|reload`; TUI tests (AC-06, AC-09)
+- [x] T007 Network questions in `TerminalPrompter`; `/network list|allow|deny|remove|reload`; TUI tests (AC-06, AC-09)
 
 ## Traceability
 

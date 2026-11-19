@@ -1,6 +1,6 @@
 # Spec 011 — Egress proxy and network rules
 
-Status: Draft · Phase: P2 · Created: 2026-11-19
+Status: Done · Phase: P2 · Created: 2026-11-19
 
 ## Summary
 

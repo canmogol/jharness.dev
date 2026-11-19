@@ -220,6 +220,7 @@ public final class Session implements AutoCloseable {
     public void close() throws IOException {
         isolate.close();
         if (proxy != null) {
+            HttpClients.stopProxy(proxy.address());
             proxy.close();
         }
         log.close();

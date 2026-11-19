@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.List;
 import java.util.Map;
 
 import org.jline.keymap.KeyMap;
@@ -17,6 +18,11 @@ import org.jline.reader.UserInterruptException;
 import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
 
+import dev.jharness.net.EgressProxy;
+import dev.jharness.net.NetworkRules;
+import dev.jharness.net.Rule;
+import dev.jharness.net.RulesEditor;
+import dev.jharness.net.RulesFile;
 import dev.jharness.agent.Session;
 import dev.jharness.agent.TurnResult;
 import dev.jharness.config.ConfigException;
@@ -37,6 +43,10 @@ final class Tui {
               /events         show the event level and the session log file
               /events LEVEL   show none, steps or all events
               /thinking       show or hide the model's thinking
+              /network        list the network rules, built-in denies and this session's allows
+              /network allow|deny X [--project]   add a rule (host, *.suffix, IP or CIDR, optional :port)
+              /network remove X [--project]       remove the rules naming X
+              /network reload re-read both rules files
               Alt+Enter, Ctrl-J  new line; Enter sends
               Esc             stop the running turn
               /help           show this help
@@ -195,6 +205,77 @@ final class Tui {
         }
     }
 
+    /** {@code /network} (spec 011 AC-09): list, edit and reload the rules files. */
+    private void network(Session session, String arg) {
+        EgressProxy p = session.proxy();
+        if (p == null) {
+            out.println("This session has no egress proxy.");
+            return;
+        }
+        List<String> a = arg.isEmpty() ? List.of() : List.of(arg.split("\\s+"));
+        String sub = a.isEmpty() ? "list" : a.getFirst();
+        boolean project = a.contains("--project");
+        List<String> targets = a.stream().skip(1).filter(x -> !x.equals("--project")).toList();
+        NetworkRules r = p.rules();
+        switch (sub) {
+            case "list" -> {
+                listRules("General rules", r.general(), "");
+                listRules("Project rules", r.project(), r.trusted() ? "" : " (project not trusted: only deny lines count)");
+                out.println("Model endpoints, allowed automatically: "
+                        + (r.automatic().isEmpty() ? "none" : String.join(", ", r.automatic().stream().map(x -> x.line().substring(6)).toList())));
+                out.println("Built-in denies (unless an allow names the address): " + String.join(", ", NetworkRules.BUILT_IN_DENY));
+                out.println("Allowed for this session: " + (p.sessionAllows().isEmpty() ? "none" : String.join(", ", p.sessionAllows())));
+            }
+            case "reload" -> {
+                try {
+                    p.reload();
+                    out.println("Network rules reloaded.");
+                } catch (ConfigException e) {
+                    out.println(styler.error(e.getMessage()));
+                }
+            }
+            case "allow", "deny", "remove" -> {
+                if (targets.size() != 1) {
+                    out.println("Usage: /network " + sub + " HOST|*.SUFFIX|IP|CIDR[:PORT] [--project]");
+                    return;
+                }
+                if (project && !r.trusted()) {
+                    out.println("This project isn't trusted, so its rules file can't be edited with --project; edit the general file instead.");
+                    return;
+                }
+                Path file = project ? r.project().path() : r.general().path();
+                try {
+                    if (sub.equals("remove")) {
+                        int n = RulesEditor.remove(file, targets.getFirst());
+                        out.println(n == 0 ? "No rule names " + targets.getFirst() + " in " + file + "." : "Removed " + n + " line(s) from " + file + ".");
+                    } else {
+                        String line = RulesEditor.add(file, sub.equals("allow") ? Rule.Action.ALLOW : Rule.Action.DENY, targets.getFirst());
+                        out.println("Added \"" + line + "\" to " + file + ".");
+                    }
+                    p.reload();
+                } catch (IllegalArgumentException e) {
+                    out.println(styler.error(e.getMessage()));
+                } catch (IOException e) {
+                    out.println(styler.error("cannot write " + file + ": " + e.getMessage()));
+                } catch (ConfigException e) {
+                    out.println(styler.error(e.getMessage()));
+                }
+            }
+            default -> out.println("Usage: /network [list|allow X|deny X|remove X|reload] [--project]");
+        }
+    }
+
+    private void listRules(String title, RulesFile f, String note) {
+        out.println(title + ": " + f.path() + note);
+        f.defaultAction().ifPresent(d -> out.println("  default " + d.word()));
+        if (f.rules().isEmpty() && f.defaultAction().isEmpty()) {
+            out.println("  (none)");
+        }
+        for (Rule x : f.rules()) {
+            out.println("  " + x.line());
+        }
+    }
+
     /** Prints whole lines of the streamed reply, styled; the rest waits for its newline (AC-02). */
     private void stream(String delta) {
         pending.append(delta);
@@ -271,6 +352,7 @@ final class Tui {
                     }
                 }
             }
+            case "/network" -> network(session, parts.length > 1 ? parts[1].strip() : "");
             case "/thinking" -> {
                 showThinking = !showThinking;
                 out.println("Thinking: " + (showThinking ? "shown" : "hidden"));

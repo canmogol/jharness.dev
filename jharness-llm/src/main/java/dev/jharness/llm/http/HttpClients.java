@@ -24,11 +24,12 @@ public final class HttpClients {
 
     private static volatile ProxySelector proxy = HttpClient.Builder.NO_PROXY;
     private static volatile Authenticator authenticator;
+    private static volatile InetSocketAddress current;
 
     private HttpClients() {}
 
     /** Called by the session when its egress proxy starts; clients built afterwards use it. */
-    public static void useProxy(InetSocketAddress address, PasswordAuthentication credentials) {
+    public static synchronized void useProxy(InetSocketAddress address, PasswordAuthentication credentials) {
         authenticator = new Authenticator() {
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {
@@ -39,6 +40,16 @@ public final class HttpClients {
             }
         };
         proxy = ProxySelector.of(address);
+        current = address;
+    }
+
+    /** Called when that session's proxy closes; a newer session's proxy is left alone. */
+    public static synchronized void stopProxy(InetSocketAddress address) {
+        if (address.equals(current)) {
+            proxy = HttpClient.Builder.NO_PROXY;
+            authenticator = null;
+            current = null;
+        }
     }
 
     public static HttpClient create() {

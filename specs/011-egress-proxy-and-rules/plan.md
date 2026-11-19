@@ -1,6 +1,6 @@
 # Plan 011 — Egress proxy and network rules
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-19
+Spec: `spec.md` · Status: Done · Created: 2026-11-19
 
 ## Approach
 
@@ -66,8 +66,9 @@ public final class EgressProxy implements AutoCloseable {
 
 ## Checks
 
-- [ ] `mvn -pl jharness-net -am test`
-- [ ] `mvn verify`
+- [x] `mvn -pl jharness-net -am test`
+- [x] `mvn verify`
+- [x] Native smoke binary on macOS: `proxy model turn`, `proxy CONNECT credentials`
 - [ ] By hand: a turn against LM Studio through the proxy; `/network list`
 
 ## Risks
@@ -77,3 +78,5 @@ public final class EgressProxy implements AutoCloseable {
 | The JDK refuses Basic auth on CONNECT | Set `jdk.http.auth.tunneling.disabledSchemes` empty at start-up; a test covers HTTPS through the proxy |
 | A pooled client connection is reused after the proxy closed it | `Connection: close` on plain HTTP responses; CONNECT tunnels stay open until either side closes |
 | The model endpoint is on a private address (LM Studio on the LAN) | It is an explicit automatic allow, so the built-in denies don't block it |
+| Native Image leaves the `http` URL protocol off, and the JDK client needs it to use a proxy | `--enable-url-protocols=http,https` in both native builds; the native smoke binary runs a model turn and a CONNECT through the proxy |
+| `HttpClients` holds one proxy for the process | One session per process today; `Session.close` clears it only if it is still its own. Subagents (Phase 3) must share the session's proxy |
