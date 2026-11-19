@@ -53,4 +53,36 @@ class GateScenarioTest {
         assertTrue(events.stream().anyMatch(e -> e.get("type").asText().equals("process.completed")
                 && e.toString().contains("Fix Calculator.add")), "the commit is in the session log");
     }
+
+    /** Gate attempt 1 (spec 008 AC-04): edit and commit in one reply; the commit block must not be lost silently. */
+    @Test
+    void editAndCommitInOneReplyGetsTheCommitSentNext() throws Exception {
+        Path repo = SampleRepo.create(tmp.resolve("repo"));
+        String commit = "```js\napi.git({op: \"add\", paths: [\"" + SampleRepo.CALCULATOR + "\"]});\n"
+                + "const c = JSON.parse(api.git({op: \"commit\", message: \"Fix Calculator.add to return the correct sum\"}));\n"
+                + "c.exitCode === 0 ? \"committed\" : c.output\n```";
+        List<String> replies = List.of(
+                "```js\napi.readFile(\"" + SampleRepo.CALCULATOR + "\")\n```",
+                "Fixing it:\n```js\napi.editFile(\"" + SampleRepo.CALCULATOR + "\", \"" + SampleRepo.BUGGY_LINE + "\", \""
+                        + SampleRepo.FIXED_LINE + "\");\n```\n\nCommit the fix:\n\n" + commit,
+                "The commit didn't run yet:\n" + commit,
+                "Fixed and committed.");
+        ReplayProvider[] replay = new ReplayProvider[1];
+        TurnResult r;
+        try (Session s = Session.open(tmp.resolve("home"), repo, Settings.defaults(),
+                Session.Access.prompter(op -> dev.jharness.security.Prompter.Answer.ONCE), (bus, turns) -> {
+                    replay[0] = ReplayProvider.ofReplies(replies, bus, turns);
+                    return replay[0];
+                })) {
+            r = s.loop().turn(SampleRepo.TASK, d -> {});
+            String afterEdit = replay[0].requests().get(2).messages().getLast().content();
+            assertTrue(afterEdit.contains("Note: your reply had 1 more js block(s) after the first; they did not run."), afterEdit);
+            String afterCommit = replay[0].requests().get(3).messages().getLast().content();
+            assertTrue(afterCommit.contains("committed"), afterCommit);
+        }
+        assertEquals("done", r.stopReason());
+        assertEquals(3, r.steps());
+        assertTrue(SampleRepo.fixed(repo));
+        assertEquals("Fix Calculator.add to return the correct sum", SampleRepo.log(repo).getFirst());
+    }
 }
