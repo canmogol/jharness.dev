@@ -38,7 +38,7 @@ class ProcessRunnerTest {
     }
 
     private ProcessRunner runner(int chars) {
-        return new ProcessRunner(bus, () -> Origin.main(1), chars);
+        return new ProcessRunner(bus, () -> Origin.main(1), chars, TestSandboxes.in(tmp));
     }
 
     @Test

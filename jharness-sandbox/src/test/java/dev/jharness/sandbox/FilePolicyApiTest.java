@@ -40,7 +40,7 @@ class FilePolicyApiTest {
         Files.createDirectories(fx.root.resolve("secrets"));
         Files.writeString(fx.root.resolve("secrets/db.txt"), "TODO password\n");
         FilePolicy policy = new FilePolicy(fx.ws, List.of(docs), List.of("secrets/**"));
-        Search search = Search.create(fx.ws, fx.bus, () -> Origin.main(1), Timeouts.defaults(), policy.denyList());
+        Search search = Search.create(fx.ws, fx.runner, Timeouts.defaults(), policy.denyList());
         api = new ApiServices(policy, PermissionGate.allowAll(), fx.bus, () -> Origin.main(1), search, fx.git);
         iso = Fixture.isolate(Fixture.profile(Map.of()), fx.bus);
     }

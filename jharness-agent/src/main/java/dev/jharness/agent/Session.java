@@ -1,5 +1,7 @@
 package dev.jharness.agent;
 
+import dev.jharness.process.ChildSandbox;
+import java.nio.file.Files;
 import java.util.Map;
 import java.util.List;
 import java.net.URI;
@@ -51,6 +53,7 @@ public final class Session implements AutoCloseable {
     private final TurnCounter turns;
     private final Settings settings;
     private EgressProxy proxy;
+    private Path childTmp;
     private Secrets secrets;
     private String profile;
 
@@ -111,11 +114,19 @@ public final class Session implements AutoCloseable {
         ModelProvider provider = providers.create(bus, turns);
         bus.publish(turns.get(), "session.started", Json.object().put("workspace", ws.root().toString())
                 .put("provider", provider.provider()).put("model", provider.model()).put("trusted", access.trusted()));
-        ProcessRunner runner = new ProcessRunner(bus, turns, settings.timeouts().outputChars());
+        Path childTmp = Files.createTempDirectory("jharness-");
+        ChildSandbox sandbox = ChildSandbox.detect(ChildSandbox.Policy.forSession(ws.root(), childTmp, home));
+        var os = Json.object().put("mechanism", sandbox.mechanism().wire()).put("available", sandbox.available())
+                .put("tmp", sandbox.policy().tmp().toString());
+        if (!sandbox.available()) {
+            os.put("reason", sandbox.reason());
+        }
+        bus.publish(turns.get(), "sandbox.os", os);
+        ProcessRunner runner = new ProcessRunner(bus, turns, settings.timeouts().outputChars(), sandbox);
         Optional<Executable> git = Executables.resolve("git", ws.root());
         GitOperations gitOps = git.map(g -> new GitOperations(runner, g, ws, settings.timeouts().process())).orElse(null);
         FilePolicy files = new FilePolicy(ws, settings.files().mounts(), settings.files().deny());
-        Search search = Search.create(ws, bus, turns, settings.timeouts(), files.denyList());
+        Search search = Search.create(ws, runner, settings.timeouts(), files.denyList());
         PermissionGate gate = access.gate() != null ? access.gate()
                 : new PermissionEngine(PermissionMode.of(settings.permissions().mode()), ProjectRules.load(home, ws.root()),
                         access.prompter(), bus, turns);
@@ -130,6 +141,7 @@ public final class Session implements AutoCloseable {
         loop.useCheckpoints(checkpoints);
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
         s.proxy = proxy;
+        s.childTmp = childTmp;
         return s;
     }
 
@@ -223,6 +235,24 @@ public final class Session implements AutoCloseable {
             HttpClients.stopProxy(proxy.address());
             proxy.close();
         }
+        if (childTmp != null) {
+            deleteTree(childTmp);
+        }
         log.close();
+    }
+
+    /** Removes the children's private temp folder; best effort. */
+    private static void deleteTree(Path root) {
+        try (var walk = Files.walk(root)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(f -> {
+                try {
+                    Files.deleteIfExists(f);
+                } catch (IOException e) {
+                    // left for the OS to clean
+                }
+            });
+        } catch (IOException e) {
+            // already gone
+        }
     }
 }

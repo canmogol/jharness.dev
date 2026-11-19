@@ -21,7 +21,8 @@ import dev.jharness.events.Origin;
 /**
  * The only place JHarness starts a process (constitution Article IV, D-008). It takes an argv list,
  * never a command string; the executable comes from {@link Executables}; the environment is cleared
- * except for a fixed set; stdin is empty; the whole process tree is killed on timeout (D-028).
+ * except for a fixed set; stdin is empty; the whole process tree is killed on timeout (D-028); and
+ * every process runs inside the OS sandbox, or not at all (D-048).
  */
 public final class ProcessRunner {
 
@@ -31,17 +32,51 @@ public final class ProcessRunner {
     private final EventBus bus;
     private final Supplier<Origin> origin;
     private final int outputChars;
+    private final ChildSandbox sandbox;
 
-    public ProcessRunner(EventBus bus, Supplier<Origin> origin, int outputChars) {
+    public ProcessRunner(EventBus bus, Supplier<Origin> origin, int outputChars, ChildSandbox sandbox) {
         this.bus = bus;
         this.origin = origin;
         this.outputChars = outputChars;
+        this.sandbox = java.util.Objects.requireNonNull(sandbox, "sandbox");
+    }
+
+    public ChildSandbox sandbox() {
+        return sandbox;
+    }
+
+    /** Result of {@link #probe}. */
+    record Probe(int exitCode, String output) {}
+
+    /** Runs a short check (the sandbox probe) without events: argv as given, clean environment, 4 KB of output. */
+    static Probe probe(List<String> argv, Path cwd, Duration timeout) {
+        ProcessBuilder pb = new ProcessBuilder(argv).directory(cwd.toFile()).redirectErrorStream(true)
+                .redirectInput(ProcessBuilder.Redirect.from(new File("/dev/null")));
+        pb.environment().clear();
+        pb.environment().put("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        try {
+            Process p = pb.start();
+            byte[] out = p.getInputStream().readNBytes(4096);
+            if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                killTree(p);
+                return new Probe(-1, "timed out");
+            }
+            return new Probe(p.exitValue(), new String(out, java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            return new Probe(-1, e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new Probe(-1, "interrupted");
+        }
     }
 
     /**
      * @param env extra environment variables on top of the clean base
      */
     public ProcessResult run(Executable exe, List<String> args, Path cwd, Duration timeout, Map<String, String> env) {
+        if (!sandbox.available()) {
+            throw new OperationException("cannot run " + exe.name() + ": no OS sandbox (" + sandbox.reason() + ")");
+        }
         List<String> argv = new ArrayList<>(args.size() + 1);
         argv.add(exe.path().toString());
         for (String a : args) {
@@ -50,7 +85,7 @@ public final class ProcessRunner {
             }
             argv.add(a);
         }
-        ProcessBuilder pb = new ProcessBuilder(argv)
+        ProcessBuilder pb = new ProcessBuilder(sandbox.wrap(argv, cwd))
                 .directory(cwd.toFile())
                 .redirectErrorStream(true)
                 .redirectInput(ProcessBuilder.Redirect.from(new File("/dev/null")));
@@ -68,9 +103,10 @@ public final class ProcessRunner {
             e.put("TMPDIR", tmp);
         }
         e.putAll(env);
+        e.putAll(sandbox.env());
 
         var started = Json.object().put("executable", exe.name()).put("path", exe.path().toString())
-                .put("cwd", cwd.toString());
+                .put("cwd", cwd.toString()).put("sandbox", sandbox.mechanism().wire());
         var argsJson = started.putArray("args");
         args.forEach(argsJson::add);
         bus.publish(origin.get(), "process.started", started);

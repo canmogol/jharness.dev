@@ -44,7 +44,7 @@ class GitOperationsTest {
         sh(exe.path().toString(), "config", "user.name", "Test");
         EventBus bus = new EventBus("s-git");
         bus.subscribe(events::add);
-        git = new GitOperations(new ProcessRunner(bus, () -> Origin.main(1), 30_000), exe, new Workspace(ws), Duration.ofSeconds(30));
+        git = new GitOperations(new ProcessRunner(bus, () -> Origin.main(1), 30_000, TestSandboxes.in(ws)), exe, new Workspace(ws), Duration.ofSeconds(30));
     }
 
     private static com.fasterxml.jackson.databind.node.ObjectNode req(String json) {

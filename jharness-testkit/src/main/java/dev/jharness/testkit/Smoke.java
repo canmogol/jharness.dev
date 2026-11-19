@@ -86,9 +86,12 @@ public final class Smoke {
         Files.createDirectories(root.resolve("src"));
         Files.writeString(root.resolve("src/App.java"), "class App {\n  // TODO fix\n  int answer() { return 41; }\n}\n");
         Workspace ws = new Workspace(root);
-        ProcessRunner runner = new ProcessRunner(bus, () -> o, Timeouts.defaults().outputChars());
+        dev.jharness.process.ChildSandbox childSandbox = dev.jharness.process.ChildSandbox.detect(dev.jharness.process.ChildSandbox.Policy
+                .forSession(root, Files.createDirectories(tmp.resolve("child-tmp")), tmp.resolve("sandbox-home")));
+        check("os sandbox", childSandbox.available(), childSandbox.mechanism().wire() + " " + childSandbox.reason());
+        ProcessRunner runner = new ProcessRunner(bus, () -> o, Timeouts.defaults().outputChars(), childSandbox);
         GitOperations git = new GitOperations(runner, gitExe, ws, Duration.ofSeconds(60));
-        Search search = Search.create(ws, bus, () -> o, Timeouts.defaults());
+        Search search = Search.create(ws, runner, Timeouts.defaults());
         check("search engine", true, search.engine());
         check("java search", new JavaSearch(ws).grep("TODO", ws.root(), null, false, 10).get("matches").size() == 1, "1 match");
 
