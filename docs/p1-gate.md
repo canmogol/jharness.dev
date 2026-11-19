@@ -2,29 +2,29 @@
 
 Gate (`../product/roadmap.md`): fixes a seeded bug in a sample repo end to end, with a local model and with Claude. The Claude run moves to the v0.1 release checks (D-045); this run covers the local model.
 
-Status: **pending**: attempt 1 fixed the bug but didn't commit in the same turn · Run: 2026-11-19
+Status: **passed** on attempt 2 (local model) · Run: 2026-11-19
 
 ## Summary
 
 | Check | Pass if | Local model | Claude |
 | --- | --- | --- | --- |
-| Finds the bug | Searches or lists, then reads `Calculator.java` | | Deferred (D-045) |
-| Fixes it | `add` returns `a + b`; nothing else changed | | Deferred (D-045) |
-| Approvals | Asked for the edit and the commit in `ask` mode | | Deferred (D-045) |
-| Commits | A new commit after `Initial commit` | | Deferred (D-045) |
-| Ends the turn | Stop reason `done`, within 15 steps | | Deferred (D-045) |
-| Session log | One JSONL file with the turn's events | | Deferred (D-045) |
+| Finds the bug | Searches or lists, then reads `Calculator.java` | Pass | Deferred (D-045) |
+| Fixes it | `add` returns `a + b`; nothing else changed | Pass | Deferred (D-045) |
+| Approvals | Asked for the edit and the commit in `ask` mode | Pass | Deferred (D-045) |
+| Commits | A new commit after `Initial commit` | Pass | Deferred (D-045) |
+| Ends the turn | Stop reason `done`, within 15 steps | Pass | Deferred (D-045) |
+| Session log | One JSONL file with the turn's events | Pass | Deferred (D-045) |
 
 Covered without a live Claude run: the Claude provider against the stub server (spec 002) and the gate scenario through the replay provider (spec 003, `GateScenarioTest`).
 
 ## Setup
 
-| Item | Value |
-| --- | --- |
-| Machine | Apple M4, macOS 26.7.3 |
-| Binary | `jharness 0.1.0-SNAPSHOT` |
-| Model server | LM Studio, OpenAI-compatible API on the local network |
-| Model | `qwen2.5-coder-7b-instruct` |
+| Item | Attempt 1 | Attempt 2 |
+| --- | --- | --- |
+| Machine | Apple M4, macOS 26.7.3 | A second machine of the user's |
+| Binary | `jharness 0.1.0-SNAPSHOT`, native, before spec 008 | Built from `master` after specs 008–010 |
+| Model server | LM Studio, OpenAI-compatible API on the local network | LM Studio, OpenAI-compatible API |
+| Model | `qwen2.5-coder-7b-instruct` | `qwen/qwen3.6-27b` (reasoning model) |
 
 1. Build: `mvn install`, then `mvn -Pnative -pl jharness-cli package -DskipTests` for the native binary.
 2. Put the model profile in `~/.jharness/settings.json`, not in a project folder: the sample repo is a new, untrusted folder, so its own settings can't add a profile.
@@ -81,6 +81,7 @@ Covered without a live Claude run: the Claude provider against the stub server (
 | # | Steps | Stop reason | Fixed | Committed | Notes |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 11 + 1 | `done`, then `done` | Yes | Only after a second prompt | See attempt 1 below |
+| 2 | Not recorded | `done` | Yes | Yes, in the same turn | See attempt 2 below |
 
 ## Notes
 
@@ -92,3 +93,9 @@ Covered without a live Claude run: the Claude provider against the stub server (
 - After the user wrote "You didn't commit the change", turn 2 ran `git add` and `commit` in one step, both approved. Result: `b93b838 Fix Calculator.add to return the correct sum`, only `Calculator.java` changed.
 - Checks: found yes (slowly), fixed yes, approvals yes, ended `done` within 15 steps yes, session log yes. Committed in the same turn: no.
 - Finding: when a reply has more than one block, the loop should tell the model that the later blocks didn't run, so it doesn't report work it never did.
+
+### Attempt 2
+
+- Run by the user on a second machine with `qwen/qwen3.6-27b`, following this procedure, after specs 008 (notice for extra code blocks), 009 (TUI usability) and 010 (thinking text, quieter log).
+- Reported result: every check passed, with the fix committed in the same turn.
+- The session log stayed on that machine, so step counts and timings are not recorded here.
