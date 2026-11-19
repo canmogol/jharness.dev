@@ -138,6 +138,44 @@ public final class Smoke {
             check("anthropic", b.equals("Hello, world"), b);
         }
 
+        // The egress proxy (spec 011): a model turn through it, and the JDK client's credentials on CONNECT.
+        try (StubModelServer stub = new StubModelServer();
+                java.net.ServerSocket tls = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+            stub.enqueue(StubModelServer.Reply.sse("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"proxied\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"));
+            Thread.ofVirtual().start(() -> {
+                try (java.net.Socket c = tls.accept()) {
+                    c.getInputStream().read();
+                } catch (java.io.IOException e) {
+                    // closed
+                }
+            });
+            Path proxyHome = tmp.resolve("proxy-home");
+            Files.createDirectories(proxyHome.resolve(".jharness"));
+            Files.writeString(dev.jharness.agent.Session.generalNetworkRules(proxyHome), "allow 127.0.0.1:" + tls.getLocalPort() + "\n");
+            Settings ps = Settings.parse("{\"model\":\"p\",\"models\":{\"p\":{\"provider\":\"openai-compatible\",\"baseUrl\":\"" + stub.baseUrl()
+                    + "/v1\",\"model\":\"m\"}}}", "smoke");
+            List<Event> net = new java.util.concurrent.CopyOnWriteArrayList<>();
+            try (dev.jharness.agent.Session session = dev.jharness.agent.Session.open(proxyHome, Files.createDirectories(tmp.resolve("proxy-ws")), ps,
+                    null, dev.jharness.agent.Session.Access.prompter(dev.jharness.security.Prompter.none()))) {
+                session.bus().subscribe(e -> {
+                    if (e.type().startsWith("network.")) {
+                        net.add(e);
+                    }
+                });
+                var t = session.loop().turn("hi", d -> {});
+                check("proxy model turn", t.reply().equals("proxied") && net.stream().anyMatch(e -> e.type().equals("network.allowed")), t + " " + net);
+                try {
+                    dev.jharness.llm.http.HttpClients.create().send(java.net.http.HttpRequest.newBuilder(
+                            java.net.URI.create("https://127.0.0.1:" + tls.getLocalPort() + "/")).timeout(Duration.ofSeconds(5)).build(),
+                            java.net.http.HttpResponse.BodyHandlers.discarding());
+                } catch (java.io.IOException e) {
+                    // the TLS handshake fails after the tunnel opens
+                }
+                check("proxy CONNECT credentials", net.stream().anyMatch(e -> e.type().equals("network.allowed")
+                        && e.body().get("port").asInt() == tls.getLocalPort()), net);
+            }
+        }
+
         // The agent loop with recorded replies: the P1 gate scenario.
         Path repo = SampleRepo.create(tmp.resolve("repo"));
         try (dev.jharness.agent.Session session = dev.jharness.agent.Session.open(home, repo, Settings.defaults(),

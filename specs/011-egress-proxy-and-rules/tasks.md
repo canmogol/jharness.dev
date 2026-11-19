@@ -16,8 +16,8 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 3 — Wiring
 
-- [ ] T005 `HttpClients.useProxy` with the authenticator; `Session` starts the proxy with model endpoints allowed; a stub-server turn through the proxy (AC-07)
-- [ ] T006 Architecture test: sockets only in `jharness-net` and `HttpClients` (AC-08)
+- [x] T005 `HttpClients.useProxy` with the authenticator; `Session` starts the proxy with model endpoints allowed; a stub-server turn through the proxy (AC-07)
+- [x] T006 Architecture test: sockets only in `jharness-net` and `HttpClients` (AC-08)
 
 ## Group 4 — TUI
 
