@@ -17,7 +17,7 @@ import dev.jharness.events.Origin;
 
 /**
  * Plays back recorded replies for deterministic tests (US-6.2). A recording is JSONL, one line per
- * model call: {@code {"reply":"…"}} or {@code {"error":"…"}}. Emits the same events as a real
+ * model call: {@code {"reply":"…"}}, optionally with {@code "thinking":"…"}, or {@code {"error":"…"}}. Emits the same events as a real
  * provider and makes no network connection.
  */
 public final class ReplayProvider implements ModelProvider {
@@ -93,6 +93,10 @@ public final class ReplayProvider implements ModelProvider {
             throw new ModelException(m);
         }
         String text = line.get("reply").asText();
+        String thinking = line.path("thinking").asText("");
+        for (String t : lines(thinking)) {
+            bus.publish(origin.get(), "model.thinking_delta", Json.object().put("text", t));
+        }
         // Stream line by line, so consumers see more than one delta, as with a real model.
         int from = 0;
         while (from < text.length()) {
@@ -103,8 +107,20 @@ public final class ReplayProvider implements ModelProvider {
             onDelta.accept(d);
             from = to;
         }
-        bus.publish(origin.get(), "model.completed", Json.object().put("provider", "replay").put("model", "replay")
-                .put("stopReason", "replay").put("inputTokens", 0).put("outputTokens", 0));
-        return new ChatReply(text, "replay", 0, 0);
+        ChatReply reply = new ChatReply(text, thinking, "replay", 0, 0);
+        bus.publish(origin.get(), "model.completed", ModelEvents.completed("replay", "replay", reply));
+        return reply;
+    }
+
+    private static List<String> lines(String text) {
+        List<String> out = new ArrayList<>();
+        int from = 0;
+        while (from < text.length()) {
+            int nl = text.indexOf('\n', from);
+            int to = nl < 0 ? text.length() : nl + 1;
+            out.add(text.substring(from, to));
+            from = to;
+        }
+        return out;
     }
 }

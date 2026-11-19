@@ -27,7 +27,7 @@ class SessionLogTest {
             bus.subscribe(published::add);
             bus.publish(Origin.main(0), "session.started", Json.object().put("workspace", ws.toString()));
             for (int i = 0; i < 50; i++) {
-                bus.publish(Origin.main(1), "model.delta", Json.object().put("text", "line " + i + " \"quoted\"\n"));
+                bus.publish(Origin.main(1), "api.call", Json.object().put("api", "readFile").put("status", "ok").put("summary", "line " + i + " \"quoted\"\n"));
             }
             bus.publishGuest(Origin.main(1), "{\"type\":\"agent.done\"}");
 
@@ -60,9 +60,9 @@ class SessionLogTest {
         try (SessionLog log = SessionLog.open(tmp.resolve("home"), ws, bus.session())) {
             bus.subscribe(log);
             Thread.currentThread().interrupt();
-            bus.publish(Origin.main(1), "model.delta", Json.object().put("text", "while interrupted"));
+            bus.publish(Origin.main(1), "turn.started", Json.object().put("prompt", "while interrupted"));
             Thread.interrupted();
-            bus.publish(Origin.main(1), "model.delta", Json.object().put("text", "after"));
+            bus.publish(Origin.main(1), "turn.started", Json.object().put("prompt", "after"));
             assertEquals(2, SessionLog.read(log.path()).size());
         }
     }
@@ -73,5 +73,25 @@ class SessionLogTest {
         Path link = Files.createSymbolicLink(tmp.resolve("link"), ws);
         assertEquals(SessionLog.projectHash(ws), SessionLog.projectHash(link));
         assertEquals(16, SessionLog.projectHash(ws).length());
+    }
+
+    @Test
+    void streamChunksStayOffTheLog() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws"));
+        EventBus bus = new EventBus("s-live");
+        List<Event> live = new ArrayList<>();
+        try (SessionLog log = SessionLog.open(tmp.resolve("home"), ws, bus.session())) {
+            bus.subscribe(log);
+            bus.subscribe(live::add);
+            bus.publish(Origin.main(1), "model.request", Json.object().put("provider", "p").put("model", "m"));
+            bus.publish(Origin.main(1), "model.thinking_delta", Json.object().put("text", "hmm"));
+            bus.publish(Origin.main(1), "model.delta", Json.object().put("text", "Hi"));
+            bus.publish(Origin.main(1), "model.completed", Json.object().put("provider", "p").put("model", "m").put("stopReason", "stop")
+                    .put("text", "Hi").put("thinking", "hmm"));
+            assertEquals(4, live.size(), "live subscribers see every event");
+            var back = SessionLog.read(log.path());
+            assertEquals(List.of("model.request", "model.completed"), back.stream().map(n -> n.get("type").asText()).toList());
+            assertEquals("Hi", back.getLast().get("text").asText());
+        }
     }
 }

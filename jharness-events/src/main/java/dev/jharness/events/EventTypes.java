@@ -35,6 +35,7 @@ public final class EventTypes {
         HOST.put("sandbox.memory_protection", List.of("available"));
         HOST.put("model.request", List.of("provider", "model"));
         HOST.put("model.delta", List.of("text"));
+        HOST.put("model.thinking_delta", List.of("text"));
         HOST.put("model.completed", List.of("provider", "model", "stopReason"));
         HOST.put("model.error", List.of("provider", "message"));
         HOST.put("turn.started", List.of("prompt"));

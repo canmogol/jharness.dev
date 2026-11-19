@@ -127,6 +127,9 @@ class SettingsTest {
         assertTrue(bad("{\"ui\":{\"events\":1}}").getMessage().contains("ui.events"));
         assertTrue(bad("{\"ui\":{\"theme\":\"dark\"}}").getMessage().contains("ui.theme"));
         assertTrue(bad("{\"ui\":true}").getMessage().contains("\"ui\""));
+        assertEquals("hide", Settings.defaults().ui().thinking());
+        assertEquals("show", Settings.parse("{\"ui\":{\"thinking\":\"show\"}}", "s").ui().thinking());
+        assertTrue(bad("{\"ui\":{\"thinking\":\"yes\"}}").getMessage().contains("ui.thinking"));
     }
 
     @Test

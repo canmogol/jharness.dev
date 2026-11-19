@@ -35,7 +35,11 @@ public final class RecordingProvider implements ModelProvider {
     public ChatReply stream(ChatRequest request, Consumer<String> onDelta) throws ModelException {
         try {
             ChatReply r = inner.stream(request, onDelta);
-            append(Json.write(Json.object().put("reply", r.text())));
+            var line = Json.object().put("reply", r.text());
+            if (!r.thinking().isEmpty()) {
+                line.put("thinking", r.thinking());
+            }
+            append(Json.write(line));
             return r;
         } catch (ModelException e) {
             append(Json.write(Json.object().put("error", e.getMessage())));

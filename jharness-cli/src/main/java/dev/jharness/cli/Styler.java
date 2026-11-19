@@ -15,6 +15,7 @@ final class Styler {
     private static final String RESET = "\u001b[0m";
     private static final String BOLD = "\u001b[1m";
     private static final String DIM = "\u001b[2m";
+    private static final String ITALIC = "\u001b[3m";
     private static final String RED = "\u001b[31m";
     private static final String GREEN = "\u001b[32m";
     private static final String YELLOW = "\u001b[33m";
@@ -103,6 +104,11 @@ final class Styler {
 
     String dim(String text) {
         return paint(DIM, text);
+    }
+
+    /** The model's thinking text: dim and italic. */
+    String thinking(String text) {
+        return paint(DIM + ITALIC, text);
     }
 
     /** A unified diff, line by line: additions green, removals red, hunk headers cyan. */

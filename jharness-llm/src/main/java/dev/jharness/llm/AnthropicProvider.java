@@ -58,8 +58,9 @@ public final class AnthropicProvider extends HttpProvider {
     }
 
     @Override
-    ChatReply parse(InputStream in, Consumer<String> delta) throws IOException, ModelException {
+    ChatReply parse(InputStream in, Consumer<String> delta, Consumer<String> thinkingDelta) throws IOException, ModelException {
         StringBuilder text = new StringBuilder();
+        StringBuilder thinking = new StringBuilder();
         String[] stop = {null};
         int[] usage = {0, 0};
         boolean[] stopped = {false};
@@ -79,6 +80,10 @@ public final class AnthropicProvider extends HttpProvider {
                         String t = d.path("text").asText("");
                         text.append(t);
                         delta.accept(t);
+                    } else if ("thinking_delta".equals(d.path("type").asText())) {
+                        String t = d.path("thinking").asText("");
+                        thinking.append(t);
+                        thinkingDelta.accept(t);
                     }
                 }
                 case "message_delta" -> {
@@ -103,7 +108,7 @@ public final class AnthropicProvider extends HttpProvider {
         if (!stopped[0]) {
             throw new ModelException("the stream from Anthropic ended before message_stop");
         }
-        return new ChatReply(text.toString(), stop[0] == null ? "end_turn" : stop[0], usage[0], usage[1]);
+        return new ChatReply(text.toString(), thinking.toString(), stop[0] == null ? "end_turn" : stop[0], usage[0], usage[1]);
     }
 
     @Override

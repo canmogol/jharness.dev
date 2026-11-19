@@ -88,8 +88,8 @@ abstract class HttpProvider implements ModelProvider {
 
     abstract ObjectNode body(ChatRequest req);
 
-    /** Parses the event stream, calling {@code delta} per text chunk; returns the reply. */
-    abstract ChatReply parse(InputStream in, Consumer<String> delta) throws IOException, ModelException;
+    /** Parses the event stream, calling {@code delta} per reply chunk and {@code thinking} per thinking chunk; returns the reply. */
+    abstract ChatReply parse(InputStream in, Consumer<String> delta, Consumer<String> thinking) throws IOException, ModelException;
 
     /** The message from an error body, or a cut-down body. */
     abstract String errorMessage(JsonNode body);
@@ -130,11 +130,13 @@ abstract class HttpProvider implements ModelProvider {
                         bus.publish(origin.get(), "model.delta", Json.object().put("text", t));
                         onDelta.accept(t);
                     }
+                }, t -> {
+                    if (!t.isEmpty()) {
+                        bus.publish(origin.get(), "model.thinking_delta", Json.object().put("text", t));
+                    }
                 });
             }
-            bus.publish(origin.get(), "model.completed", Json.object().put("provider", provider()).put("model", model())
-                    .put("stopReason", reply.stopReason()).put("inputTokens", reply.inputTokens())
-                    .put("outputTokens", reply.outputTokens()));
+            bus.publish(origin.get(), "model.completed", ModelEvents.completed(provider(), model(), reply));
             return reply;
         } catch (ModelException e) {
             error(e.getMessage());

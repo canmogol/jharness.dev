@@ -161,4 +161,26 @@ class AgentLoopTest {
         var logged = SessionLog.read(session.logPath());
         assertEquals("session.started", logged.getFirst().get("type").asText());
     }
+
+    @Test
+    void codeInThinkingNeverRuns() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws"));
+        List<com.fasterxml.jackson.databind.JsonNode> lines = List.of(
+                dev.jharness.events.Json.object().put("thinking", "Plan:\n```js\napi.writeFile('src/App.java', 'gone')\n```\n")
+                        .put("reply", "Nothing to change."));
+        session = Session.open(tmp.resolve("home"), ws, Settings.parse("{}", "t"), Session.Access.gate(new DefaultGate()), (bus, turns) -> {
+            replay = new ReplayProvider(lines, bus, turns);
+            return replay;
+        });
+        session.bus().subscribe(events::add);
+        TurnResult r = session.loop().turn("anything?", d -> {});
+        assertEquals("done", r.stopReason());
+        assertEquals(0, r.steps());
+        assertTrue(events.stream().noneMatch(e -> e.type().equals("loop.code")));
+        assertTrue(events.stream().anyMatch(e -> e.type().equals("model.thinking_delta")));
+        Event done = events.stream().filter(e -> e.type().equals("model.completed")).findFirst().orElseThrow();
+        assertTrue(done.body().get("thinking").asText().contains("api.writeFile"));
+        assertFalse(session.loop().conversation().stream().anyMatch(m -> m.content().contains("api.writeFile")),
+                "thinking is not sent back to the model");
+    }
 }

@@ -168,8 +168,9 @@ public final class Smoke {
 
         log.close();
         List<JsonNode> back = SessionLog.read(log.path());
-        check("session log", back.size() == events.size() && back.getLast().equals(events.getLast().toJson()),
-                back.size() + " lines, " + events.size() + " events");
+        List<Event> logged = events.stream().filter(e -> !SessionLog.LIVE_ONLY.contains(e.type())).toList();
+        check("session log", back.size() == logged.size() && back.getLast().equals(logged.getLast().toJson()),
+                back.size() + " lines, " + logged.size() + " logged events");
         check("event types", events.stream().map(Event::type).toList().containsAll(List.of("api.call", "permission.decided",
                 "process.completed", "sandbox.limit_exceeded", "sandbox.watchdog", "model.delta", "agent.smoke")), "all present");
     }
