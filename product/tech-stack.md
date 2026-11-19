@@ -113,8 +113,8 @@ The sandbox also limits network access to the proxy port, so a build script can'
 
 | Platform | Mechanism |
 | --- | --- |
-| Linux | bubblewrap or Landlock |
-| macOS | Seatbelt (`sandbox-exec`) |
+| Linux | bubblewrap (`/usr/bin/bwrap`); Landlock not used for now (D-048) |
+| macOS | Seatbelt (`/usr/bin/sandbox-exec` with a generated deny-by-default profile) |
 
 ## Platforms and release
 

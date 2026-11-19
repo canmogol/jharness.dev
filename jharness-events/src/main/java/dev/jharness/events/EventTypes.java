@@ -45,6 +45,7 @@ public final class EventTypes {
         HOST.put("network.allowed", List.of("host", "port", "reason"));
         HOST.put("network.blocked", List.of("host", "port", "reason"));
         HOST.put("network.asked", List.of("host", "port", "reason"));
+        HOST.put("sandbox.os", List.of("mechanism", "available"));
     }
 
     private EventTypes() {}

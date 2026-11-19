@@ -30,6 +30,7 @@ final class Fixture {
     final List<Event> events = new java.util.concurrent.CopyOnWriteArrayList<>();
     final GitOperations git;
     final Search search;
+    final ProcessRunner runner;
 
     Fixture(Path tmp) throws Exception {
         root = Files.createDirectories(tmp.resolve("ws"));
@@ -47,9 +48,10 @@ final class Fixture {
         Files.createDirectories(root.resolve("src"));
         Files.writeString(root.resolve("src/App.java"), "class App {\n  // TODO fix the bug\n  int answer() { return 41; }\n}\n");
         ws = new Workspace(root);
-        ProcessRunner runner = new ProcessRunner(bus, () -> Origin.main(1), 30_000);
+        runner = new ProcessRunner(bus, () -> Origin.main(1), 30_000, dev.jharness.process.ChildSandbox.detect(
+                dev.jharness.process.ChildSandbox.Policy.forSession(root, Files.createDirectories(tmp.resolve("child-tmp")), tmp.resolve("home"))));
         git = new GitOperations(runner, exe, ws, Duration.ofSeconds(30));
-        search = Search.create(ws, bus, () -> Origin.main(1), Timeouts.defaults());
+        search = Search.create(ws, runner, Timeouts.defaults());
     }
 
     ApiServices services(PermissionGate gate, FilePolicy files) {

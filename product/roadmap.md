@@ -57,7 +57,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [ ] Per-operation timeouts with `timeoutMs` (2 min default, 10 min max for builds) and process-tree kill
 - [ ] Output returned to the model capped at the last 30,000 characters plus exit code; full output in the session log
 - [ ] Command-execution checks (no shell, pinned executables, argument validation, git hardening, clean environment, process-tree kill)
-- [ ] OS sandbox for build tools (bubblewrap or Landlock on Linux, Seatbelt on macOS)
+- [x] OS sandbox for build tools (bubblewrap or Landlock on Linux, Seatbelt on macOS)
 - [ ] `api.http` and web fetch
 - [ ] Egress proxy in the host: every HTTP client and command-line tool goes through it (HTTP clients: spec 011; command-line tools: spec 013)
 - [x] Rules files `~/.jharness/network.rules` (general) and `.jharness/network.rules` (project); DNS pinning; `/network` commands

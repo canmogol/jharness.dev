@@ -72,7 +72,7 @@ class SearchTest {
     @Test
     void ripgrepSameResults() {
         assumeTrue(rg().isPresent(), "rg not installed; CI covers this path");
-        RipgrepSearch s = new RipgrepSearch(new ProcessRunner(new EventBus("s"), () -> Origin.main(1), 30_000), rg().get(), ws, Duration.ofSeconds(60),
+        RipgrepSearch s = new RipgrepSearch(new ProcessRunner(new EventBus("s"), () -> Origin.main(1), 30_000, TestSandboxes.in(ws.root())), rg().get(), ws, Duration.ofSeconds(60),
                 new dev.jharness.security.DenyList(List.of()));
         sameShape(s, ws);
     }
@@ -80,7 +80,7 @@ class SearchTest {
     @Test
     void ripgrepArgumentsNeverCarryBlockedFlags() {
         Executable fake = new Executable("rg", Path.of("/nonexistent/rg"));
-        RipgrepSearch s = new RipgrepSearch(new ProcessRunner(new EventBus("s"), () -> Origin.main(1), 30_000), fake, ws, Duration.ofSeconds(60));
+        RipgrepSearch s = new RipgrepSearch(new ProcessRunner(new EventBus("s"), () -> Origin.main(1), 30_000, TestSandboxes.in(ws.root())), fake, ws, Duration.ofSeconds(60));
         List<String> a = s.grepArgs("--pre=sh", ws.root(), "--follow", false);
         int e = a.indexOf("-e");
         assertEquals("--pre=sh", a.get(e + 1), "the pattern is a value of -e");

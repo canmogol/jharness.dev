@@ -31,16 +31,16 @@ public interface Search {
     /** Which implementation, for events and tests: {@code rg} or {@code java}. */
     String engine();
 
-    /** {@code rg} when it is installed, else the Java fallback. */
-    static Search create(Workspace ws, EventBus bus, Supplier<Origin> origin, Timeouts timeouts) {
-        return create(ws, bus, origin, timeouts, new DenyList(java.util.List.of()));
+    /** {@code rg} when it is installed and the OS sandbox works, else the Java fallback (D-048). */
+    static Search create(Workspace ws, ProcessRunner runner, Timeouts timeouts) {
+        return create(ws, runner, timeouts, new DenyList(java.util.List.of()));
     }
 
     /** @param deny files left out of results ({@code rg -g '!glob'}, and the same globs in the Java walk) */
-    static Search create(Workspace ws, EventBus bus, Supplier<Origin> origin, Timeouts timeouts, DenyList deny) {
+    static Search create(Workspace ws, ProcessRunner runner, Timeouts timeouts, DenyList deny) {
         Optional<Executable> rg = Executables.resolve("rg", ws.root());
-        if (rg.isPresent()) {
-            return new RipgrepSearch(new ProcessRunner(bus, origin, timeouts.outputChars()), rg.get(), ws, timeouts.rg(), deny);
+        if (rg.isPresent() && runner.sandbox().available()) {
+            return new RipgrepSearch(runner, rg.get(), ws, timeouts.rg(), deny);
         }
         return new JavaSearch(ws, deny);
     }
