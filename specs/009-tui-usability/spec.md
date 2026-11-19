@@ -1,6 +1,6 @@
 # Spec 009 — TUI usability
 
-Status: Draft · Phase: P1 · Created: 2026-11-19
+Status: Done · Phase: P1 · Created: 2026-11-19
 
 ## Summary
 

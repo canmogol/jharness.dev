@@ -1,6 +1,6 @@
 # Plan 009 — TUI usability
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-19
+Spec: `spec.md` · Status: Done · Created: 2026-11-19
 
 ## Approach
 
@@ -31,8 +31,8 @@ All changes are in `jharness-cli`, plus a `ui` settings section in `jharness-con
 
 ## Checks
 
-- [ ] `mvn -pl jharness-cli -am test`
-- [ ] `mvn verify`
+- [x] `mvn -pl jharness-cli -am test`
+- [x] `mvn verify`
 - [ ] By hand: multi-line input, colors and `/events all` in a real terminal
 
 ## Risks
