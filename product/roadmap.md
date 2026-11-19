@@ -47,6 +47,10 @@ Spec: `../specs/001-p0-spike/`
 
 **Gate:** fixes a seeded bug in a sample repo end to end, with a local model and with Claude.
 
+The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is a Phase 4 release check (D-045).
+
+**Gate passed 2026-11-19:** attempt 2 with `qwen/qwen3.6-27b` fixed the seeded bug and committed it in one turn (`../docs/p1-gate.md`); fixes from attempt 1 landed in specs 008–010.
+
 ## Phase 2 — Build tools and hardening
 
 - [ ] Maven, Gradle and npm typed operations through `ProcessRunner`
@@ -87,6 +91,7 @@ Spec: `../specs/001-p0-spike/`
 - [ ] GitHub releases with checksums, Homebrew tap, install script
 - [ ] macOS code signing and notarization
 - [ ] `jharness update` with signature verification
+- [ ] Live Claude run of the P1 gate scenario (D-045)
 - [ ] User guide, `api` reference, extension authoring guide
 
 **Gate:** v0.1 tagged; signed binaries for Linux and macOS.
