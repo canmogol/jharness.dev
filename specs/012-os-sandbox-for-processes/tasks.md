@@ -12,7 +12,7 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 ## Group 2 — Wiring and CI
 
 - [x] T003 `Session`: private temp folder, probe, `sandbox.os`, git and search through the sandbox, Java search when unavailable; update tests (AC-05, AC-07)
-- [ ] T004 CI installs bubblewrap on Linux; native smoke checks a sandboxed git run and a denied write (AC-07)
+- [x] T004 CI installs bubblewrap on Linux; native smoke checks a sandboxed git run and a denied write (AC-07)
 
 ## Traceability
 

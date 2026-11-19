@@ -31,7 +31,7 @@ Phase 1 (core loop MVP) in progress. Done: the P0 spike (`specs/001-p0-spike/`),
 
 ## Build and run
 
-Needs Oracle GraalVM 25 (Java 25) and Maven; `rg` (ripgrep) is used when installed.
+Needs Oracle GraalVM 25 (Java 25) and Maven; `rg` (ripgrep) is used when installed. Every process JHarness starts (git, `rg`) runs in an OS sandbox: Seatbelt on macOS (built in), bubblewrap on Linux (`sudo apt install bubblewrap`; on Ubuntu 24.04 also allow unprivileged user namespaces). Without it JHarness runs no processes and searches with its Java fallback.
 
 ```
 mvn install                                          # build and test on the JVM

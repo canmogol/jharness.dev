@@ -1,6 +1,6 @@
 # Plan 012 — OS sandbox for child processes
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-19
+Spec: `spec.md` · Status: Done · Created: 2026-11-19
 
 ## Approach
 
@@ -60,13 +60,13 @@ Paths are real paths (`/tmp` is `/private/tmp`) and quoted for SBPL. No `network
 
 ### Probe and fail closed
 
-`detect` runs the wrapped `/usr/bin/true` once through `ProcessRunner.probe` (the only other `ProcessBuilder` use stays in `ProcessRunner.java`). A non-zero exit or a missing wrapper makes the sandbox unavailable with a reason: "install bubblewrap (`apt install bubblewrap`) and allow unprivileged user namespaces" or the wrapper's own error. `Search.create` uses `JavaSearch` when the sandbox is unavailable; git operations throw.
+`detect` runs the wrapped `/usr/bin/true` (must succeed) and `/usr/bin/touch` on a path outside the workspace (must fail) through `ProcessRunner.probe` (the only other `ProcessBuilder` use stays in `ProcessRunner.java`). A non-zero exit or a missing wrapper makes the sandbox unavailable with a reason: "install bubblewrap (`apt install bubblewrap`) and allow unprivileged user namespaces" or the wrapper's own error. `Search.create` uses `JavaSearch` when the sandbox is unavailable; git operations throw.
 
 ## Checks
 
-- [ ] `mvn -pl jharness-process -am test`
-- [ ] `mvn verify` on macOS; CI on Linux with bubblewrap
-- [ ] Native smoke binary on macOS
+- [x] `mvn -pl jharness-process -am test`
+- [x] `mvn verify` on macOS; CI on Linux with bubblewrap
+- [x] Native smoke binary on macOS
 
 ## Risks
 

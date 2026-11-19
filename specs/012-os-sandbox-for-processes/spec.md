@@ -1,6 +1,6 @@
 # Spec 012 — OS sandbox for child processes
 
-Status: Draft · Phase: P2 · Created: 2026-11-19
+Status: Done · Phase: P2 · Created: 2026-11-19
 
 ## Summary
 

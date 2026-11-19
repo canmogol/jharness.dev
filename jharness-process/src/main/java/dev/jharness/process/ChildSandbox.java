@@ -21,6 +21,7 @@ public final class ChildSandbox {
     static final Path SANDBOX_EXEC = Path.of("/usr/bin/sandbox-exec");
     static final Path BWRAP = Path.of("/usr/bin/bwrap");
     static final Path TRUE = Path.of("/usr/bin/true");
+    static final Path TOUCH = Path.of("/usr/bin/touch");
 
     /**
      * @param workspace the project folder; writable except {@code .jharness/}
@@ -57,7 +58,11 @@ public final class ChildSandbox {
         this.reason = reason;
     }
 
-    /** Picks the mechanism for this OS and probes it once by running {@code /usr/bin/true} inside it. */
+    /**
+     * Picks the mechanism for this OS and probes it once: {@code /usr/bin/true} must run inside it, and
+     * {@code /usr/bin/touch} on a path outside the workspace must fail, so a sandbox that allows
+     * everything is caught too.
+     */
     public static ChildSandbox detect(Policy policy) {
         return detect(policy, System.getProperty("os.name", ""));
     }
@@ -92,6 +97,17 @@ public final class ChildSandbox {
                 why += "; allow unprivileged user namespaces (on Ubuntu 24.04: sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0)";
             }
             return unavailable(real, m, why);
+        }
+        Path outside = real.tmp().getParent().resolve("jharness-probe-" + Long.toHexString(System.nanoTime()));
+        ProcessRunner.Probe w = ProcessRunner.probe(s.wrap(List.of(TOUCH.toString(), outside.toString()), real.workspace()),
+                real.workspace(), Duration.ofSeconds(15));
+        if (w.exitCode() == 0 || Files.exists(outside)) {
+            try {
+                Files.deleteIfExists(outside);
+            } catch (IOException e) {
+                // reported below
+            }
+            return unavailable(real, m, m.wire() + " did not stop a write outside the workspace");
         }
         return s;
     }

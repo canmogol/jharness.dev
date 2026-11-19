@@ -88,7 +88,7 @@ public final class Smoke {
         Workspace ws = new Workspace(root);
         dev.jharness.process.ChildSandbox childSandbox = dev.jharness.process.ChildSandbox.detect(dev.jharness.process.ChildSandbox.Policy
                 .forSession(root, Files.createDirectories(tmp.resolve("child-tmp")), tmp.resolve("sandbox-home")));
-        check("os sandbox", childSandbox.available(), childSandbox.mechanism().wire() + " " + childSandbox.reason());
+        check("os sandbox (starts true, blocks a write outside)", childSandbox.available(), childSandbox.mechanism().wire() + " " + childSandbox.reason());
         ProcessRunner runner = new ProcessRunner(bus, () -> o, Timeouts.defaults().outputChars(), childSandbox);
         GitOperations git = new GitOperations(runner, gitExe, ws, Duration.ofSeconds(60));
         Search search = Search.create(ws, runner, Timeouts.defaults());
