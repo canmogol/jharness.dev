@@ -1,5 +1,6 @@
 package dev.jharness.agent;
 
+import dev.jharness.process.BuildOperations;
 import dev.jharness.process.ChildSandbox;
 import java.nio.file.Files;
 import java.util.Map;
@@ -53,7 +54,7 @@ public final class Session implements AutoCloseable {
     private final TurnCounter turns;
     private final Settings settings;
     private EgressProxy proxy;
-    private Path childTmp;
+    private Path sessionDir;
     private Secrets secrets;
     private String profile;
 
@@ -114,8 +115,20 @@ public final class Session implements AutoCloseable {
         ModelProvider provider = providers.create(bus, turns);
         bus.publish(turns.get(), "session.started", Json.object().put("workspace", ws.root().toString())
                 .put("provider", provider.provider()).put("model", provider.model()).put("trusted", access.trusted()));
-        Path childTmp = Files.createTempDirectory("jharness-");
+        // <sessionDir>/tmp is the children's TMPDIR; <sessionDir>/net holds the proxy socket and Maven's settings (D-049).
+        Path sessionDir = Files.createTempDirectory("jharness-");
+        Path childTmp = Files.createDirectory(sessionDir.resolve("tmp"), OWNER_ONLY);
+        Path netDir = Files.createDirectory(sessionDir.resolve("net"), OWNER_ONLY);
         ChildSandbox sandbox = ChildSandbox.detect(ChildSandbox.Policy.forSession(ws.root(), childTmp, home));
+        if (sandbox.available()) {
+            var cred = proxy.credentials();
+            Path sock = netDir.toRealPath().resolve("proxy.sock");
+            if (sandbox.mechanism() == ChildSandbox.Mechanism.BUBBLEWRAP) {
+                proxy.serveUnix(sock);
+            }
+            sandbox = sandbox.withProxy(new ChildSandbox.ProxyRoute(proxy.address().getPort(), sock, cred.getUserName(),
+                    new String(cred.getPassword())), ChildSandbox.selfBridgeCommand());
+        }
         var os = Json.object().put("mechanism", sandbox.mechanism().wire()).put("available", sandbox.available())
                 .put("tmp", sandbox.policy().tmp().toString());
         if (!sandbox.available()) {
@@ -124,14 +137,17 @@ public final class Session implements AutoCloseable {
         bus.publish(turns.get(), "sandbox.os", os);
         ProcessRunner runner = new ProcessRunner(bus, turns, settings.timeouts().outputChars(), sandbox);
         Optional<Executable> git = Executables.resolve("git", ws.root());
-        GitOperations gitOps = git.map(g -> new GitOperations(runner, g, ws, settings.timeouts().process())).orElse(null);
+        GitOperations gitOps = git.map(g -> new GitOperations(runner, g, ws, settings.timeouts().process(), settings.timeouts().processMax()))
+                .orElse(null);
+        BuildOperations builds = new BuildOperations(runner, ws, settings.timeouts(), access.trusted(), BuildOperations.findOnPath(ws.root()),
+                home, System.getenv("JAVA_HOME"));
         FilePolicy files = new FilePolicy(ws, settings.files().mounts(), settings.files().deny());
         Search search = Search.create(ws, runner, settings.timeouts(), files.denyList());
         PermissionGate gate = access.gate() != null ? access.gate()
                 : new PermissionEngine(PermissionMode.of(settings.permissions().mode()), ProjectRules.load(home, ws.root()),
                         access.prompter(), bus, turns);
         Checkpoints checkpoints = new Checkpoints(Checkpoints.rootFor(home, ws.root(), bus.session()), bus, turns);
-        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints);
+        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
         String system = SystemPrompt.build(ctx.ok() ? ctx.value() : null, SystemPrompt.readMemory(ws.root().resolve("JHARNESS.md")),
@@ -141,7 +157,7 @@ public final class Session implements AutoCloseable {
         loop.useCheckpoints(checkpoints);
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
         s.proxy = proxy;
-        s.childTmp = childTmp;
+        s.sessionDir = sessionDir;
         return s;
     }
 
@@ -235,13 +251,16 @@ public final class Session implements AutoCloseable {
             HttpClients.stopProxy(proxy.address());
             proxy.close();
         }
-        if (childTmp != null) {
-            deleteTree(childTmp);
+        if (sessionDir != null) {
+            deleteTree(sessionDir);
         }
         log.close();
     }
 
-    /** Removes the children's private temp folder; best effort. */
+    private static final java.nio.file.attribute.FileAttribute<?> OWNER_ONLY =
+            java.nio.file.attribute.PosixFilePermissions.asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+
+    /** Removes the session folder (children's temp folder, proxy socket, Maven settings); best effort. */
     private static void deleteTree(Path root) {
         try (var walk = Files.walk(root)) {
             walk.sorted(java.util.Comparator.reverseOrder()).forEach(f -> {

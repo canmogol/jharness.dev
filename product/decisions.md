@@ -314,7 +314,7 @@ The configured model endpoint (for example `localhost:11434` for Ollama) and the
 | npm | `HTTPS_PROXY` / `HTTP_PROXY` environment variables (with the session credentials) |
 | git | `-c http.proxy=...` on every call; ssh remotes are blocked in v1 (`-c protocol.ssh.allow=never`) because ssh does not use an HTTP proxy |
 | Maven | A generated global settings file passed with `--global-settings`, holding the proxy entry; the user's own settings still apply |
-| Gradle | `-Dhttp(s).proxyHost/-Port` system properties on the command line, which also cover the wrapper download |
+| Gradle | `http(s).proxyHost/-Port` system properties, which also cover the wrapper download; passed in `JAVA_TOOL_OPTIONS`, not on the command line (changed by D-049, so the password isn't visible in `ps`) |
 
 **How it works.** For HTTPS, the proxy reads the `CONNECT host:port`, checks the rules, resolves the host itself, checks every resolved IP, and connects to the checked IP. It does not decrypt traffic. Plain HTTP is checked the same way per request. Every decision emits `network.allowed`, `network.blocked` or `network.asked`.
 
@@ -668,7 +668,7 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 - `api.maven`, `api.gradle` and `api.npm` run a short list of build and test operations (spec 013). Builds run project code, so they need a trusted project (D-011) and approval (D-010); "always" saves the tool and op.
 - Wrappers (`./mvnw`, `./gradlew`) run when present; `./gradlew` needs `distributionSha256Sum`. Gradle always runs with `--no-daemon` (D-029); npm `ci` and `install` always run with `--ignore-scripts`.
 - The sandbox opens one network path for build tools: the proxy port. On macOS this is a Seatbelt rule for `localhost:<port>`. On Linux, bubblewrap keeps its private network namespace, and the JHarness binary runs inside it as a bridge (`__proxy-bridge`) that forwards `127.0.0.1:<port>` over a Unix socket to the proxy. git and `rg` keep no network.
-- Tools learn the proxy from a generated Maven global settings file, `JAVA_TOOL_OPTIONS` (Gradle and other JVMs) and `npm_config_*` variables, never from argv. The proxy password is redacted from captured output.
+- Tools learn the proxy from a generated Maven global settings file, `JAVA_TOOL_OPTIONS` (Gradle and other JVMs) and `npm_config_*` variables, never from argv. The proxy password is redacted from captured output. This changes D-025's Gradle row, which put the properties on the command line.
 - Build tools may also write to their caches (`~/.m2/repository`, parts of `~/.gradle`, `~/.npm`), but not to the files that configure them (`~/.m2/settings.xml`, `~/.gradle/init.d`, `~/.gradle/gradle.properties`, `~/.npmrc`).
 
 **Why.** US-2.1 and US-3.5. A bridge inside the namespace gives Linux the same "proxy port only" rule as macOS, without new dependencies (slirp4netns, pasta) or sharing the host network. Caches are shared with the user's own builds so cached dependencies keep working offline (D-033); their config files stay read-only so a build can't plant an init script that runs later outside JHarness.

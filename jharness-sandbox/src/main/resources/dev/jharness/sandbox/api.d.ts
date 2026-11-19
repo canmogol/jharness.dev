@@ -24,8 +24,12 @@ type FilesJson = string;
 /** {"matches": [{"path": string, "line": number, "text": string}], "truncated": boolean} */
 type MatchesJson = string;
 
-/** {"exitCode": number, "output": string, "truncated": boolean, "timedOut": boolean} — output is the last 30,000 characters */
+/** {"exitCode": number, "output": string, "truncated": boolean, "timedOut": boolean, "durationMs": number}
+ *   — output is the last 30,000 characters; on timeout the process tree is killed and output is what it printed so far */
 type GitResultJson = string;
+
+/** Same shape as GitResultJson. */
+type BuildResultJson = string;
 
 interface ListQuery {
   /** folder to list, default "." */
@@ -46,8 +50,13 @@ interface GrepQuery {
   max?: number;
 }
 
+/** Every git, maven, gradle and npm request also takes timeoutMs: default 120000 (2 min), at most 600000 (10 min). */
+interface Timed {
+  timeoutMs?: number;
+}
+
 /** Local git only; no fetch, pull, push or clone. */
-type GitRequest =
+type GitRequest = Timed & (
   | { op: "status"; paths?: string[] }
   | { op: "diff"; staged?: boolean; stat?: boolean; rev?: string; paths?: string[] }
   | { op: "log"; max?: number; oneline?: boolean; rev?: string; paths?: string[] }
@@ -55,7 +64,22 @@ type GitRequest =
   | { op: "branch" }
   | { op: "add"; paths: string[] }
   | { op: "commit"; message: string }
-  | { op: "restore"; staged?: boolean; paths: string[] };
+  | { op: "restore"; staged?: boolean; paths: string[] });
+
+/** tests: a test class or pattern such as "AppTest", "AppTest#adds" or "com.x.*Test" */
+type MavenRequest = Timed & (
+  | { op: "compile" | "package" | "clean"; module?: string }
+  | { op: "test" | "verify"; module?: string; tests?: string });
+
+/** project: a Gradle project path such as ":app" */
+type GradleRequest = Timed & (
+  | { op: "build" | "check" | "assemble" | "clean"; project?: string }
+  | { op: "test"; project?: string; tests?: string });
+
+/** ci and install never run package scripts; run needs a script defined in package.json */
+type NpmRequest = Timed & (
+  | { op: "ci" | "install" | "test" }
+  | { op: "run"; script: string });
 
 /** type must start with "agent." or "custom."; at most 64 KB */
 interface AgentEvent {
@@ -78,6 +102,15 @@ declare const api: {
   grep(query: GrepQuery | string): MatchesJson;
   /** Runs a typed git operation. add, commit and restore need approval. */
   git(request: GitRequest | string): GitResultJson;
+  /**
+   * Maven, Gradle and npm run the project's own build code, so they need a trusted project and
+   * approval. They run in an OS sandbox: they can write only to the workspace and their caches, and
+   * reach the network only through the user's network rules. A non-zero exitCode is a normal result
+   * (for example failing tests), not an error.
+   */
+  maven(request: MavenRequest | string): BuildResultJson;
+  gradle(request: GradleRequest | string): BuildResultJson;
+  npm(request: NpmRequest | string): BuildResultJson;
   /** Records an event in the session log; returns its id. */
   emit(event: AgentEvent | string): string;
 };

@@ -31,7 +31,7 @@ Phase 1 (core loop MVP) in progress. Done: the P0 spike (`specs/001-p0-spike/`),
 
 ## Build and run
 
-Needs Oracle GraalVM 25 (Java 25) and Maven; `rg` (ripgrep) is used when installed. Every process JHarness starts (git, `rg`) runs in an OS sandbox: Seatbelt on macOS (built in), bubblewrap on Linux (`sudo apt install bubblewrap`). Without it JHarness runs no processes and searches with its Java fallback.
+Needs Oracle GraalVM 25 (Java 25) and Maven; `rg` (ripgrep) is used when installed. Every process JHarness starts (git, `rg`, Maven, Gradle, npm) runs in an OS sandbox: Seatbelt on macOS (built in), bubblewrap on Linux (`sudo apt install bubblewrap`). Without it JHarness runs no processes and searches with its Java fallback.
 
 Ubuntu 24.04 blocks the user namespaces bubblewrap needs. Allow them for bwrap only:
 
@@ -75,6 +75,8 @@ jharness -p "explain src/"    # one prompt, no UI; changes are denied
 In the UI, Alt+Enter or Ctrl-J starts a new line and Enter sends. Every event goes to the session log printed at start (`tail -f` it); `/events all` or `"ui": {"events": "all"}` in settings also shows them inline. The log keeps each model reply, and its thinking text, whole on `model.completed`; `/thinking` or `"ui": {"thinking": "show"}` shows the thinking dim in the UI. `NO_COLOR=1` turns colors off.
 
 All network traffic goes through a proxy inside JHarness that applies `~/.jharness/network.rules` and the project's `.jharness/network.rules` (`default ask|allow|deny`, `allow X`, `deny X`; X is a host, `*.suffix`, IP or CIDR with an optional `:port`). Model endpoints from your profiles are allowed automatically; loopback and private addresses are denied unless a rule names them. `/network` lists and edits the rules.
+
+In a trusted project the agent can run Maven (`compile`, `test`, `verify`, `package`, `clean`), Gradle (`build`, `test`, `check`, `assemble`, `clean`) and npm (`ci`, `install`, `test`, `run <script>`), each after your approval. `./mvnw` and `./gradlew` are used when present; `./gradlew` must pin `distributionSha256Sum`. Builds may write only to the workspace and their caches (`~/.m2/repository`, `~/.gradle/caches` and friends, `~/.npm`), and reach the network only through the proxy and its rules, so add `allow repo.maven.apache.org`, `allow plugins.gradle.org` or `allow registry.npmjs.org` (or answer "always" when asked). On macOS, tests that start their own local servers can't run inside the sandbox yet.
 
 ## License
 
