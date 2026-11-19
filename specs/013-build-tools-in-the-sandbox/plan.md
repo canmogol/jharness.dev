@@ -48,7 +48,7 @@ EgressProxy.serveUnix(Path socket);                     // relays each Unix conn
 
 | Platform | Rule |
 | --- | --- |
-| macOS | `(allow network-outbound (remote ip "localhost:<port>"))` only when `Grants.network` |
+| macOS | `(allow network-outbound (remote ip "localhost:<port>"))` only when `Grants.network`, plus `network-bind` / `network-inbound` on `(local udp "localhost:*")` for Gradle's lock handling (no sends, no TCP listening) |
 | Linux | `--bind <socket> <socket>`, argv becomes `<bridge> <socket> <port> -- <tool argv>`; the namespace's loopback is private |
 
 ### Pointing tools at the proxy

@@ -80,6 +80,22 @@ class ChildSandboxTest {
     }
 
     @Test
+    void buildGrantsAddCachesAndOnlyTheProxyPort() {
+        Path cache = home.resolve(".npm");
+        var route = new ChildSandbox.ProxyRoute(4321, tmp.resolve("proxy.sock"), "u", "p");
+        String p = ChildSandbox.seatbeltProfile(policy(), new ChildSandbox.Grants(List.of(cache), true), route);
+        assertTrue(p.contains("(subpath \"" + cache + "\")"), p);
+        assertTrue(p.contains("(allow network-outbound (remote ip \"localhost:4321\"))"), p);
+        assertEquals(1, p.split("network-outbound", -1).length - 1, p);
+        assertFalse(p.contains("network-bind (local ip") || p.contains("network-bind (local tcp"), "no TCP listening: " + p);
+        List<String> b = ChildSandbox.bubblewrapArgs(policy(), ws, new ChildSandbox.Grants(List.of(cache), true), route);
+        assertTrue(b.contains("--unshare-all"), b.toString());
+        assertFalse(b.contains("--share-net"), b.toString());
+        assertTrue(String.join(" ", b).contains("--bind " + cache + " " + cache), b.toString());
+        assertTrue(String.join(" ", b).contains("--bind " + route.socket() + " " + route.socket()), b.toString());
+    }
+
+    @Test
     void bubblewrapArguments() {
         List<String> a = ChildSandbox.bubblewrapArgs(policy(), ws);
         String s = String.join(" ", a);
