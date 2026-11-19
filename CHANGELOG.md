@@ -1,6 +1,34 @@
 # Changelog
 
-<!-- last-commit: fcafc2a7c620c3c02679b1318cfdb0027fcfb693 -->
+<!-- last-commit: 3e9a571a3c2584794f64ed52a3d7c6167a235849 -->
+
+## 2026-11-19 · Phase 1 gate
+
+- Recorded the by-hand P1 gate procedure and both attempts in `docs/p1-gate.md`. Attempt 1 (`qwen2.5-coder-7b-instruct`) fixed the bug but committed only after a second prompt; attempt 2 (`qwen/qwen3.6-27b`, after specs 008–010) passed. Phase 1 gate passed.
+- Decision: the gate passes on a local model, and the live Claude run becomes a Phase 4 release check (D-045).
+
+## 2026-11-19 · 010 Thinking text and a quieter session log
+
+- Streamed `model.delta` and the new `model.thinking_delta` go to the TUI but not to the session log; `model.completed` now carries the whole reply as `text` and the thinking as `thinking`, each capped at 65,536 characters.
+- Thinking text is captured from `reasoning_content` / `reasoning` fields, a leading `<think>…</think>` (tags may be split across chunks) and Claude thinking blocks. It is never run or sent back to the model.
+- Added `ui.thinking` and `/thinking` to show the thinking dim in the TUI.
+- Decision: streamed deltas stay off the log, and thinking is kept apart from the reply (D-046).
+
+## 2026-11-19 · 009 TUI usability
+
+- Alt+Enter or Ctrl-J inserts a newline at the prompt; Enter sends.
+- Replies are colored as Markdown line by line; step lines, errors and diffs are colored; `NO_COLOR` turns colors off.
+- The start line shows the session log path; added `ui.events` (`none`, `steps`, `all`) and `/events`.
+- A failed step shows its error and line number; `loop.result` carries both.
+
+## 2026-11-19 · 008 Loop notice for extra code blocks
+
+- When a reply has more than one `js` block, the result sent back tells the model how many didn't run, and `loop.code` records `ignoredBlocks`. Found in P1 gate attempt 1, where a dropped commit block was reported as done.
+
+## 2026-11-19
+
+- Claude may run `git switch` and `gh pr create` in this repo.
+
 
 ## 2026-11-18 · 007 Checkpoints, undo and interrupt
 
