@@ -11,8 +11,8 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 2 — Proxy
 
-- [ ] T003 `EgressProxy` with credentials, CONNECT and plain HTTP, DNS pinning, events; tests with a local upstream (AC-03, AC-04, AC-05)
-- [ ] T004 Ask path: session allows, "always" appends to the project file, headless blocks; tests (AC-06)
+- [x] T003 `EgressProxy` with credentials, CONNECT and plain HTTP, DNS pinning, events; tests with a local upstream (AC-03, AC-04, AC-05)
+- [x] T004 Ask path: session allows, "always" appends to the project file, headless blocks; tests (AC-06)
 
 ## Group 3 — Wiring
 

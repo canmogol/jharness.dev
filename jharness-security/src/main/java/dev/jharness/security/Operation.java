@@ -13,7 +13,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public record Operation(String api, Kind kind, String summary, ObjectNode detail) {
 
     public enum Kind {
-        READ, WRITE, GIT_READ, GIT_WRITE, EMIT;
+        READ, WRITE, GIT_READ, GIT_WRITE, EMIT,
+        /** A connection through the egress proxy that no rule decided (spec 011); asked by the proxy itself. */
+        NETWORK;
 
         /** True for kinds that change state and need approval by default (D-010). */
         public boolean changesState() {

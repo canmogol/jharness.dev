@@ -27,7 +27,7 @@ class ArchitectureTest {
             new Rule("HTTP client", Pattern.compile("HttpClient\\s*\\.\\s*(newBuilder|newHttpClient)\\b"),
                     "jharness-llm/src/main/java/dev/jharness/llm/http/HttpClients.java"),
             new Rule("socket", Pattern.compile("new\\s+(Server)?Socket\\s*\\(|(Server)?SocketChannel\\s*\\.\\s*open|new\\s+DatagramSocket|HttpServer\\s*\\.\\s*create"),
-                    null));
+                    "jharness-net/src/main/java/dev/jharness/net/EgressProxy.java"));
 
     static Path root() {
         Path p = Path.of("").toAbsolutePath();
@@ -43,7 +43,7 @@ class ArchitectureTest {
         assertNotNull(root);
         List<String> violations = new ArrayList<>();
         int scanned = 0;
-        for (String module : List.of("jharness-events", "jharness-config", "jharness-security", "jharness-process", "jharness-sandbox", "jharness-llm", "jharness-agent", "jharness-cli")) {
+        for (String module : List.of("jharness-events", "jharness-config", "jharness-security", "jharness-process", "jharness-net", "jharness-sandbox", "jharness-llm", "jharness-agent", "jharness-cli")) {
             Path src = root.resolve(module).resolve("src/main/java");
             try (Stream<Path> files = Files.walk(src)) {
                 for (Path f : files.filter(x -> x.toString().endsWith(".java")).toList()) {

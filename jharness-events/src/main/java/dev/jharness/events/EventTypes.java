@@ -42,6 +42,9 @@ public final class EventTypes {
         HOST.put("turn.completed", List.of("steps", "stopReason"));
         HOST.put("loop.code", List.of("step", "lines"));
         HOST.put("loop.result", List.of("step", "status"));
+        HOST.put("network.allowed", List.of("host", "port", "reason"));
+        HOST.put("network.blocked", List.of("host", "port", "reason"));
+        HOST.put("network.asked", List.of("host", "port", "reason"));
     }
 
     private EventTypes() {}
