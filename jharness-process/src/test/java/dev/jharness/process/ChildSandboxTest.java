@@ -87,7 +87,7 @@ class ChildSandboxTest {
         assertTrue(p.contains("(subpath \"" + cache + "\")"), p);
         assertTrue(p.contains("(allow network-outbound (remote ip \"localhost:4321\"))"), p);
         assertEquals(1, p.split("network-outbound", -1).length - 1, p);
-        assertFalse(p.contains("network-bind (local ip") || p.contains("network-bind (local tcp"), "no TCP listening: " + p);
+        assertFalse(p.contains("network-bind") || p.contains("network-inbound"), "no listening: " + p);
         List<String> b = ChildSandbox.bubblewrapArgs(policy(), ws, new ChildSandbox.Grants(List.of(cache), true), route);
         assertTrue(b.contains("--unshare-all"), b.toString());
         assertFalse(b.contains("--share-net"), b.toString());

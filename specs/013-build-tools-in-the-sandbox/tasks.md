@@ -6,19 +6,19 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 1 — Network path to the proxy
 
-- [ ] T001 `ChildSandbox` grants (cache folders, network) and the proxy route: Seatbelt rule, bubblewrap socket bind and bridge argv; `ProxyBridge`; `EgressProxy.serveUnix`; password redaction in `ProcessRunner` (AC-05, AC-07, AC-08)
-- [ ] T002 Tests: a sandboxed client reaches a stub server through the proxy and can't connect directly; git and `rg` runs still have no network (AC-07, AC-09)
+- [x] T001 `ChildSandbox` grants (cache folders, network) and the proxy route: Seatbelt rule, bubblewrap socket bind and bridge argv; `ProxyBridge`; `EgressProxy.serveUnix`; password redaction in `ProcessRunner` (AC-05, AC-07, AC-08)
+- [x] T002 Tests: a sandboxed client reaches a stub server through the proxy and can't connect directly; git and `rg` runs still have no network (AC-07, AC-09)
 
 ## Group 2 — Build operations
 
-- [ ] T003 `timeoutMs` on git and build calls (AC-04)
-- [ ] T004 `BuildOperations` for Maven, Gradle and npm: validation, fixed flags, wrappers, proxy settings, cache grants; unit tests of argv (AC-01, AC-02, AC-06, AC-08)
-- [ ] T005 `api.maven`, `api.gradle`, `api.npm`; `BUILD` permission kind and saved rules; trust check; `api.d.ts`; `Session` wiring (AC-03, AC-05)
-- [ ] T006 Real-tool tests (Maven, npm, Gradle when installed) in the sandbox (AC-02, AC-08, AC-09)
+- [x] T003 `timeoutMs` on git and build calls (AC-04)
+- [x] T004 `BuildOperations` for Maven, Gradle and npm: validation, fixed flags, wrappers, proxy settings, cache grants; unit tests of argv (AC-01, AC-02, AC-06, AC-08)
+- [x] T005 `api.maven`, `api.gradle`, `api.npm`; `BUILD` permission kind and saved rules; trust check; `api.d.ts`; `Session` wiring (AC-03, AC-05)
+- [x] T006 Real-tool tests (Maven, npm, Gradle when installed) in the sandbox (AC-02, AC-08, AC-09)
 
 ## Group 3 — Native and docs
 
-- [ ] T007 `__proxy-bridge` in the CLI and smoke binaries; native smoke check through the bridge; README and tech-stack notes (AC-07, AC-09)
+- [x] T007 `__proxy-bridge` in the CLI and smoke binaries; native smoke check through the bridge; README and tech-stack notes (AC-07, AC-09)
 
 ## Traceability
 

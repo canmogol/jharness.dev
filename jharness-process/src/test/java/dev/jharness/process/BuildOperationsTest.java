@@ -56,7 +56,14 @@ class BuildOperationsTest {
     }
 
     private String fails(Tool t, String json) {
-        return assertThrows(RuntimeException.class, () -> ops().check(t, req(json))).getMessage();
+        // Gradle is refused on macOS before validation (spec 013 open question), so check its argv directly.
+        return assertThrows(RuntimeException.class, () -> {
+            if (t == Tool.GRADLE) {
+                ops().args(t, req(json));
+            } else {
+                ops().check(t, req(json));
+            }
+        }).getMessage();
     }
 
     @Test
@@ -118,8 +125,8 @@ class BuildOperationsTest {
 
     @Test
     void missingToolsSaySo() {
-        var e = assertThrows(OperationException.class, () -> ops(true, Map.of()).check(Tool.GRADLE, req("{\"op\":\"build\"}")));
-        assertTrue(e.getMessage().contains("gradle is not installed"), e.getMessage());
+        var e = assertThrows(OperationException.class, () -> ops(true, Map.of()).check(Tool.MAVEN, req("{\"op\":\"test\"}")));
+        assertTrue(e.getMessage().contains("maven is not installed"), e.getMessage());
     }
 
     @Test

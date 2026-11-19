@@ -1,6 +1,6 @@
 # Plan 013 — Maven, Gradle and npm in the sandbox
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-19
+Spec: `spec.md` · Status: Done · Created: 2026-11-19
 
 ## Approach
 
@@ -48,7 +48,7 @@ EgressProxy.serveUnix(Path socket);                     // relays each Unix conn
 
 | Platform | Rule |
 | --- | --- |
-| macOS | `(allow network-outbound (remote ip "localhost:<port>"))` only when `Grants.network`, plus `network-bind` / `network-inbound` on `(local udp "localhost:*")` for Gradle's lock handling (no sends, no TCP listening) |
+| macOS | `(allow network-outbound (remote ip "localhost:<port>"))` only when `Grants.network` |
 | Linux | `--bind <socket> <socket>`, argv becomes `<bridge> <socket> <port> -- <tool argv>`; the namespace's loopback is private |
 
 ### Pointing tools at the proxy
@@ -73,8 +73,8 @@ Every op also takes `timeoutMs`. `tests` matches `[A-Za-z0-9_.*#,+$-]{1,200}` an
 
 ## Checks
 
-- [ ] `mvn -pl jharness-process -am test`
-- [ ] `mvn verify` on macOS; CI on Linux with bubblewrap
+- [x] `mvn -pl jharness-process -am test`
+- [x] `mvn verify` on macOS; CI on Linux with bubblewrap
 - [ ] Native smoke binary on macOS and in CI
 
 ## Risks
@@ -83,5 +83,5 @@ Every op also takes `timeoutMs`. `tests` matches `[A-Za-z0-9_.*#,+$-]{1,200}` an
 | --- | --- |
 | Tests that start local servers fail on macOS (Seatbelt can't tell them apart from other local services) | Out of scope for 013; listed in the spec; Linux works because loopback is private |
 | A tool ignores proxy settings | Its connections fail in the sandbox; the error names the host |
-| Gradle starts a single-use daemon JVM | `JAVA_TOOL_OPTIONS` reaches it too; the tree kill covers it |
+| Gradle starts a single-use daemon JVM and talks to it over loopback TCP | Works on Linux (private loopback); refused on macOS until the open question in the spec is settled |
 | Unix domain sockets in Native Image | Checked by the native smoke binary on all targets |

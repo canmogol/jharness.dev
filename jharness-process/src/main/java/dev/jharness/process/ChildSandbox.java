@@ -293,9 +293,6 @@ public final class ChildSandbox {
         if (g.network()) {
             // The only network rule: the proxy's port on loopback (D-049). Everything else stays denied.
             sb.append("(allow network-outbound (remote ip \"localhost:").append(route.port()).append("\"))\n");
-            // Gradle binds a loopback UDP socket for lock contention; binding and receiving lets nothing out.
-            sb.append("(allow network-bind (local udp \"localhost:*\"))\n");
-            sb.append("(allow network-inbound (local udp \"localhost:*\"))\n");
         }
         return sb.toString();
     }

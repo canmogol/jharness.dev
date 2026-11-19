@@ -98,7 +98,15 @@ class BuildToolsTest {
     }
 
     @Test
+    void gradleIsRefusedInTheMacOsSandbox() {
+        assumeTrue(net.sandbox.mechanism() == ChildSandbox.Mechanism.SEATBELT, "macOS only");
+        var e = assertThrows(OperationException.class, () -> ops.run(Tool.GRADLE, Json.parseObject("{\"op\":\"build\"}")));
+        assertTrue(e.getMessage().contains("macOS sandbox"), e.getMessage());
+    }
+
+    @Test
     void gradleRunsInTheSandbox() throws Exception {
+        assumeTrue(net.sandbox.mechanism() != ChildSandbox.Mechanism.SEATBELT, "Gradle is refused on macOS (spec 013 open question)");
         Files.writeString(root.resolve("settings.gradle"), "rootProject.name = 't'\n");
         Files.writeString(root.resolve("build.gradle"), "plugins { id 'base' }\n");
         ProcessResult r = run(Tool.GRADLE, "{\"op\":\"build\",\"timeoutMs\":300000}");
