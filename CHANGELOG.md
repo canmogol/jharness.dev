@@ -1,6 +1,15 @@
 # Changelog
 
-<!-- last-commit: d381d7abfc470cde4d79f41902fd83824d4ada27 -->
+<!-- last-commit: 027a11c488ccf75b1815fa9a7ff5ec4032506583 -->
+
+## 2026-11-19 · 012 OS sandbox for child processes
+
+- Every child process (git, `rg`) now runs in an OS sandbox: Seatbelt (`sandbox-exec`) on macOS, bubblewrap (`bwrap`) on Linux.
+- Children can write only to the workspace (not `.jharness/`) and a private per-session temp folder passed as `TMPDIR`; they can't read `~/.jharness`, `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gcloud` or `~/.netrc`, and have no network, loopback included.
+- The session probes the sandbox at start and emits `sandbox.os`; without a working sandbox, process operations fail with the reason and fix, search falls back to Java, and nothing runs unsandboxed. `process.started` records the mechanism.
+- Linux CI installs bubblewrap; the README documents a bwrap-only AppArmor profile for Ubuntu 24.04, which blocks unprivileged user namespaces by default.
+- The native smoke binary checks a sandboxed run and a blocked write.
+- Decision: Seatbelt on macOS, bubblewrap on Linux, fail closed, with a fixed hidden-folder list (D-048).
 
 ## 2026-11-19 · 011 Egress proxy and network rules
 
