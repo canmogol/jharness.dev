@@ -86,12 +86,13 @@ class ProcessRunnerTest {
 
     @Test
     void timeoutKillsTheWholeTree() throws Exception {
-        ProcessResult r = runner(30_000).run(fixture("sleep 60 & echo child=$!; wait"), List.of(), tmp, Duration.ofSeconds(1), Map.of());
+        // A marker, not the child's PID: inside bubblewrap's PID namespace $! is not a host PID.
+        Path marker = tmp.resolve("child-survived");
+        ProcessResult r = runner(30_000).run(fixture("(sleep 2; touch " + marker + ") & wait"), List.of(), tmp, Duration.ofSeconds(1), Map.of());
         assertTrue(r.timedOut());
         assertEquals(-1, r.exitCode());
-        long child = Long.parseLong(r.output().lines().filter(l -> l.startsWith("child=")).findFirst().orElseThrow().substring(6));
-        Thread.sleep(300);
-        assertFalse(ProcessHandle.of(child).map(ProcessHandle::isAlive).orElse(false), "child sleep still alive");
+        Thread.sleep(2500);
+        assertFalse(Files.exists(marker), "a child outlived the kill");
         assertTrue(events.getLast().body().get("timedOut").asBoolean());
     }
 
