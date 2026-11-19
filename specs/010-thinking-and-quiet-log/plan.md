@@ -1,6 +1,6 @@
 # Plan 010 — Thinking text and a quieter session log
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-19
+Spec: `spec.md` · Status: Done · Created: 2026-11-19
 
 ## Approach
 
@@ -44,8 +44,8 @@ static ObjectNode completed(String provider, String model, ChatReply r);
 
 ## Checks
 
-- [ ] `mvn -pl jharness-llm,jharness-events -am test`
-- [ ] `mvn verify`
+- [x] `mvn -pl jharness-llm,jharness-events -am test`
+- [x] `mvn verify`
 - [ ] By hand: a turn with `qwen3` through LM Studio, `ui.thinking: show`, and the log tailed
 
 ## Risks

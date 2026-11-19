@@ -1,6 +1,6 @@
 # Spec 010 — Thinking text and a quieter session log
 
-Status: Draft · Phase: P1 · Created: 2026-11-19
+Status: Done · Phase: P1 · Created: 2026-11-19
 
 ## Summary
 
