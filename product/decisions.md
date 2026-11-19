@@ -57,6 +57,7 @@ Last updated: 2026-11-19
 | D-044 | Checkpoints hold file contents per turn; `/undo` and `/rewind` restore files and the conversation, not git history | Accepted |
 | D-045 | The P1 gate passes on a local model; the live Claude run moves to the v0.1 release checks | Accepted |
 | D-046 | Streamed deltas stay off the session log; `model.completed` carries the reply and the thinking text, which is never run or sent back | Accepted |
+| D-047 | Phase 2 order: proxy and rules, then the OS sandbox, then build tools; in-house proxy in `jharness-net`; "always" network answers go to the project rules file | Accepted |
 
 ---
 
@@ -631,6 +632,20 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-047 — Phase 2 order, the proxy module, and saved network answers
+
+**Decision.**
+- Phase 2 starts with the egress proxy and rules files (spec 011), then the OS sandbox for child processes (spec 012), then Maven, Gradle and npm (spec 013). Builds never run before both the proxy and the sandbox exist.
+- The proxy is built in-house in a new `jharness-net` module: a minimal HTTP/1.1 forward proxy (`CONNECT` for HTTPS, absolute-form requests for plain HTTP) on virtual threads, with no new dependency.
+- An "always" answer to a network question appends `allow host[:port]` to the project's `.jharness/network.rules`. The host writes it; agent code still can't write `.jharness/**`. In an untrusted project the line is written but counts only once the project is trusted (D-025 step 2).
+- A "once" answer allows that `host:port` for the rest of the session.
+
+**Why.** Running builds with only offline flags would leave build scripts free to open sockets until the sandbox lands (Article V). A small proxy keeps the native binary free of Netty-sized dependencies. Saving answers in the project file keeps them next to the project and reviewable.
+
+**Source.** User answers, specifying 011-egress-proxy-and-rules, 2026-11-19.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -688,6 +703,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q49 | What do checkpoints save, and does undo touch git? | File contents per turn; files and conversation are restored, git history isn't | Works outside git; never rewrites history | D-044 |
 | Q50 | Can the P1 gate pass without a Claude API key? | Yes, on a local model; the live Claude run becomes a v0.1 release check | Phase 2 isn't blocked on a key | D-045 |
 | Q51 | Should every streamed chunk be in the session log, and can the thinking text be logged? | No: deltas are live only, and `model.completed` holds the reply and the thinking; thinking is never run | A readable log; thinking can't smuggle code into a run | D-046 |
+| Q52 | Can builds run offline before the proxy and the OS sandbox exist, and where do "always" network answers go? | No: proxy, then sandbox, then builds; "always" appends to the project's `.jharness/network.rules` | Build scripts can't reach the network unchecked; saved answers stay with the project | D-047 |
 
 ---
 

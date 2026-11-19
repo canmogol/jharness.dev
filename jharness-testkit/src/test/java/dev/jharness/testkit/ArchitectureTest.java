@@ -27,7 +27,7 @@ class ArchitectureTest {
             new Rule("HTTP client", Pattern.compile("HttpClient\\s*\\.\\s*(newBuilder|newHttpClient)\\b"),
                     "jharness-llm/src/main/java/dev/jharness/llm/http/HttpClients.java"),
             new Rule("socket", Pattern.compile("new\\s+(Server)?Socket\\s*\\(|(Server)?SocketChannel\\s*\\.\\s*open|new\\s+DatagramSocket|HttpServer\\s*\\.\\s*create"),
-                    null));
+                    "jharness-net/src/main/java/dev/jharness/net/EgressProxy.java"));
 
     static Path root() {
         Path p = Path.of("").toAbsolutePath();
@@ -43,7 +43,7 @@ class ArchitectureTest {
         assertNotNull(root);
         List<String> violations = new ArrayList<>();
         int scanned = 0;
-        for (String module : List.of("jharness-events", "jharness-config", "jharness-security", "jharness-process", "jharness-sandbox", "jharness-llm", "jharness-agent", "jharness-cli")) {
+        for (String module : List.of("jharness-events", "jharness-config", "jharness-security", "jharness-process", "jharness-net", "jharness-sandbox", "jharness-llm", "jharness-agent", "jharness-cli")) {
             Path src = root.resolve(module).resolve("src/main/java");
             try (Stream<Path> files = Files.walk(src)) {
                 for (Path f : files.filter(x -> x.toString().endsWith(".java")).toList()) {
@@ -68,5 +68,10 @@ class ArchitectureTest {
         assertTrue(RULES.get(0).pattern().matcher("Runtime.getRuntime().exec(\"ls\")").find());
         assertTrue(RULES.get(1).pattern().matcher("HttpClient.newHttpClient()").find());
         assertTrue(RULES.get(2).pattern().matcher("new Socket(\"h\", 80)").find());
+        assertTrue(RULES.get(2).pattern().matcher("var s = new ServerSocket(0);").find());
+        assertTrue(RULES.get(2).pattern().matcher("SocketChannel.open(addr)").find());
+        // Sockets are allowed only in the egress proxy (spec 011 AC-08); anywhere else is a violation.
+        assertEquals("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", RULES.get(2).allowedFile());
+        assertNotEquals("jharness-llm/src/main/java/dev/jharness/llm/OpenAiCompatibleProvider.java", RULES.get(2).allowedFile());
     }
 }

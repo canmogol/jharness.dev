@@ -187,4 +187,46 @@ class TuiTest {
         assertFalse(sc.contains("second idea"), sc);
         assertTrue(sc.contains("Answer two."), sc);
     }
+
+    @Test
+    void networkCommands() throws Exception {
+        Path home = tmp.resolve("home7");
+        Path ws = Files.createDirectories(tmp.resolve("ws7"));
+        Files.createDirectories(home.resolve(".jharness"));
+        Files.writeString(Session.generalNetworkRules(home), "default ask\n");
+        Tui tui = new Tui(terminal("/network\n/network allow API.example.com:443\n/network deny *.ads.example.com\n/network allow bad!\n"
+                + "/network deny x.example.com --project\n/network remove *.ads.example.com\n/network remove nothing.example.com\n"
+                + "/network reload\n/network list\n/network frob\n/exit\n"), null);
+        try (Session session = Session.open(home, ws, Settings.parse("{\"models\":{\"lan\":{\"provider\":\"openai-compatible\","
+                + "\"baseUrl\":\"http://192.168.68.140:1234/v1\",\"model\":\"q\"}}}", "t"), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(), bus, turns))) {
+            tui.run(session);
+            assertEquals(dev.jharness.net.Rule.Action.ALLOW, session.proxy().rules()
+                    .decide("api.example.com", 443, java.net.InetAddress.ofLiteral("93.184.216.34")).action(), "reloaded after the edit");
+        }
+        String sc = screen();
+        assertTrue(sc.contains("General rules: " + Session.generalNetworkRules(home)), sc);
+        assertTrue(sc.contains("  default ask"), sc);
+        assertTrue(sc.contains("network.rules (project not trusted: only deny lines count)"), sc);
+        assertTrue(sc.contains("Model endpoints, allowed automatically: 192.168.68.140:1234"), sc);
+        assertTrue(sc.contains("Built-in denies (unless an allow names the address): 127.0.0.0/8"), sc);
+        assertTrue(sc.contains("Added \"allow api.example.com:443\" to"), sc);
+        assertTrue(sc.contains("Added \"deny *.ads.example.com\" to"), sc);
+        assertTrue(sc.contains("bad host"), sc);
+        assertTrue(sc.contains("This project isn't trusted"), sc);
+        assertTrue(sc.contains("Removed 1 line(s)"), sc);
+        assertTrue(sc.contains("No rule names nothing.example.com"), sc);
+        assertTrue(sc.contains("Network rules reloaded."), sc);
+        assertTrue(sc.contains("Usage: /network [list|allow X|deny X|remove X|reload] [--project]"), sc);
+        assertEquals("default ask\nallow api.example.com:443\n", Files.readString(Session.generalNetworkRules(home)));
+    }
+
+    @Test
+    void networkQuestion() throws Exception {
+        Operation op = new Operation("network", Operation.Kind.NETWORK, "connect api.example.com:443",
+                Json.object().put("host", "api.example.com").put("port", 443));
+        Tui tui = new Tui(terminal("a\n"), null);
+        assertEquals(Prompter.Answer.ALWAYS, tui.prompter().ask(op));
+        assertTrue(screen().contains("Allow network: connect api.example.com:443?"), screen());
+    }
 }

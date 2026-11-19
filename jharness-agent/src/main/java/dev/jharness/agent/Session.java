@@ -1,5 +1,13 @@
 package dev.jharness.agent;
 
+import java.util.Map;
+import java.util.List;
+import java.net.URI;
+import dev.jharness.llm.http.HttpClients;
+import dev.jharness.net.EgressProxy;
+import dev.jharness.net.NetworkRules;
+import dev.jharness.net.Rule;
+import dev.jharness.net.RulesFile;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -42,6 +50,7 @@ public final class Session implements AutoCloseable {
     private final Workspace workspace;
     private final TurnCounter turns;
     private final Settings settings;
+    private EgressProxy proxy;
     private Secrets secrets;
     private String profile;
 
@@ -92,12 +101,13 @@ public final class Session implements AutoCloseable {
     }
 
     public static Session open(Path home, Path workspacePath, Settings settings, Access access, ProviderFactory providers)
-            throws IOException {
+            throws IOException, ConfigException {
         Workspace ws = new Workspace(workspacePath);
         EventBus bus = new EventBus(EventBus.newSessionId());
         SessionLog log = SessionLog.open(home, ws.root(), bus.session());
         bus.subscribe(log);
         TurnCounter turns = new TurnCounter("main");
+        EgressProxy proxy = startProxy(home, ws.root(), settings, access, bus, turns);
         ModelProvider provider = providers.create(bus, turns);
         bus.publish(turns.get(), "session.started", Json.object().put("workspace", ws.root().toString())
                 .put("provider", provider.provider()).put("model", provider.model()).put("trusted", access.trusted()));
@@ -118,7 +128,51 @@ public final class Session implements AutoCloseable {
         AgentLoop loop = new AgentLoop(provider, isolate, services, bus, turns, system, settings.agent().maxSteps(),
                 settings.timeouts().outputChars());
         loop.useCheckpoints(checkpoints);
-        return new Session(bus, log, isolate, loop, ws, turns, settings);
+        Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
+        s.proxy = proxy;
+        return s;
+    }
+
+    public static Path generalNetworkRules(Path home) {
+        return home.resolve(".jharness").resolve("network.rules");
+    }
+
+    public static Path projectNetworkRules(Path workspace) {
+        return workspace.resolve(".jharness").resolve("network.rules");
+    }
+
+    /** Starts the egress proxy (D-025, spec 011) and points every HTTP client the session builds at it. */
+    private static EgressProxy startProxy(Path home, Path root, Settings settings, Access access, EventBus bus, TurnCounter turns)
+            throws IOException, ConfigException {
+        Path general = generalNetworkRules(home);
+        Path project = projectNetworkRules(root);
+        List<Rule> endpoints = modelEndpoints(settings.models());
+        boolean trusted = access.trusted();
+        EgressProxy p = EgressProxy.start(() -> new NetworkRules(RulesFile.load(general), RulesFile.load(project), trusted, endpoints),
+                access.prompter(), bus, turns, project);
+        HttpClients.useProxy(p.address(), p.credentials());
+        return p;
+    }
+
+    /** Every profile's endpoint is allowed automatically, so model traffic works without rule edits (D-025). */
+    static List<Rule> modelEndpoints(ModelProfiles models) {
+        List<Rule> l = new java.util.ArrayList<>();
+        for (Map.Entry<String, ModelProfile> e : models.all().entrySet()) {
+            URI u = URI.create(e.getValue().baseUrl());
+            String host = u.getHost();
+            if (host == null) {
+                continue;
+            }
+            int port = u.getPort() > 0 ? u.getPort() : "https".equalsIgnoreCase(u.getScheme()) ? 443 : 80;
+            String h = host.startsWith("[") ? host : host.contains(":") ? "[" + host + "]" : host;
+            l.add(RulesFile.rule(Rule.Action.ALLOW, h + ":" + port, "model profile " + e.getKey()));
+        }
+        return List.copyOf(l);
+    }
+
+    /** The session's egress proxy, for {@code /network}. */
+    public EgressProxy proxy() {
+        return proxy;
     }
 
     /** The profiles that {@link #switchModel} can pick from. */
@@ -165,6 +219,10 @@ public final class Session implements AutoCloseable {
     @Override
     public void close() throws IOException {
         isolate.close();
+        if (proxy != null) {
+            HttpClients.stopProxy(proxy.address());
+            proxy.close();
+        }
         log.close();
     }
 }

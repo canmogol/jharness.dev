@@ -41,6 +41,8 @@
               <mainClass>dev.jharness.testkit.Smoke</mainClass>
               <buildArgs>
                 <buildArg>--no-fallback</buildArg>
+                <!-- The JDK HTTP client needs these URL handlers to reach the egress proxy (spec 011). -->
+                <buildArg>--enable-url-protocols=http,https</buildArg>
                 <buildArg>--enable-native-access=ALL-UNNAMED,org.graalvm.truffle</buildArg>
               </buildArgs>
             </configuration>
