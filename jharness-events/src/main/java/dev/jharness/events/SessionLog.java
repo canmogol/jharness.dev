@@ -21,11 +21,14 @@ import java.util.function.Consumer;
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
- * Appends every event as one JSON line to
+ * Appends every event but the live stream chunks ({@link #LIVE_ONLY}, D-046) as one JSON line to
  * {@code <home>/.jharness/sessions/<project-hash>/<session-id>.jsonl} (D-038). Folders are 0700 and the
  * file 0600. Each line is written and forced to the file before {@link #accept} returns.
  */
 public final class SessionLog implements Consumer<Event>, AutoCloseable {
+
+    /** Streamed chunks: live subscribers see them; the log has the whole text on {@code model.completed} (D-046). */
+    public static final Set<String> LIVE_ONLY = Set.of("model.delta", "model.thinking_delta");
 
     private static final Set<PosixFilePermission> DIR = PosixFilePermissions.fromString("rwx------");
     private static final Set<PosixFilePermission> FILE = PosixFilePermissions.fromString("rw-------");
@@ -101,6 +104,9 @@ public final class SessionLog implements Consumer<Event>, AutoCloseable {
 
     @Override
     public synchronized void accept(Event event) {
+        if (LIVE_ONLY.contains(event.type())) {
+            return;
+        }
         byte[] line = (event.toJsonLine() + "\n").getBytes(StandardCharsets.UTF_8);
         try {
             out.write(line);

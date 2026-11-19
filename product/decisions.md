@@ -56,6 +56,7 @@ Last updated: 2026-11-19
 | D-043 | Trust answers in `~/.jharness/trusted.json`; settings layers user, project, session; untrusted projects only tighten | Accepted |
 | D-044 | Checkpoints hold file contents per turn; `/undo` and `/rewind` restore files and the conversation, not git history | Accepted |
 | D-045 | The P1 gate passes on a local model; the live Claude run moves to the v0.1 release checks | Accepted |
+| D-046 | Streamed deltas stay off the session log; `model.completed` carries the reply and the thinking text, which is never run or sent back | Accepted |
 
 ---
 
@@ -615,6 +616,21 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-046 — Session log and thinking text
+
+**Decision.**
+- `model.delta` and `model.thinking_delta` go to live subscribers (the TUI) but not to the session log. `model.completed` carries the whole reply as `text` and, when there is any, the thinking as `thinking`; each is cut at 65,536 characters, with `textCut` / `thinkingCut` giving the characters cut.
+- Providers keep thinking apart from the reply: OpenAI-compatible `reasoning_content` and `reasoning` fields, a leading `<think>…</think>` in the content, and Anthropic `thinking_delta` blocks.
+- Thinking is never part of the reply: it is not searched for code, not run, and not sent back to the model.
+- The TUI hides thinking unless `ui.thinking` is `show` (or `/thinking` turns it on); shown thinking is dim.
+- Turning on Claude extended thinking is left for later.
+
+**Why.** One event per streamed chunk made the log hard to read and tail, and the reply was nowhere in one piece. Reasoning models send their thinking alongside the reply; inline `<think>` text could hold a code block that would have been run.
+
+**Source.** User answers, specifying 010-thinking-and-quiet-log, 2026-11-19.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -671,6 +687,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q48 | Where are trust answers kept, how do settings layer, and what does an untrusted project's settings file do? | `~/.jharness/trusted.json`; user, project, session; untrusted: only `files.deny` and `plan` | A cloned repo can only make JHarness stricter | D-043 |
 | Q49 | What do checkpoints save, and does undo touch git? | File contents per turn; files and conversation are restored, git history isn't | Works outside git; never rewrites history | D-044 |
 | Q50 | Can the P1 gate pass without a Claude API key? | Yes, on a local model; the live Claude run becomes a v0.1 release check | Phase 2 isn't blocked on a key | D-045 |
+| Q51 | Should every streamed chunk be in the session log, and can the thinking text be logged? | No: deltas are live only, and `model.completed` holds the reply and the thinking; thinking is never run | A readable log; thinking can't smuggle code into a run | D-046 |
 
 ---
 

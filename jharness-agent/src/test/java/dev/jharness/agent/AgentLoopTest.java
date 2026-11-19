@@ -75,6 +75,12 @@ class AgentLoopTest {
         String first = lastUserMessage(1);
         assertTrue(first.contains("Error at line 3"), first);
         assertTrue(lastUserMessage(2).contains("Result: undefined"), lastUserMessage(2));
+        List<Event> results = events.stream().filter(e -> e.type().equals("loop.result")).toList();
+        assertEquals("error", results.get(0).body().get("status").asText());
+        assertEquals(3, results.get(0).body().get("line").asInt());
+        assertFalse(results.get(0).body().get("error").asText().isBlank(), results.get(0).body().toString());
+        assertFalse(results.get(1).body().has("error"), results.get(1).body().toString());
+        assertFalse(results.get(1).body().has("line"));
     }
 
     @Test
@@ -82,7 +88,8 @@ class AgentLoopTest {
         open("{\"sandbox\":{\"main\":{\"sandbox.MaxCPUTime\":\"1s\"}}}", "```js\nwhile (true) {}\n```", "stopping");
         session.loop().turn("spin", d -> {});
         assertTrue(lastUserMessage(1).contains("sandbox.MaxCPUTime"), lastUserMessage(1));
-        assertTrue(events.stream().anyMatch(e -> e.type().equals("loop.result") && e.body().get("status").asText().equals("limit")));
+        assertTrue(events.stream().anyMatch(e -> e.type().equals("loop.result") && e.body().get("status").asText().equals("limit")
+                && e.body().has("error")));
     }
 
     @Test
@@ -115,6 +122,33 @@ class AgentLoopTest {
     }
 
     @Test
+    void laterBlocksDontRunAndTheModelIsTold() throws Exception {
+        open("{}", "```js\n'first'\n```\nand\n```js\n'second'\n```\n```javascript\n'third'\n```", "```js\n'second'\n```", "done");
+        TurnResult r = session.loop().turn("go", d -> {});
+        assertEquals("done", r.stopReason());
+        assertEquals(2, r.steps());
+        String fed = lastUserMessage(1);
+        assertTrue(fed.contains("first"), fed);
+        assertFalse(fed.contains("third"), fed);
+        assertTrue(fed.endsWith("\n\nNote: your reply had 2 more js block(s) after the first; they did not run. "
+                + "Send the next one in your next reply."), fed);
+        assertFalse(lastUserMessage(2).contains("Note:"), lastUserMessage(2));
+        List<Event> code = events.stream().filter(e -> e.type().equals("loop.code")).toList();
+        assertEquals(2, code.get(0).body().get("ignoredBlocks").asInt());
+        assertFalse(code.get(1).body().has("ignoredBlocks"), code.get(1).body().toString());
+    }
+
+    @Test
+    void theNoteIsNeverCut() throws Exception {
+        open("{\"timeouts\":{\"outputChars\":100}}", "```js\n'x'.repeat(1000) + 'END'\n```\n```js\n'next'\n```", "ok");
+        session.loop().turn("big", d -> {});
+        String fed = lastUserMessage(1);
+        assertTrue(fed.contains("characters cut"), fed);
+        assertTrue(fed.contains("END\n\nNote: your reply had 1 more js block(s)"), fed);
+        assertTrue(fed.endsWith("Send the next one in your next reply."), fed);
+    }
+
+    @Test
     void conversationAndTurnNumbersCarryAcrossTurns() throws Exception {
         open("{}", "first answer", "second answer");
         session.loop().turn("one", d -> {});
@@ -126,5 +160,27 @@ class AgentLoopTest {
         assertTrue(events.stream().filter(e -> e.type().equals("turn.started")).map(Event::turn).toList().equals(List.of(1, 2)));
         var logged = SessionLog.read(session.logPath());
         assertEquals("session.started", logged.getFirst().get("type").asText());
+    }
+
+    @Test
+    void codeInThinkingNeverRuns() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws"));
+        List<com.fasterxml.jackson.databind.JsonNode> lines = List.of(
+                dev.jharness.events.Json.object().put("thinking", "Plan:\n```js\napi.writeFile('src/App.java', 'gone')\n```\n")
+                        .put("reply", "Nothing to change."));
+        session = Session.open(tmp.resolve("home"), ws, Settings.parse("{}", "t"), Session.Access.gate(new DefaultGate()), (bus, turns) -> {
+            replay = new ReplayProvider(lines, bus, turns);
+            return replay;
+        });
+        session.bus().subscribe(events::add);
+        TurnResult r = session.loop().turn("anything?", d -> {});
+        assertEquals("done", r.stopReason());
+        assertEquals(0, r.steps());
+        assertTrue(events.stream().noneMatch(e -> e.type().equals("loop.code")));
+        assertTrue(events.stream().anyMatch(e -> e.type().equals("model.thinking_delta")));
+        Event done = events.stream().filter(e -> e.type().equals("model.completed")).findFirst().orElseThrow();
+        assertTrue(done.body().get("thinking").asText().contains("api.writeFile"));
+        assertFalse(session.loop().conversation().stream().anyMatch(m -> m.content().contains("api.writeFile")),
+                "thinking is not sent back to the model");
     }
 }

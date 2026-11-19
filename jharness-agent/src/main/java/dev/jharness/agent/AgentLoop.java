@@ -25,6 +25,8 @@ import dev.jharness.sandbox.RunResult;
 public final class AgentLoop {
 
     static final String RESULT_PREFIX = "Result of your code:\n";
+    /** Longest error text put on {@code loop.result} (spec 009 AC-03). */
+    static final int ERROR_CHARS = 2000;
 
     private volatile ModelProvider provider;
     private final AgentIsolate isolate;
@@ -162,7 +164,7 @@ public final class AgentLoop {
             }
             last = reply.text();
             conversation.add(ChatMessage.assistant(last));
-            Optional<String> code = JsBlocks.first(last);
+            Optional<JsBlocks.Found> code = JsBlocks.find(last);
             if (code.isEmpty()) {
                 return end(new TurnResult(last, "done", steps, null));
             }
@@ -170,18 +172,28 @@ public final class AgentLoop {
                 return end(new TurnResult(last, "max_steps", steps, "the turn reached agent.maxSteps (" + maxSteps + ")"));
             }
             steps++;
-            bus.publish(turns.get(), "loop.code", Json.object().put("step", steps).put("lines", code.get().split("\n", -1).length));
-            RunResult r = isolate.run(code.get(), services);
+            int ignored = code.get().ignored();
+            var codeEvent = Json.object().put("step", steps).put("lines", code.get().code().split("\n", -1).length);
+            if (ignored > 0) {
+                codeEvent.put("ignoredBlocks", ignored);
+            }
+            bus.publish(turns.get(), "loop.code", codeEvent);
+            RunResult r = isolate.run(code.get().code(), services);
             var result = Json.object().put("step", steps).put("status", r.status());
             if (r.limit() != null) {
                 result.put("limit", r.limit());
+            }
+            if (!r.status().equals("ok")) {
+                String err = r.error() != null ? r.error() : forModel(r);
+                result.put("error", err.length() > ERROR_CHARS ? err.substring(0, ERROR_CHARS) + "…" : err);
+                result.put("line", r.line());
             }
             bus.publish(turns.get(), "loop.result", result);
             if (interrupted) {
                 conversation.add(ChatMessage.user(RESULT_PREFIX + "The user stopped this code with Esc."));
                 return end(new TurnResult(last, "interrupted", steps, null));
             }
-            conversation.add(ChatMessage.user(RESULT_PREFIX + cap(forModel(r))));
+            conversation.add(ChatMessage.user(RESULT_PREFIX + cap(forModel(r)) + ignoredNote(ignored)));
         }
     }
 
@@ -192,6 +204,15 @@ public final class AgentLoop {
             text += "\n(stopped by the " + r.limit() + " limit)";
         }
         return text;
+    }
+
+    /** Tells the model that later blocks in its reply didn't run (spec 008); added after the cap so it is never cut. */
+    static String ignoredNote(int ignored) {
+        if (ignored == 0) {
+            return "";
+        }
+        return "\n\nNote: your reply had " + ignored + " more js block(s) after the first; they did not run. "
+                + "Send the next one in your next reply.";
     }
 
     /** Keeps the last {@code resultChars} characters, saying how much was cut. */

@@ -103,4 +103,88 @@ class TuiTest {
         }
         assertTrue(screen().contains("/help for commands"));
     }
+
+    private Session replaySession(Path home, Path ws, String settingsJson, Tui tui, String... replies) throws Exception {
+        return Session.open(home, ws, Settings.parse(settingsJson, "t"), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(replies), bus, turns));
+    }
+
+    @Test
+    void stepErrorsAndTheLogPathAreShown() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws3"));
+        Tui tui = new Tui(terminal("go\n/events\n/events loud\n/exit\n"), null);
+        Path log;
+        try (Session session = replaySession(tmp.resolve("home3"), ws, "{}", tui, "```js\nconst a = 1;\nnull.x;\n```", "Sorry.")) {
+            log = session.logPath();
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("Session log: " + log), sc);
+        assertTrue(sc.contains("▸ step 1: error"), sc);
+        assertTrue(sc.contains("  line 2: ") && sc.contains("null"), sc);
+        assertTrue(sc.contains("Events: steps (none, steps or all). Session log: " + log), sc);
+        assertTrue(sc.contains("Usage: /events [none|steps|all]"), sc);
+        assertFalse(sc.contains("\u001b["), "no color on a dumb terminal");
+    }
+
+    @Test
+    void eventLevels() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws4"));
+        Tui tui = new Tui(terminal("one\n/events none\ntwo\n/exit\n"), null);
+        try (Session session = replaySession(tmp.resolve("home4"), ws, "{\"ui\":{\"events\":\"all\"}}", tui,
+                "```js\n1\n```", "first done", "```js\n2\n```", "second done")) {
+            tui.run(session);
+        }
+        String sc = screen();
+        int split = sc.indexOf("Events: none");
+        String all = sc.substring(0, split);
+        String none = sc.substring(split);
+        assertTrue(all.contains("· turn.started {\"prompt\":\"one\"}"), all);
+        assertTrue(all.contains("· loop.result {"), all);
+        assertTrue(all.contains("▸ step 1: ok"), all);
+        assertFalse(all.contains("· model.delta"), all);
+        assertTrue(none.contains("second done"), none);
+        assertFalse(none.contains("▸ step"), none);
+        assertFalse(none.contains("· "), none);
+    }
+
+    @Test
+    void altEnterAndCtrlJAddLines() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws5"));
+        // Raw input as a real terminal gives it in JLine's raw mode: Enter is \r, Ctrl-J is \n.
+        var raw = new org.jline.terminal.Attributes();
+        raw.setInputFlag(org.jline.terminal.Attributes.InputFlag.ICRNL, false);
+        Terminal t = TerminalBuilder.builder().system(false).type("xterm-256color").attributes(raw)
+                .streams(new ByteArrayInputStream("first\u001b\rsecond\nthird\r/exit\r".getBytes(StandardCharsets.UTF_8)), screen).build();
+        t.setSize(new org.jline.terminal.Size(200, 50));
+        Tui tui = new Tui(t, null, java.util.Map.of());
+        Path log;
+        try (Session session = replaySession(tmp.resolve("home5"), ws, "{}", tui, "Got **three** lines.")) {
+            log = session.logPath();
+            tui.run(session);
+        }
+        var started = dev.jharness.events.SessionLog.read(log).stream().filter(e -> e.get("type").asText().equals("turn.started")).toList();
+        assertEquals(1, started.size(), started + " screen: " + screen().replace("\u001b", "<ESC>"));
+        assertEquals("first\nsecond\nthird", started.getFirst().get("prompt").asText());
+        assertTrue(screen().contains("\u001b[1mthree\u001b[0m"), "colored reply: " + screen());
+    }
+
+    @Test
+    void thinkingShownDimOrHidden() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws6"));
+        Tui tui = new Tui(terminal("one\n/thinking\ntwo\n/exit\n"), null);
+        List<com.fasterxml.jackson.databind.JsonNode> lines = List.of(
+                Json.object().put("thinking", "first idea\n").put("reply", "Answer one."),
+                Json.object().put("thinking", "second idea\n").put("reply", "Answer two."));
+        try (Session session = Session.open(tmp.resolve("home6"), ws, Settings.parse("{\"ui\":{\"thinking\":\"show\"}}", "t"),
+                Session.Access.prompter(tui.prompter()), (bus, turns) -> new ReplayProvider(lines, bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("first idea"), sc);
+        assertTrue(sc.indexOf("first idea") < sc.indexOf("Answer one."), sc);
+        assertTrue(sc.contains("Thinking: hidden"), sc);
+        assertFalse(sc.contains("second idea"), sc);
+        assertTrue(sc.contains("Answer two."), sc);
+    }
 }

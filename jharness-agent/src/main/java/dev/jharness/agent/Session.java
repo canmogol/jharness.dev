@@ -158,6 +158,10 @@ public final class Session implements AutoCloseable {
         return log.path();
     }
 
+    public Settings settings() {
+        return settings;
+    }
+
     @Override
     public void close() throws IOException {
         isolate.close();

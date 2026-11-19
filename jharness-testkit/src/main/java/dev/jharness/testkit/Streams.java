@@ -77,4 +77,57 @@ public final class Streams {
 
     public static final String ANTHROPIC_401 =
             "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}";
+
+    /** Thinking in {@code reasoning_content} (LM Studio, llama.cpp) and {@code reasoning} (Ollama), then the reply. */
+    public static final String OPENAI_REASONING = """
+            data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning_content":"The user says hi."},"finish_reason":null}]}
+
+            data: {"choices":[{"index":0,"delta":{"reasoning":" Greet back."},"finish_reason":null}]}
+
+            data: {"choices":[{"index":0,"delta":{"content":"\\n\\n"},"finish_reason":null}]}
+
+            data: {"choices":[{"index":0,"delta":{"content":"Hi!"},"finish_reason":"stop"}]}
+
+            data: [DONE]
+
+            """;
+
+    /** Inline thinking with split tags and a code block inside it, which must not run. */
+    public static final String OPENAI_THINK_TAGS = """
+            data: {"choices":[{"index":0,"delta":{"content":"<thi"},"finish_reason":null}]}
+
+            data: {"choices":[{"index":0,"delta":{"content":"nk>Maybe:\\n```js\\napi.writeFile('x', 'y')\\n```\\n</th"},"finish_reason":null}]}
+
+            data: {"choices":[{"index":0,"delta":{"content":"ink>\\n\\nNo code needed."},"finish_reason":"stop"}]}
+
+            data: [DONE]
+
+            """;
+
+    public static final String ANTHROPIC_THINKING = """
+            event: message_start
+            data: {"type":"message_start","message":{"id":"msg_2","type":"message","role":"assistant","content":[],"model":"claude-test","stop_reason":null,"usage":{"input_tokens":5,"output_tokens":1}}}
+
+            event: content_block_start
+            data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Check the file."}}
+
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig"}}
+
+            event: content_block_start
+            data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Done."}}
+
+            event: message_delta
+            data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":9}}
+
+            event: message_stop
+            data: {"type":"message_stop"}
+
+            """;
 }
