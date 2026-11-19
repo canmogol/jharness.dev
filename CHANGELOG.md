@@ -1,6 +1,16 @@
 # Changelog
 
-<!-- last-commit: 3e9a571a3c2584794f64ed52a3d7c6167a235849 -->
+<!-- last-commit: d381d7abfc470cde4d79f41902fd83824d4ada27 -->
+
+## 2026-11-19 · 011 Egress proxy and network rules
+
+- Added the `jharness-net` module: `~/.jharness/network.rules` and `.jharness/network.rules` (`default`, `allow`, `deny`; host, `*.suffix`, IP or CIDR, optional `:port`), evaluated as in D-025, with built-in denies for loopback, private, link-local and metadata addresses unless a rule names them.
+- Added the egress proxy on `127.0.0.1` with per-session credentials: HTTPS `CONNECT` tunnels and plain HTTP, every resolved IP checked and the connection pinned, and `network.allowed` / `network.blocked` / `network.asked` events.
+- Every HTTP client now goes through the proxy; each model profile's endpoint is allowed automatically.
+- Unmatched hosts ask in the TUI (`a` saves the allow to the project rules file); added `/network list|allow|deny|remove|reload`.
+- Native builds enable the `http` and `https` URL protocols, which the JDK client needs to use a proxy; the native smoke binary checks a model turn and a `CONNECT` through it.
+- Decision: Phase 2 runs proxy, then OS sandbox, then build tools; the proxy is built in-house; "always" network answers go to the project rules file (D-047).
+
 
 ## 2026-11-19 · Phase 1 gate
 
