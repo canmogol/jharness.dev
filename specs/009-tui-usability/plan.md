@@ -4,7 +4,7 @@ Spec: `spec.md` · Status: Done · Created: 2026-11-19
 
 ## Approach
 
-All changes are in `jharness-cli`, plus a `ui` settings section in `jharness-config`, a getter for the settings on `Session`, and two optional fields on `loop.result` in `AgentLoop`. A new `Styler` turns text lines into ANSI with JLine's `AttributedStringBuilder`, or returns them unchanged when color is off. The TUI buffers streamed deltas until a newline and styles each full line; the rest is flushed at the end of the turn.
+All changes are in `jharness-cli`, plus a `ui` settings section in `jharness-config`, a getter for the settings on `Session`, and two optional fields on `loop.result` in `AgentLoop`. A new `Styler` adds ANSI SGR codes to text lines, or returns them unchanged when color is off. The TUI buffers streamed deltas until a newline and styles each full line; the rest is flushed at the end of the turn.
 
 ## Constitution check
 
@@ -24,7 +24,7 @@ All changes are in `jharness-cli`, plus a `ui` settings section in `jharness-con
 
 ## Design
 
-- **Input:** widget `insert-newline` writes `\n` into the buffer; bound to `alt(\r)` and `^J` in the main keymap. `SECONDARY_PROMPT_PATTERN` is `. ` so wrapped lines line up. Bracketed paste is JLine's default.
+- **Input:** widget `jharness-newline` writes `\n` into the buffer; bound to `alt(\r)` and `^J` in the main keymap, on non-dumb terminals only. `SECONDARY_PROMPT_PATTERN` is `. ` so wrapped lines line up. Bracketed paste is JLine's default.
 - **Styler:** `Styler(boolean color)`; `line(String)` keeps fence state (```` ``` ```` / `~~~`); `step`, `error`, `diff`, `dim` helpers. Color is on when the terminal isn't `dumb` and `NO_COLOR` is unset.
 - **Events:** `UiSettings(String events)` parsed like `AgentSettings`; `Tui` keeps the level, prints the log path at start, `/events [LEVEL]`.
 - **Errors:** `AgentLoop` puts `error` (cut to 2,000 characters) and `line` on `loop.result` when status isn't `ok`.
