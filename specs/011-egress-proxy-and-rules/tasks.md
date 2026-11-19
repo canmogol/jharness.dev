@@ -6,8 +6,8 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 
 ## Group 1 — Rules
 
-- [ ] T001 Create `jharness-net`; rules-file parser with line-numbered errors; tests (AC-01)
-- [ ] T002 `NetworkRules` evaluator: built-in denies, trust, file order, deny over allow, defaults, automatic allows; tests (AC-02)
+- [x] T001 Create `jharness-net`; rules-file parser with line-numbered errors; tests (AC-01)
+- [x] T002 `NetworkRules` evaluator: built-in denies, trust, file order, deny over allow, defaults, automatic allows; tests (AC-02)
 
 ## Group 2 — Proxy
 
