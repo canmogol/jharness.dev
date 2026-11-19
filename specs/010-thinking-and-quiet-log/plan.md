@@ -36,7 +36,7 @@ final class ThinkSplitter {
     void finish();
 }
 
-/** In ModelProvider: the model.completed body for any provider. */
+/** ModelEvents (package-private): the model.completed body for any provider. */
 static ObjectNode completed(String provider, String model, ChatReply r);
 ```
 
