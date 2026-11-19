@@ -119,6 +119,17 @@ class SettingsTest {
     }
 
     @Test
+    void uiSection() throws Exception {
+        assertEquals("steps", Settings.defaults().ui().events());
+        assertEquals("all", Settings.parse("{\"ui\":{\"events\":\"all\"}}", "s").ui().events());
+        assertEquals("none", Settings.parse("{\"ui\":{\"events\":\"none\"}}", "s").ui().events());
+        assertTrue(bad("{\"ui\":{\"events\":\"some\"}}").getMessage().contains("ui.events"));
+        assertTrue(bad("{\"ui\":{\"events\":1}}").getMessage().contains("ui.events"));
+        assertTrue(bad("{\"ui\":{\"theme\":\"dark\"}}").getMessage().contains("ui.theme"));
+        assertTrue(bad("{\"ui\":true}").getMessage().contains("\"ui\""));
+    }
+
+    @Test
     void permissionsAndFiles(@TempDir Path docs) throws Exception {
         assertEquals("ask", Settings.defaults().permissions().mode());
         assertEquals("plan", Settings.parse("{\"permissions\":{\"mode\":\"plan\"}}", "s").permissions().mode());

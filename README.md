@@ -58,6 +58,8 @@ jharness --model claude       # another profile
 jharness -p "explain src/"    # one prompt, no UI; changes are denied
 ```
 
+In the UI, Alt+Enter or Ctrl-J starts a new line and Enter sends. Every event goes to the session log printed at start (`tail -f` it); `/events all` or `"ui": {"events": "all"}` in settings also shows them inline. `NO_COLOR=1` turns colors off.
+
 ## License
 
 The source code is under the [MIT License](LICENSE).

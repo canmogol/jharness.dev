@@ -11,12 +11,14 @@ import dev.jharness.security.Prompter;
 final class TerminalPrompter implements Prompter {
 
     private final LineReader reader;
+    private final Styler styler;
     volatile EscWatcher watcher;
     /** The path whose diff the last question showed, so the TUI doesn't print it twice. */
     volatile String shownPath;
 
-    TerminalPrompter(LineReader reader) {
+    TerminalPrompter(LineReader reader, Styler styler) {
         this.reader = reader;
+        this.styler = styler;
     }
 
     @Override
@@ -39,7 +41,7 @@ final class TerminalPrompter implements Prompter {
         w.println();
         String diff = op.detail().path("diff").asText("");
         if (!diff.isEmpty()) {
-            w.print(diff);
+            w.print(styler.diff(diff));
             shownPath = op.detail().path("path").asText(null);
         }
         w.println("Allow " + op.api() + ": " + op.summary() + "?");

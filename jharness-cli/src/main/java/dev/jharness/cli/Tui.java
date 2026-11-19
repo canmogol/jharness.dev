@@ -7,8 +7,11 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
 
+import org.jline.keymap.KeyMap;
+import org.jline.reader.Binding;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
+import org.jline.reader.Reference;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.UserInterruptException;
 import org.jline.terminal.Attributes;
@@ -18,6 +21,7 @@ import dev.jharness.agent.Session;
 import dev.jharness.agent.TurnResult;
 import dev.jharness.config.ConfigException;
 import dev.jharness.config.ModelProfile;
+import dev.jharness.config.UiSettings;
 import dev.jharness.events.Event;
 
 /** The terminal UI (AC-03, AC-05): line editing and history, streamed replies, code steps, slash commands. */
@@ -30,6 +34,9 @@ final class Tui {
               /diff           show the last turn's file changes
               /undo           undo the last turn's file changes and remove it from the conversation
               /rewind N       undo every turn after turn N (add --force to overwrite your own edits)
+              /events         show the event level and the session log file
+              /events LEVEL   show none, steps or all events
+              Alt+Enter, Ctrl-J  new line; Enter sends
               Esc             stop the running turn
               /help           show this help
               /exit           quit (or Ctrl-D)
@@ -38,9 +45,16 @@ final class Tui {
     private final Terminal terminal;
     private final LineReader reader;
     private final PrintWriter out;
+    private final Styler styler;
+    private final StringBuilder pending = new StringBuilder();
     private TerminalPrompter prompter;
+    private String events = UiSettings.defaults().events();
 
     Tui(Terminal terminal, Path historyFile) throws IOException {
+        this(terminal, historyFile, System.getenv());
+    }
+
+    Tui(Terminal terminal, Path historyFile, Map<String, String> env) throws IOException {
         this.terminal = terminal;
         if (historyFile != null) {
             Files.createDirectories(historyFile.getParent());
@@ -55,6 +69,22 @@ final class Tui {
         }
         this.reader = b.build();
         this.out = terminal.writer();
+        this.styler = Styler.forTerminal(terminal, env);
+        if (!terminal.getType().startsWith("dumb")) {
+            multiLine();
+        }
+    }
+
+    /** Alt+Enter and Ctrl-J insert a newline; Enter sends (AC-01). Dumb terminals have no raw keys, so they keep one line. */
+    private void multiLine() {
+        reader.getWidgets().put("jharness-newline", () -> {
+            reader.getBuffer().write("\n");
+            return true;
+        });
+        KeyMap<Binding> main = reader.getKeyMaps().get(LineReader.MAIN);
+        main.bind(new Reference("jharness-newline"), KeyMap.alt('\r'));
+        main.bind(new Reference("jharness-newline"), KeyMap.ctrl('J'));
+        reader.setVariable(LineReader.SECONDARY_PROMPT_PATTERN, ". ");
     }
 
     /** The trust question (AC-01, AC-02); end of input means no. */
@@ -87,14 +117,16 @@ final class Tui {
 
     TerminalPrompter prompter() {
         if (prompter == null) {
-            prompter = new TerminalPrompter(reader);
+            prompter = new TerminalPrompter(reader, styler);
         }
         return prompter;
     }
 
     void run(Session session) {
+        events = session.settings().ui().events();
         session.bus().subscribe(this::onEvent);
         out.println("JHarness in " + session.workspace().root() + " · model " + modelName(session) + " · /help for commands");
+        out.println(styler.dim("Session log: " + session.logPath()));
         out.flush();
         while (true) {
             String line;
@@ -118,7 +150,7 @@ final class Tui {
             TurnResult r = turn(session, t);
             out.println();
             if (!r.stopReason().equals("done")) {
-                out.println("[" + r.stopReason() + (r.error() == null ? "" : ": " + r.error()) + "]");
+                out.println(styler.error("[" + r.stopReason() + (r.error() == null ? "" : ": " + r.error()) + "]"));
             }
             out.flush();
         }
@@ -146,17 +178,39 @@ final class Tui {
             w = new EscWatcher(terminal.reader(), session.loop()::interrupt);
             prompter().watcher = w;
         }
+        styler.reset();
         try {
-            return session.loop().turn(text, d -> {
-                out.print(d);
-                out.flush();
-            });
+            return session.loop().turn(text, this::stream);
         } finally {
+            flushPending();
             if (w != null) {
                 prompter().watcher = null;
                 w.close();
                 terminal.setAttributes(saved);
             }
+        }
+    }
+
+    /** Prints whole lines of the streamed reply, styled; the rest waits for its newline (AC-02). */
+    private void stream(String delta) {
+        pending.append(delta);
+        int nl;
+        boolean printed = false;
+        while ((nl = pending.indexOf("\n")) >= 0) {
+            out.println(styler.line(pending.substring(0, nl)));
+            pending.delete(0, nl + 1);
+            printed = true;
+        }
+        if (printed) {
+            out.flush();
+        }
+    }
+
+    private void flushPending() {
+        if (!pending.isEmpty()) {
+            out.print(styler.line(pending.toString()));
+            pending.setLength(0);
+            out.flush();
         }
     }
 
@@ -203,6 +257,16 @@ final class Tui {
                     }
                 }
             }
+            case "/events" -> {
+                if (parts.length == 1) {
+                    out.println("Events: " + events + " (none, steps or all). Session log: " + session.logPath());
+                } else if (UiSettings.EVENT_LEVELS.contains(parts[1].strip())) {
+                    events = parts[1].strip();
+                    out.println("Events: " + events);
+                } else {
+                    out.println("Usage: /events [none|steps|all]");
+                }
+            }
             default -> out.println("Unknown command " + parts[0] + ". Type /help for the commands.");
         }
         out.flush();
@@ -210,11 +274,17 @@ final class Tui {
     }
 
     private void onEvent(Event e) {
+        if (e.type().equals("model.delta")) {
+            return;
+        }
+        flushPending();
+        boolean steps = !events.equals("none");
         switch (e.type()) {
             case "loop.code" -> {
-                out.println();
-                out.println("▸ step " + e.body().get("step").asInt() + ": running " + e.body().get("lines").asInt() + " lines");
-                out.flush();
+                if (steps) {
+                    out.println();
+                    out.println(styler.step("▸ step " + e.body().get("step").asInt() + ": running " + e.body().get("lines").asInt() + " lines"));
+                }
             }
             case "file.changed" -> {
                 String path = e.body().get("path").asText();
@@ -224,19 +294,29 @@ final class Tui {
                     p.shownPath = null;
                 } else if (!diff.isEmpty()) {
                     out.println();
-                    out.print(diff);
-                    out.flush();
+                    out.print(styler.diff(diff));
                 }
             }
             case "loop.result" -> {
+                String status = e.body().get("status").asText();
                 String limit = e.body().has("limit") ? " (" + e.body().get("limit").asText() + ")" : "";
-                out.println("▸ step " + e.body().get("step").asInt() + ": " + e.body().get("status").asText() + limit);
-                out.flush();
+                if (steps) {
+                    String text = "▸ step " + e.body().get("step").asInt() + ": " + status + limit;
+                    out.println(status.equals("ok") ? styler.step(text) : styler.error(text));
+                }
+                if (e.body().has("error")) {
+                    int line = e.body().path("line").asInt(0);
+                    out.println(styler.error("  " + (line > 0 ? "line " + line + ": " : "") + e.body().get("error").asText()));
+                }
             }
             default -> {
-                // Other events go to the session log only.
+                // Other events go to the session log only, unless all events are shown.
             }
         }
+        if (events.equals("all")) {
+            out.println(styler.dim("· " + e.type() + " " + e.body()));
+        }
+        out.flush();
     }
 
     Terminal terminal() {

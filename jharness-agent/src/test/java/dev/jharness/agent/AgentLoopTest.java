@@ -75,6 +75,12 @@ class AgentLoopTest {
         String first = lastUserMessage(1);
         assertTrue(first.contains("Error at line 3"), first);
         assertTrue(lastUserMessage(2).contains("Result: undefined"), lastUserMessage(2));
+        List<Event> results = events.stream().filter(e -> e.type().equals("loop.result")).toList();
+        assertEquals("error", results.get(0).body().get("status").asText());
+        assertEquals(3, results.get(0).body().get("line").asInt());
+        assertFalse(results.get(0).body().get("error").asText().isBlank(), results.get(0).body().toString());
+        assertFalse(results.get(1).body().has("error"), results.get(1).body().toString());
+        assertFalse(results.get(1).body().has("line"));
     }
 
     @Test
@@ -82,7 +88,8 @@ class AgentLoopTest {
         open("{\"sandbox\":{\"main\":{\"sandbox.MaxCPUTime\":\"1s\"}}}", "```js\nwhile (true) {}\n```", "stopping");
         session.loop().turn("spin", d -> {});
         assertTrue(lastUserMessage(1).contains("sandbox.MaxCPUTime"), lastUserMessage(1));
-        assertTrue(events.stream().anyMatch(e -> e.type().equals("loop.result") && e.body().get("status").asText().equals("limit")));
+        assertTrue(events.stream().anyMatch(e -> e.type().equals("loop.result") && e.body().get("status").asText().equals("limit")
+                && e.body().has("error")));
     }
 
     @Test

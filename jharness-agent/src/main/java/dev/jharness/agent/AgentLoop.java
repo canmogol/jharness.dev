@@ -25,6 +25,8 @@ import dev.jharness.sandbox.RunResult;
 public final class AgentLoop {
 
     static final String RESULT_PREFIX = "Result of your code:\n";
+    /** Longest error text put on {@code loop.result} (spec 009 AC-03). */
+    static final int ERROR_CHARS = 2000;
 
     private volatile ModelProvider provider;
     private final AgentIsolate isolate;
@@ -180,6 +182,11 @@ public final class AgentLoop {
             var result = Json.object().put("step", steps).put("status", r.status());
             if (r.limit() != null) {
                 result.put("limit", r.limit());
+            }
+            if (!r.status().equals("ok")) {
+                String err = r.error() != null ? r.error() : forModel(r);
+                result.put("error", err.length() > ERROR_CHARS ? err.substring(0, ERROR_CHARS) + "…" : err);
+                result.put("line", r.line());
             }
             bus.publish(turns.get(), "loop.result", result);
             if (interrupted) {
