@@ -58,6 +58,7 @@ Last updated: 2026-11-19
 | D-045 | The P1 gate passes on a local model; the live Claude run moves to the v0.1 release checks | Accepted |
 | D-046 | Streamed deltas stay off the session log; `model.completed` carries the reply and the thinking text, which is never run or sent back | Accepted |
 | D-047 | Phase 2 order: proxy and rules, then the OS sandbox, then build tools; in-house proxy in `jharness-net`; "always" network answers go to the project rules file | Accepted |
+| D-048 | Every child process runs in an OS sandbox (Seatbelt; bubblewrap on Linux): writes only to the workspace and a private temp folder, credential folders hidden, no network until spec 013; no sandbox, no process | Accepted |
 
 ---
 
@@ -646,6 +647,20 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-048 — OS sandbox for child processes
+
+**Decision.**
+- Every process `ProcessRunner` starts runs inside an OS sandbox: Seatbelt (`/usr/bin/sandbox-exec` with a generated profile) on macOS, bubblewrap (`/usr/bin/bwrap`) on Linux. Landlock is not used for now: it would need a launcher inside the binary, and its network rules cover only TCP ports.
+- Files: reads are allowed except `~/.jharness`, `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gcloud` and `~/.netrc`; writes only to the workspace (not its `.jharness/`) and a private per-session temp folder passed as `TMPDIR`. On Linux the host creates an empty `.jharness/` first, so it can be mounted read-only.
+- Network: none for every child process in spec 012 (git runs local operations only, D-039; `rg` needs none). Spec 013 opens the proxy port for the tools that need it.
+- Fail closed: the sandbox is probed at session start (`sandbox.os` event). When it's missing or doesn't work (no bubblewrap, user namespaces blocked), process operations fail with an error that says how to fix it, search uses the Java fallback, and nothing runs unsandboxed. There is no setting to turn the sandbox off.
+
+**Why.** Constitution Articles IV and V and US-3.5: a malicious build script must not reach outside the project. Both mechanisms ship with, or are one package away on, the target systems and need no code inside the binary.
+
+**Source.** Recommended options accepted while the user was away, specifying 012-os-sandbox-for-processes, 2026-11-19.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -704,6 +719,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q50 | Can the P1 gate pass without a Claude API key? | Yes, on a local model; the live Claude run becomes a v0.1 release check | Phase 2 isn't blocked on a key | D-045 |
 | Q51 | Should every streamed chunk be in the session log, and can the thinking text be logged? | No: deltas are live only, and `model.completed` holds the reply and the thinking; thinking is never run | A readable log; thinking can't smuggle code into a run | D-046 |
 | Q52 | Can builds run offline before the proxy and the OS sandbox exist, and where do "always" network answers go? | No: proxy, then sandbox, then builds; "always" appends to the project's `.jharness/network.rules` | Build scripts can't reach the network unchecked; saved answers stay with the project | D-047 |
+| Q53 | How are child processes sandboxed, and what if the sandbox is missing? | Seatbelt on macOS, bubblewrap on Linux; workspace and private temp writable, credential folders hidden, no network yet; missing sandbox means no processes | A build script can't touch the rest of the machine; there is no unsandboxed fallback | D-048 |
 
 ---
 
