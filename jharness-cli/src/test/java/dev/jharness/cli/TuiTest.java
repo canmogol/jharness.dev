@@ -11,7 +11,8 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 
 import org.jline.terminal.Terminal;
-import org.jline.terminal.TerminalBuilder;
+import org.jline.terminal.impl.DumbTerminal;
+import org.jline.terminal.impl.ExternalTerminal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -28,11 +29,24 @@ class TuiTest {
     Path tmp;
     final ByteArrayOutputStream screen = new ByteArrayOutputStream();
 
+    /**
+     * In-process terminals, so output reaches {@link #screen} on the writing thread.
+     * {@code TerminalBuilder.system(false)} may give a real PTY, whose output is copied to the stream
+     * by a background thread, so a test could read the screen before the question reached it.
+     */
     private Terminal terminal(String input) throws Exception {
-        Terminal t = TerminalBuilder.builder().system(false).dumb(true).type("dumb")
-                .streams(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)), screen).build();
+        Terminal t = new DumbTerminal("test", "dumb", new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
+                screen, StandardCharsets.UTF_8);
         t.setSize(new org.jline.terminal.Size(200, 50));
         return t;
+    }
+
+    /** An xterm in raw mode, as JLine reads a real one: Enter is \r, Ctrl-J is \n. */
+    private Terminal xterm(String input) throws Exception {
+        var raw = new org.jline.terminal.Attributes();
+        raw.setInputFlag(org.jline.terminal.Attributes.InputFlag.ICRNL, false);
+        return new ExternalTerminal(null, "test", "xterm-256color", new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
+                screen, StandardCharsets.UTF_8, Terminal.SignalHandler.SIG_DFL, false, raw, new org.jline.terminal.Size(200, 50));
     }
 
     private String screen() {
@@ -151,12 +165,7 @@ class TuiTest {
     @Test
     void altEnterAndCtrlJAddLines() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws5"));
-        // Raw input as a real terminal gives it in JLine's raw mode: Enter is \r, Ctrl-J is \n.
-        var raw = new org.jline.terminal.Attributes();
-        raw.setInputFlag(org.jline.terminal.Attributes.InputFlag.ICRNL, false);
-        Terminal t = TerminalBuilder.builder().system(false).type("xterm-256color").attributes(raw)
-                .streams(new ByteArrayInputStream("first\u001b\rsecond\nthird\r/exit\r".getBytes(StandardCharsets.UTF_8)), screen).build();
-        t.setSize(new org.jline.terminal.Size(200, 50));
+        Terminal t = xterm("first\u001b\rsecond\nthird\r/exit\r");
         Tui tui = new Tui(t, null, java.util.Map.of());
         Path log;
         try (Session session = replaySession(tmp.resolve("home5"), ws, "{}", tui, "Got **three** lines.")) {
@@ -172,13 +181,8 @@ class TuiTest {
     @Test
     void shiftEnterAddsLinesAndTheKeyModeIsOnOnlyWhileThePromptReads() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws14"));
-        var raw = new org.jline.terminal.Attributes();
-        raw.setInputFlag(org.jline.terminal.Attributes.InputFlag.ICRNL, false);
         // Shift+Enter (modifyOtherKeys), Shift+Enter (CSI u), Ctrl+Enter (modifyOtherKeys), then Enter.
-        String keys = "a\u001b[27;2;13~b\u001b[13;2uc\u001b[27;5;13~d\r/exit\r";
-        Terminal t = TerminalBuilder.builder().system(false).type("xterm-256color").attributes(raw)
-                .streams(new ByteArrayInputStream(keys.getBytes(StandardCharsets.UTF_8)), screen).build();
-        t.setSize(new org.jline.terminal.Size(200, 50));
+        Terminal t = xterm("a\u001b[27;2;13~b\u001b[13;2uc\u001b[27;5;13~d\r/exit\r");
         Tui tui = new Tui(t, null, java.util.Map.of());
         Path log;
         try (Session session = replaySession(tmp.resolve("home14"), ws, "{}", tui, "Four lines.")) {
@@ -200,8 +204,7 @@ class TuiTest {
     @Test
     void dumbTerminalsGetNoKeyMode() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws14d"));
-        Terminal t = TerminalBuilder.builder().system(false).type("dumb")
-                .streams(new ByteArrayInputStream("/exit\n".getBytes(StandardCharsets.UTF_8)), screen).build();
+        Terminal t = terminal("/exit\n");
         Tui tui = new Tui(t, null, java.util.Map.of());
         try (Session session = replaySession(tmp.resolve("home14d"), ws, "{}", tui, "unused")) {
             tui.run(session);
