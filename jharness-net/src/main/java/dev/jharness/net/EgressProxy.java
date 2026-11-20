@@ -11,8 +11,13 @@ import java.net.PasswordAuthentication;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.StandardProtocolFamily;
+import java.net.UnixDomainSocketAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -73,6 +78,8 @@ public final class EgressProxy implements AutoCloseable {
     private final Set<String> sessionAllows = ConcurrentHashMap.newKeySet();
     private final Object asking = new Object();
     private final Thread acceptor;
+    private volatile ServerSocketChannel unix;
+    private volatile Path unixPath;
     private volatile boolean closed;
 
     private EgressProxy(ServerSocket server, RulesSource source, NetworkRules rules, Prompter prompter, EventBus bus,
@@ -129,6 +136,75 @@ public final class EgressProxy implements AutoCloseable {
         rules = source.load();
     }
 
+    /**
+     * Also accepts connections on a Unix socket and relays each one to the TCP listener, so it gets
+     * the same credentials and rules. The Linux sandbox reaches the proxy only this way (D-049).
+     */
+    public synchronized void serveUnix(Path socket) throws IOException {
+        if (unix != null) {
+            throw new IllegalStateException("already serving " + unixPath);
+        }
+        Files.deleteIfExists(socket);
+        ServerSocketChannel ch = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
+        ch.bind(UnixDomainSocketAddress.of(socket));
+        unix = ch;
+        unixPath = socket;
+        Thread.ofVirtual().name("egress-proxy-unix").start(() -> {
+            while (!closed) {
+                SocketChannel c;
+                try {
+                    c = ch.accept();
+                } catch (IOException e) {
+                    return;
+                }
+                Thread.ofVirtual().name("egress-proxy-unix-conn").start(() -> relay(c));
+            }
+        });
+    }
+
+    private void relay(SocketChannel c) {
+        try (c; Socket up = new Socket(InetAddress.getLoopbackAddress(), server.getLocalPort())) {
+            Thread back = Thread.ofVirtual().start(() -> {
+                try {
+                    InputStream in = up.getInputStream();
+                    byte[] buf = new byte[16 * 1024];
+                    int n;
+                    while ((n = in.read(buf)) > 0) {
+                        ByteBuffer b = ByteBuffer.wrap(buf, 0, n);
+                        while (b.hasRemaining()) {
+                            c.write(b);
+                        }
+                    }
+                } catch (IOException e) {
+                    // either side closed
+                } finally {
+                    try {
+                        c.shutdownOutput();
+                    } catch (IOException e) {
+                        // closed
+                    }
+                }
+            });
+            try {
+                OutputStream out = up.getOutputStream();
+                ByteBuffer b = ByteBuffer.allocate(16 * 1024);
+                while (c.read(b) > 0) {
+                    out.write(b.array(), 0, b.position());
+                    out.flush();
+                    b.clear();
+                }
+                up.shutdownOutput();
+            } catch (IOException e) {
+                // either side closed
+            }
+            back.join();
+        } catch (IOException e) {
+            // the TCP listener is closed
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     @Override
     public void close() {
         closed = true;
@@ -136,6 +212,15 @@ public final class EgressProxy implements AutoCloseable {
             server.close();
         } catch (IOException e) {
             // closing
+        }
+        ServerSocketChannel u = unix;
+        if (u != null) {
+            try {
+                u.close();
+                Files.deleteIfExists(unixPath);
+            } catch (IOException e) {
+                // closing
+            }
         }
         acceptor.interrupt();
     }

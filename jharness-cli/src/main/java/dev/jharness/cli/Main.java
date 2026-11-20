@@ -49,6 +49,10 @@ public final class Main implements Callable<Integer> {
     Terminal terminal;
 
     public static void main(String[] args) {
+        if (args.length > 0 && args[0].equals(dev.jharness.process.ProxyBridge.FLAG)) {
+            // Inside the Linux sandbox: forward the proxy port and run the build tool (D-049).
+            System.exit(dev.jharness.process.ProxyBridge.run(java.util.Arrays.copyOfRange(args, 1, args.length)));
+        }
         System.exit(run(new Main(), args));
     }
 

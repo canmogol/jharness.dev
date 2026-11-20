@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.jharness.events.EventException;
 import dev.jharness.events.Json;
+import dev.jharness.process.BuildOperations;
 import dev.jharness.process.GitOperations;
 import dev.jharness.process.OperationException;
 import dev.jharness.process.ProcessResult;
@@ -402,10 +403,53 @@ public final class HostApi {
                     }
                 }
             }
-            String r = GitOperations.toJson(s.git().run(a));
+            String r = GitOperations.toJson(outsideRunClock(() -> s.git().run(a)));
             restored.forEach(p -> s.checkpoints().afterChange(turn(), p));
             return r;
         });
+    }
+
+    @HostAccess.Export
+    public String maven(String json) {
+        return build(BuildOperations.Tool.MAVEN, json);
+    }
+
+    @HostAccess.Export
+    public String gradle(String json) {
+        return build(BuildOperations.Tool.GRADLE, json);
+    }
+
+    @HostAccess.Export
+    public String npm(String json) {
+        return build(BuildOperations.Tool.NPM, json);
+    }
+
+    /** Maven, Gradle and npm (spec 013): checked first, then approved, then run in the OS sandbox. */
+    private String build(BuildOperations.Tool tool, String json) {
+        ObjectNode a;
+        ObjectNode detail;
+        try {
+            if (s.builds() == null) {
+                throw new IllegalArgumentException(tool.api() + " is not available in this session");
+            }
+            a = args(json);
+            s.builds().check(tool, a);
+            detail = BuildOperations.detail(tool, a);
+        } catch (RuntimeException e) {
+            return reject(tool.api(), e);
+        }
+        return call(tool.api(), Operation.Kind.BUILD, detail.get("op").asText(), detail,
+                () -> BuildOperations.toJson(outsideRunClock(() -> s.builds().run(tool, a))));
+    }
+
+    /** Process runs have their own timeout (D-028), so they don't count against the run's wall clock. */
+    private <T> T outsideRunClock(java.util.function.Supplier<T> body) {
+        clock.pause();
+        try {
+            return body.get();
+        } finally {
+            clock.resume();
+        }
     }
 
     @HostAccess.Export

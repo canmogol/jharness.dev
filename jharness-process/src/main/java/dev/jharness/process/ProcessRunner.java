@@ -74,6 +74,14 @@ public final class ProcessRunner {
      * @param env extra environment variables on top of the clean base
      */
     public ProcessResult run(Executable exe, List<String> args, Path cwd, Duration timeout, Map<String, String> env) {
+        return run(exe, args, cwd, timeout, env, ChildSandbox.Grants.NONE);
+    }
+
+    /**
+     * @param grants cache folders and proxy network for build tools (D-049); {@link ChildSandbox.Grants#NONE} otherwise
+     */
+    public ProcessResult run(Executable exe, List<String> args, Path cwd, Duration timeout, Map<String, String> env,
+            ChildSandbox.Grants grants) {
         if (!sandbox.available()) {
             throw new OperationException("cannot run " + exe.name() + ": no OS sandbox (" + sandbox.reason() + ")");
         }
@@ -85,7 +93,7 @@ public final class ProcessRunner {
             }
             argv.add(a);
         }
-        ProcessBuilder pb = new ProcessBuilder(sandbox.wrap(argv, cwd))
+        ProcessBuilder pb = new ProcessBuilder(sandbox.wrap(argv, cwd, grants))
                 .directory(cwd.toFile())
                 .redirectErrorStream(true)
                 .redirectInput(ProcessBuilder.Redirect.from(new File("/dev/null")));
@@ -106,7 +114,8 @@ public final class ProcessRunner {
         e.putAll(sandbox.env());
 
         var started = Json.object().put("executable", exe.name()).put("path", exe.path().toString())
-                .put("cwd", cwd.toString()).put("sandbox", sandbox.mechanism().wire());
+                .put("cwd", cwd.toString()).put("sandbox", sandbox.mechanism().wire()).put("network", grants.network())
+                .put("loopback", grants.loopback());
         var argsJson = started.putArray("args");
         args.forEach(argsJson::add);
         bus.publish(origin.get(), "process.started", started);
@@ -118,7 +127,8 @@ public final class ProcessRunner {
         } catch (IOException ex) {
             throw new UncheckedIOException("cannot start " + exe.name() + ": " + ex.getMessage(), ex);
         }
-        Capture capture = new Capture(outputChars);
+        ChildSandbox.ProxyRoute route = sandbox.route();
+        Capture capture = new Capture(outputChars, route != null ? route.password() : null);
         Thread reader = Thread.ofVirtual().start(() -> capture.drain(p));
         boolean timedOut = false;
         try {
@@ -158,10 +168,17 @@ public final class ProcessRunner {
         private final int tailChars;
         private final StringBuilder full = new StringBuilder();
         private final StringBuilder tail = new StringBuilder();
+        private final String secret;
         private long total;
 
-        Capture(int tailChars) {
+        Capture(int tailChars, String secret) {
             this.tailChars = tailChars;
+            this.secret = secret == null || secret.isEmpty() ? null : secret;
+        }
+
+        /** The proxy password reaches children through the environment, and JVMs echo it ("Picked up ..."). */
+        private String redact(String s) {
+            return secret == null ? s : s.replace(secret, "***");
         }
 
         void drain(Process p) {
@@ -189,7 +206,7 @@ public final class ProcessRunner {
         synchronized ProcessResult result(int code, boolean timedOut, long ms) {
             boolean cut = total > tailChars;
             String t = cut ? tail.substring(tail.length() - tailChars) : tail.toString();
-            return new ProcessResult(code, t, cut, full.toString(), total > FULL_OUTPUT_CHARS, timedOut, ms);
+            return new ProcessResult(code, redact(t), cut, redact(full.toString()), total > FULL_OUTPUT_CHARS, timedOut, ms);
         }
     }
 }

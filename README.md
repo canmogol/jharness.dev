@@ -17,6 +17,19 @@ This repository is planned with spec-driven development: product docs first, the
 | `user-stories.md` | Stakeholder-level user stories |
 | `specs/NNN-feature/` | One folder per feature: `spec.md`, `plan.md`, `tasks.md` |
 
+## IDs used in the docs
+
+| ID | Means | Defined in |
+| --- | --- | --- |
+| `P0`–`P4` | Roadmap phase | `product/roadmap.md` |
+| `US-N.N` | User story | `user-stories.md` |
+| `D-NNN` | Accepted decision | `product/decisions.md` |
+| `QNN` | Question behind a decision (Q&A table) | `product/decisions.md` |
+| `NNN-<slug>` | Feature: spec folder and its branch | `specs/` |
+| `AC-NN` | Acceptance criterion, numbered per spec | `specs/NNN-<slug>/spec.md` |
+| `TNNN` | Task, numbered per spec | `specs/NNN-<slug>/tasks.md` |
+| Article I–XI | Constitution rule | `product/constitution.md` |
+
 ## How a feature gets built
 
 1. Write `specs/NNN-feature/spec.md`: stories and acceptance criteria.
@@ -31,7 +44,7 @@ Phase 1 (core loop MVP) in progress. Done: the P0 spike (`specs/001-p0-spike/`),
 
 ## Build and run
 
-Needs Oracle GraalVM 25 (Java 25) and Maven; `rg` (ripgrep) is used when installed. Every process JHarness starts (git, `rg`) runs in an OS sandbox: Seatbelt on macOS (built in), bubblewrap on Linux (`sudo apt install bubblewrap`). Without it JHarness runs no processes and searches with its Java fallback.
+Needs Oracle GraalVM 25 (Java 25) and Maven; `rg` (ripgrep) is used when installed. Every process JHarness starts (git, `rg`, Maven, Gradle, npm) runs in an OS sandbox: Seatbelt on macOS (built in), bubblewrap on Linux (`sudo apt install bubblewrap`). Without it JHarness runs no processes and searches with its Java fallback.
 
 Ubuntu 24.04 blocks the user namespaces bubblewrap needs. Allow them for bwrap only:
 
@@ -75,6 +88,8 @@ jharness -p "explain src/"    # one prompt, no UI; changes are denied
 In the UI, Alt+Enter or Ctrl-J starts a new line and Enter sends. Every event goes to the session log printed at start (`tail -f` it); `/events all` or `"ui": {"events": "all"}` in settings also shows them inline. The log keeps each model reply, and its thinking text, whole on `model.completed`; `/thinking` or `"ui": {"thinking": "show"}` shows the thinking dim in the UI. `NO_COLOR=1` turns colors off.
 
 All network traffic goes through a proxy inside JHarness that applies `~/.jharness/network.rules` and the project's `.jharness/network.rules` (`default ask|allow|deny`, `allow X`, `deny X`; X is a host, `*.suffix`, IP or CIDR with an optional `:port`). Model endpoints from your profiles are allowed automatically; loopback and private addresses are denied unless a rule names them. `/network` lists and edits the rules.
+
+In a trusted project the agent can run Maven (`compile`, `test`, `verify`, `package`, `clean`), Gradle (`build`, `test`, `check`, `assemble`, `clean`) and npm (`ci`, `install`, `test`, `run <script>`), each after your approval. `./mvnw` and `./gradlew` are used when present; `./gradlew` must pin `distributionSha256Sum`. Builds may write only to the workspace and their caches (`~/.m2/repository`, `~/.gradle/caches` and friends, `~/.npm`), and reach the network only through the proxy and its rules, so add `allow repo.maven.apache.org`, `allow plugins.gradle.org` or `allow registry.npmjs.org` (or answer "always" when asked). On macOS, Gradle builds can also reach services on your Mac's loopback and accept connections from your LAN (Gradle's daemon needs loopback, and macOS's sandbox can't narrow it; D-050), and Maven and npm tests that start their own local servers can't run inside the sandbox yet.
 
 ## License
 

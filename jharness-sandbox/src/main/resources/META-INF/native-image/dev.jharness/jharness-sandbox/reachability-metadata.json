@@ -51,6 +51,24 @@
           "parameterTypes": [
             "java.lang.String"
           ]
+        },
+        {
+          "name": "maven",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "gradle",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "npm",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         }
       ]
     }

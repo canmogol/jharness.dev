@@ -56,8 +56,14 @@ public final class GitOperations {
     private final Executable git;
     private final Workspace workspace;
     private final Duration timeout;
+    private final Duration max;
 
     public GitOperations(ProcessRunner runner, Executable git, Workspace workspace, Duration timeout) {
+        this(runner, git, workspace, timeout, Duration.ofMinutes(10));
+    }
+
+    /** @param max the most {@code timeoutMs} may ask for (D-028) */
+    public GitOperations(ProcessRunner runner, Executable git, Workspace workspace, Duration timeout, Duration max) {
         if (!git.name().equals("git")) {
             throw new IllegalArgumentException("not git: " + git);
         }
@@ -65,6 +71,7 @@ public final class GitOperations {
         this.git = git;
         this.workspace = workspace;
         this.timeout = timeout;
+        this.max = max;
     }
 
     public static Set<String> operations() {
@@ -90,8 +97,10 @@ public final class GitOperations {
         String op = op(req);
         for (Iterator<String> it = req.fieldNames(); it.hasNext(); ) {
             String f = it.next();
-            if (!f.equals("op") && !FIELDS.get(op).contains(f)) {
-                throw new OperationException("git " + op + " does not take \"" + f + "\" (takes: " + String.join(", ", FIELDS.get(op)) + ")");
+            if (!f.equals("op") && !f.equals(CallTimeout.FIELD) && !FIELDS.get(op).contains(f)) {
+                List<String> takes = new ArrayList<>(new java.util.TreeSet<>(FIELDS.get(op)));
+                takes.add(CallTimeout.FIELD);
+                throw new OperationException("git " + op + " does not take \"" + f + "\" (takes: " + String.join(", ", takes) + ")");
             }
         }
         List<String> a = new ArrayList<>();
@@ -161,13 +170,13 @@ public final class GitOperations {
     public ProcessResult run(ObjectNode req) {
         List<String> argv = new ArrayList<>(HARDENING);
         argv.addAll(args(req));
-        return runner.run(git, argv, workspace.root(), timeout, ENV);
+        return runner.run(git, argv, workspace.root(), CallTimeout.of(req, timeout, max), ENV);
     }
 
     /** Result as the JSON string {@code api.git} returns. */
     public static String toJson(ProcessResult r) {
         return Json.write(Json.object().put("exitCode", r.exitCode()).put("output", r.output())
-                .put("truncated", r.truncated()).put("timedOut", r.timedOut()));
+                .put("truncated", r.truncated()).put("timedOut", r.timedOut()).put("durationMs", r.durationMs()));
     }
 
     private static boolean bool(ObjectNode req, String f) {

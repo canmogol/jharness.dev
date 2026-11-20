@@ -42,6 +42,9 @@ public final class Smoke {
     private final List<String> failures = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
+        if (args.length > 0 && args[0].equals(dev.jharness.process.ProxyBridge.FLAG)) {
+            System.exit(dev.jharness.process.ProxyBridge.run(java.util.Arrays.copyOfRange(args, 1, args.length)));
+        }
         Smoke s = new Smoke();
         s.run();
         System.out.println(Json.write(Json.object().put("smoke", s.failures.isEmpty() ? "pass" : "fail")
@@ -179,6 +182,8 @@ public final class Smoke {
             }
         }
 
+        buildThroughProxy(tmp, bus, o);
+
         // The agent loop with recorded replies: the P1 gate scenario.
         Path repo = SampleRepo.create(tmp.resolve("repo"));
         try (dev.jharness.agent.Session session = dev.jharness.agent.Session.open(home, repo, Settings.defaults(),
@@ -210,9 +215,102 @@ public final class Smoke {
         log.close();
         List<JsonNode> back = SessionLog.read(log.path());
         List<Event> logged = events.stream().filter(e -> !SessionLog.LIVE_ONLY.contains(e.type())).toList();
-        check("session log", back.size() == logged.size() && back.getLast().equals(logged.getLast().toJson()),
+        check("session log", back.size() == logged.size() && back.getLast().toString().equals(logged.getLast().toJson().toString()),
                 back.size() + " lines, " + logged.size() + " logged events");
         check("event types", events.stream().map(Event::type).toList().containsAll(List.of("api.call", "permission.decided",
                 "process.completed", "sandbox.limit_exceeded", "sandbox.watchdog", "model.delta", "agent.smoke")), "all present");
     }
+
+    /**
+     * Spec 013: an npm script in the OS sandbox tunnels through the egress proxy to an allowed stub
+     * and can't connect to it directly. On Linux this runs this binary again as the proxy bridge.
+     */
+    private void buildThroughProxy(Path tmp, EventBus bus, Origin o) throws Exception {
+        try (java.net.ServerSocket web = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+            Thread.ofVirtual().start(() -> {
+                while (!web.isClosed()) {
+                    try (java.net.Socket c = web.accept()) {
+                        var in = c.getInputStream();
+                        StringBuilder head = new StringBuilder();
+                        int b;
+                        while ((b = in.read()) >= 0 && !head.append((char) b).toString().endsWith("\r\n\r\n")) {
+                            // read the request head
+                        }
+                        c.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 15\r\nConnection: close\r\n\r\nhello from stub"
+                                .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                    } catch (java.io.IOException e) {
+                        // closed
+                    }
+                }
+            });
+            Path ws = Files.createDirectories(tmp.resolve("build-ws")).toRealPath();
+            var allow = List.of(dev.jharness.net.RulesFile.rule(dev.jharness.net.Rule.Action.ALLOW, "127.0.0.1:" + web.getLocalPort(), "smoke"));
+            try (dev.jharness.net.EgressProxy proxy = dev.jharness.net.EgressProxy.start(() -> new dev.jharness.net.NetworkRules(
+                    dev.jharness.net.RulesFile.empty(tmp.resolve("g.rules")), dev.jharness.net.RulesFile.empty(tmp.resolve("p.rules")), true, allow),
+                    null, bus, () -> o, tmp.resolve("p.rules"))) {
+                Path sock = Files.createTempDirectory("jh-smoke-net-").resolve("proxy.sock");
+                Path home = Path.of(System.getProperty("user.home"));
+                dev.jharness.process.ChildSandbox sb = dev.jharness.process.ChildSandbox.detect(dev.jharness.process.ChildSandbox.Policy
+                        .forSession(ws, Files.createDirectories(tmp.resolve("build-tmp")), home));
+                if (sb.mechanism() == dev.jharness.process.ChildSandbox.Mechanism.BUBBLEWRAP && sb.available()) {
+                    proxy.serveUnix(sock);
+                }
+                var cred = proxy.credentials();
+                sb = sb.withProxy(new dev.jharness.process.ChildSandbox.ProxyRoute(proxy.address().getPort(), sock, cred.getUserName(),
+                        new String(cred.getPassword())), dev.jharness.process.ChildSandbox.selfBridgeCommand());
+                Files.writeString(ws.resolve("probe.js"), PROBE_JS);
+                Files.writeString(ws.resolve("package.json"), "{\"name\":\"smoke\",\"version\":\"1.0.0\",\"scripts\":{\"probe\":\"node probe.js 127.0.0.1:"
+                        + web.getLocalPort() + "\"}}");
+                var tools = dev.jharness.process.BuildOperations.findOnPath(ws);
+                var ops = new dev.jharness.process.BuildOperations(new ProcessRunner(bus, () -> o, 30_000, sb), new Workspace(ws),
+                        Timeouts.defaults(), true, tools, home, System.getenv("JAVA_HOME"));
+                String out;
+                try {
+                    out = ops.run(dev.jharness.process.BuildOperations.Tool.NPM, Json.parseObject("{\"op\":\"run\",\"script\":\"probe\"}")).output();
+                } catch (RuntimeException e) {
+                    out = e.toString();
+                }
+                check("npm through the sandbox and the proxy (" + sb.mechanism().wire() + ")", out.contains("proxied ok") && out.contains("direct-failed")
+                        && !out.contains(new String(cred.getPassword())), out);
+            }
+        }
+    }
+
+    /** Tunnels to the stub through the proxy in npm_config_https_proxy, then tries the stub directly. */
+    static final String PROBE_JS = """
+            const net = require('net');
+            const u = new URL(process.env.npm_config_https_proxy);
+            const target = process.argv[2];
+            const port = Number(target.split(':')[1]);
+            const auth = Buffer.from(decodeURIComponent(u.username) + ':' + decodeURIComponent(u.password)).toString('base64');
+            function direct(done) {
+              const s = net.connect({ host: '127.0.0.1', port });
+              s.setTimeout(3000);
+              s.on('connect', () => { done('direct-connected'); s.destroy(); });
+              s.on('error', (e) => done('direct-failed ' + e.code));
+              s.on('timeout', () => { done('direct-failed timeout'); s.destroy(); });
+            }
+            function proxied(done) {
+              const s = net.connect({ host: u.hostname, port: Number(u.port) });
+              let buf = '';
+              let tunnelled = false;
+              s.setTimeout(8000);
+              s.on('connect', () => s.write('CONNECT ' + target + ' HTTP/1.1\\r\\nHost: ' + target
+                  + '\\r\\nProxy-Authorization: Basic ' + auth + '\\r\\n\\r\\n'));
+              s.on('data', (d) => {
+                buf += d;
+                if (!tunnelled && buf.includes('\\r\\n\\r\\n')) {
+                  tunnelled = true;
+                  if (!/^HTTP\\/1\\.[01] 200/.test(buf)) { done('proxy-refused ' + buf.split('\\r\\n')[0]); s.destroy(); return; }
+                  buf = '';
+                  s.write('GET / HTTP/1.1\\r\\nHost: ' + target + '\\r\\nConnection: close\\r\\n\\r\\n');
+                }
+              });
+              s.on('end', () => done(buf.includes('hello from stub') ? 'proxied ok' : 'proxied bad ' + JSON.stringify(buf)));
+              s.on('error', (e) => done('proxied-failed ' + e.code));
+              s.on('timeout', () => { done('proxied-failed timeout'); s.destroy(); });
+            }
+            let once = false;
+            proxied((a) => { if (once) return; once = true; console.log(a); direct((b) => console.log(b)); });
+            """;
 }

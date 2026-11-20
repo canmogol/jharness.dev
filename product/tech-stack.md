@@ -91,7 +91,7 @@ Process results return the exit code and the last 30,000 characters of output (c
 | --- | --- |
 | git | Hooks, fsmonitor and `ext::` protocol disabled on every call |
 | Maven (`mvn`, `./mvnw`) | Batch mode; wrapper only in trusted projects |
-| Gradle (`./gradlew`, `gradle`) | Plain console; wrapper must pin `distributionSha256Sum` |
+| Gradle (`./gradlew`, `gradle`) | Plain console, `--no-daemon`; wrapper must pin `distributionSha256Sum` |
 | npm | `--ignore-scripts` on install; `npm ci` with a lockfile |
 | rg | Search only; read-only, no network, no approval needed |
 
@@ -105,16 +105,16 @@ All outbound traffic goes through the host egress proxy (decision D-025).
 | npm | `HTTPS_PROXY` / `HTTP_PROXY` |
 | git | `-c http.proxy=...`; ssh remotes blocked in v1 |
 | Maven | Generated global settings file (`--global-settings`) with the proxy entry |
-| Gradle | `-Dhttp(s).proxyHost` / `-Dhttp(s).proxyPort` |
+| Gradle (and JVMs a build starts) | `http(s).proxyHost/Port/User/Password` in `JAVA_TOOL_OPTIONS`, never on argv (D-049) |
 
 ## OS sandbox for build tools
 
-The sandbox also limits network access to the proxy port, so a build script can't skip the proxy.
+The sandbox also limits network access to the proxy port, so a build script can't skip the proxy (D-049). git and `rg` get no network.
 
-| Platform | Mechanism |
-| --- | --- |
-| Linux | bubblewrap (`/usr/bin/bwrap`); Landlock not used for now (D-048) |
-| macOS | Seatbelt (`/usr/bin/sandbox-exec` with a generated deny-by-default profile) |
+| Platform | Mechanism | Network for build tools |
+| --- | --- | --- |
+| Linux | bubblewrap (`/usr/bin/bwrap`); Landlock not used for now (D-048) | Private network namespace; `jharness __proxy-bridge` inside forwards `127.0.0.1:<port>` to the proxy's Unix socket |
+| macOS | Seatbelt (`/usr/bin/sandbox-exec` with a generated deny-by-default profile) | `(allow network-outbound (remote ip "localhost:<port>"))`; Gradle also gets any `localhost` port (D-050) |
 
 ## Platforms and release
 

@@ -53,15 +53,15 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 
 ## Phase 2 — Build tools and hardening
 
-- [ ] Maven, Gradle and npm typed operations through `ProcessRunner`
-- [ ] Per-operation timeouts with `timeoutMs` (2 min default, 10 min max for builds) and process-tree kill
-- [ ] Output returned to the model capped at the last 30,000 characters plus exit code; full output in the session log
+- [x] Maven, Gradle and npm typed operations through `ProcessRunner`
+- [x] Per-operation timeouts with `timeoutMs` (2 min default, 10 min max for builds) and process-tree kill
+- [x] Output returned to the model capped at the last 30,000 characters plus exit code; full output in the session log
 - [ ] Command-execution checks (no shell, pinned executables, argument validation, git hardening, clean environment, process-tree kill)
 - [x] OS sandbox for build tools (bubblewrap or Landlock on Linux, Seatbelt on macOS)
 - [ ] `api.http` and web fetch
-- [ ] Egress proxy in the host: every HTTP client and command-line tool goes through it (HTTP clients: spec 011; command-line tools: spec 013)
+- [ ] Egress proxy in the host: every HTTP client and command-line tool goes through it (HTTP clients: spec 011; Maven, Gradle and npm: spec 013; git network operations still to come)
 - [x] Rules files `~/.jharness/network.rules` (general) and `.jharness/network.rules` (project); DNS pinning; `/network` commands
-- [ ] OS sandbox allows network only to the proxy port
+- [x] OS sandbox allows network only to the proxy port
 - [ ] Offline mode: network default deny, Maven/Gradle/npm offline flags, no update checks (D-033)
 - [ ] Injection, malicious-repo and sandbox-escape test suites, on JVM and native
 - [ ] Model profiles; retries and rate-limit handling

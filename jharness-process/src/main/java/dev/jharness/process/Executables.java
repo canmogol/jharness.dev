@@ -12,14 +12,14 @@ import java.util.Set;
  */
 public final class Executables {
 
-    /** Tools allowed in this feature; Maven, Gradle and npm arrive in P2. */
-    public static final Set<String> ALLOWED = Set.of("git", "rg");
+    /** The tools JHarness runs (D-008, D-009, D-027). */
+    public static final Set<String> ALLOWED = Set.of("git", "rg", "mvn", "gradle", "npm");
 
     private Executables() {}
 
     public static Optional<Executable> resolve(String name, String pathEnv, Path workspace) {
         if (!ALLOWED.contains(name)) {
-            throw new IllegalArgumentException(name + " is not a tool JHarness runs (allowed: git, rg)");
+            throw new IllegalArgumentException(name + " is not a tool JHarness runs (allowed: " + String.join(", ", new java.util.TreeSet<>(ALLOWED)) + ")");
         }
         if (pathEnv == null) {
             return Optional.empty();
@@ -43,7 +43,7 @@ public final class Executables {
                 if (ws != null && real.startsWith(ws)) {
                     continue;
                 }
-                return Optional.of(new Executable(name, real));
+                return Optional.of(new Executable(name, real, d));
             }
         }
         return Optional.empty();

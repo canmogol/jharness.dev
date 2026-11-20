@@ -17,7 +17,7 @@ class ExecutablesTest {
     @Test
     void onlyKnownToolsResolve() {
         assertThrows(IllegalArgumentException.class, () -> Executables.resolve("sh", "/bin", tmp));
-        assertThrows(IllegalArgumentException.class, () -> Executables.resolve("mvn", "/usr/bin", tmp));
+        assertThrows(IllegalArgumentException.class, () -> Executables.resolve("npx", "/usr/bin", tmp));
     }
 
     @Test

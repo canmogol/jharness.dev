@@ -2,7 +2,7 @@
 
 The rules every feature must follow. A feature's `plan.md` must pass the constitution check below before tasks are written. Changing an article needs a new entry in `decisions.md` that says why.
 
-Version 1.4 · Ratified 2026-11-16 · Amended 2026-11-17 (Article VII: reviewer only tightens, D-031; Article III: JS-only hooks, D-022, and configurable limit values, D-003; Article IV: stdio MCP servers, D-023, and `rg`, D-027)
+Version 1.5 · Ratified 2026-11-16 · Amended 2026-11-20 (Article V: Gradle loopback on macOS, D-050), 2026-11-17 (Article VII: reviewer only tightens, D-031; Article III: JS-only hooks, D-022, and configurable limit values, D-003; Article IV: stdio MCP servers, D-023, and `rg`, D-027)
 
 ---
 
@@ -25,8 +25,8 @@ Agent code cannot start processes. The host starts processes only through `Proce
 *Source: D-008, D-009, D-023, D-027*
 
 ### V. All network traffic goes through the host proxy
-Every outbound connection, from the Java `HttpClient` and from every command-line tool, goes through the host egress proxy and its rules files. No code may build an HTTP client or open a socket that skips it. Build tools run in an OS sandbox that only allows the proxy port.
-*Source: D-012, D-025*
+Every outbound connection, from the Java `HttpClient` and from every command-line tool, goes through the host egress proxy and its rules files. No code may build an HTTP client or open a socket that skips it. Build tools run in an OS sandbox that only allows the proxy port. One exception: on macOS, Gradle runs may also use any loopback port, for Gradle's daemon, which also lets them accept connections from the LAN ([D-050](decisions.md#d-050--gradle-on-macos-uses-loopback)).
+*Source: D-012, D-025, D-049, D-050*
 
 ### VI. Strings at the boundary
 Only strings and JSON cross into and out of isolates. No live host object is handed to the guest.

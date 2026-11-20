@@ -14,20 +14,29 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Constitution quality gate: no {@code ProcessBuilder} or {@code Runtime.exec} outside
- * {@code ProcessRunner}, and no {@code HttpClient} or socket outside {@code HttpClients} (AC-01).
+ * {@code ProcessRunner}, and no {@code HttpClient} or socket outside {@code HttpClients} (AC-01). The
+ * one exception is {@code ProxyBridge} (spec 013, D-049): it runs inside the Linux sandbox, starts the
+ * argv {@code ProcessRunner} gave it and connects only to the egress proxy's Unix socket.
  * Scans the main sources of every product module; test code and this testkit are not product code.
  */
 class ArchitectureTest {
 
-    record Rule(String name, Pattern pattern, String allowedFile) {}
+    static final String BRIDGE = "jharness-process/src/main/java/dev/jharness/process/ProxyBridge.java";
+
+    record Rule(String name, Pattern pattern, List<String> allowedFiles) {
+
+        String allowedFile() {
+            return allowedFiles.getFirst();
+        }
+    }
 
     static final List<Rule> RULES = List.of(
             new Rule("process start", Pattern.compile("new\\s+ProcessBuilder\\b|Runtime\\s*\\.\\s*getRuntime\\s*\\(\\s*\\)\\s*\\.\\s*exec|\\.exec\\s*\\(\\s*new\\s+String"),
-                    "jharness-process/src/main/java/dev/jharness/process/ProcessRunner.java"),
+                    List.of("jharness-process/src/main/java/dev/jharness/process/ProcessRunner.java", BRIDGE)),
             new Rule("HTTP client", Pattern.compile("HttpClient\\s*\\.\\s*(newBuilder|newHttpClient)\\b"),
-                    "jharness-llm/src/main/java/dev/jharness/llm/http/HttpClients.java"),
+                    List.of("jharness-llm/src/main/java/dev/jharness/llm/http/HttpClients.java")),
             new Rule("socket", Pattern.compile("new\\s+(Server)?Socket\\s*\\(|(Server)?SocketChannel\\s*\\.\\s*open|new\\s+DatagramSocket|HttpServer\\s*\\.\\s*create"),
-                    "jharness-net/src/main/java/dev/jharness/net/EgressProxy.java"));
+                    List.of("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", BRIDGE)));
 
     static Path root() {
         Path p = Path.of("").toAbsolutePath();
@@ -51,7 +60,7 @@ class ArchitectureTest {
                     String rel = root.relativize(f).toString().replace('\\', '/');
                     String text = Files.readString(f);
                     for (Rule r : RULES) {
-                        if (r.pattern().matcher(text).find() && !rel.equals(r.allowedFile())) {
+                        if (r.pattern().matcher(text).find() && !r.allowedFiles().contains(rel)) {
                             violations.add(r.name() + " in " + rel);
                         }
                     }
@@ -73,5 +82,7 @@ class ArchitectureTest {
         // Sockets are allowed only in the egress proxy (spec 011 AC-08); anywhere else is a violation.
         assertEquals("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", RULES.get(2).allowedFile());
         assertNotEquals("jharness-llm/src/main/java/dev/jharness/llm/OpenAiCompatibleProvider.java", RULES.get(2).allowedFile());
+        assertEquals(List.of("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", BRIDGE), RULES.get(2).allowedFiles());
+        assertEquals(List.of(), RULES.get(1).allowedFiles().stream().filter(f -> f.equals(BRIDGE)).toList());
     }
 }
