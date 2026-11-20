@@ -61,6 +61,7 @@ Last updated: 2026-11-20
 | D-048 | Every child process runs in an OS sandbox (Seatbelt; bubblewrap on Linux): writes only to the workspace and a private temp folder, credential folders hidden, no network until spec 013; no sandbox, no process | Accepted |
 | D-049 | Build tools: typed Maven, Gradle and npm operations in trusted projects; network only to the proxy port (Seatbelt rule on macOS, an in-binary bridge over a Unix socket on Linux); writes to their caches only | Accepted |
 | D-050 | Gradle on macOS may use any loopback port, for its daemon, and so can also accept LAN connections: a recorded exception to Article V | Accepted |
+| D-051 | Shift+Enter for a new line through xterm `modifyOtherKeys` (on only while the prompt reads); `agent.maxSteps` 100 by default, at most 500 | Accepted |
 
 ---
 
@@ -696,6 +697,21 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-051 — Shift+Enter and the step limit
+
+**Decision.**
+- While the `> ` prompt reads a line, JHarness turns on xterm `modifyOtherKeys` level 1 (`ESC[>4;1m`) and resets it (`ESC[>4m`) after the line is read. Shift, Alt and Ctrl+Enter insert a newline, in both the `modifyOtherKeys` and CSI u forms. Alt+Enter (`ESC` `CR`) and Ctrl-J keep working; Enter sends.
+- Terminals that don't report Shift+Enter send a plain Enter. The README shows how to map Shift+Enter to Alt+Enter in VS Code, kitty and iTerm2.
+- `agent.maxSteps` defaults to 100 and may be 1 to 500. This changes spec 003's default of 25 and maximum of 200.
+
+**Why.** Users expect Shift+Enter from chat tools. Level 1 changes only keys with no standard meaning, so Esc, Ctrl-C, Ctrl-D and arrows stay as they are; the kitty keyboard protocol would change Esc and Ctrl-letter keys too. 25 steps were too few for real tasks in the user's runs.
+
+**Rejected.** The kitty keyboard protocol. Keeping Alt+Enter as the only new-line key.
+
+**Source.** User request on 2026-11-20; recommended options accepted while the user was away, specifying 014-shift-enter-and-step-limit, 2026-11-20.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -757,6 +773,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q53 | How are child processes sandboxed, and what if the sandbox is missing? | Seatbelt on macOS, bubblewrap on Linux; workspace and private temp writable, credential folders hidden, no network yet; missing sandbox means no processes | A build script can't touch the rest of the machine; there is no unsandboxed fallback | D-048 |
 | Q54 | How do Maven, Gradle and npm run, and how do they reach the network? | Typed build and test ops in trusted projects, with approval; the sandbox opens only the proxy port (Seatbelt rule; a bridge over a Unix socket on Linux); caches writable, their config files not | Builds keep using the user's caches while every connection goes through the rules | D-049 |
 | Q55 | Should Gradle run on macOS, where its daemon needs loopback that Seatbelt can't narrow (and that also admits LAN connections)? | Yes, Gradle runs only, as a recorded Article V exception, LAN inbound included | Gradle works on every target; Maven and npm keep the proxy-only rule | D-050 |
+| Q56 | Can Shift+Enter start a new line, and how many steps may a turn take? | Yes where the terminal reports it (`modifyOtherKeys`, only while the prompt reads); 100 steps by default, at most 500 | Familiar multi-line input without breaking Esc or Ctrl-C; longer tasks finish | D-051 |
 
 ---
 

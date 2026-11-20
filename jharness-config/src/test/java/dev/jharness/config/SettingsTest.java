@@ -111,10 +111,11 @@ class SettingsTest {
 
     @Test
     void agentSection() throws Exception {
-        assertEquals(25, Settings.defaults().agent().maxSteps());
+        assertEquals(100, Settings.defaults().agent().maxSteps());
+        assertEquals(500, Settings.parse("{\"agent\":{\"maxSteps\":500}}", "s").agent().maxSteps());
         assertEquals(5, Settings.parse("{\"agent\":{\"maxSteps\":5}}", "s").agent().maxSteps());
         assertTrue(bad("{\"agent\":{\"maxSteps\":0}}").getMessage().contains("agent.maxSteps"));
-        assertTrue(bad("{\"agent\":{\"maxSteps\":201}}").getMessage().contains("agent.maxSteps"));
+        assertTrue(bad("{\"agent\":{\"maxSteps\":501}}").getMessage().contains("1 to 500"));
         assertTrue(bad("{\"agent\":{\"steps\":3}}").getMessage().contains("agent.steps"));
     }
 

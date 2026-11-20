@@ -47,11 +47,15 @@ final class Tui {
               /network allow|deny X [--project]   add a rule (host, *.suffix, IP or CIDR, optional :port)
               /network remove X [--project]       remove the rules naming X
               /network reload re-read both rules files
-              Alt+Enter, Ctrl-J  new line; Enter sends
+              Shift+Enter, Alt+Enter, Ctrl-J  new line; Enter sends
               Esc             stop the running turn
               /help           show this help
               /exit           quit (or Ctrl-D)
             """;
+
+    /** xterm {@code modifyOtherKeys} level 1, so Shift+Enter is reported (D-051); and the reset. */
+    static final String MODIFY_KEYS_ON = "\u001b[>4;1m";
+    static final String MODIFY_KEYS_OFF = "\u001b[>4m";
 
     private final Terminal terminal;
     private final LineReader reader;
@@ -88,7 +92,11 @@ final class Tui {
         }
     }
 
-    /** Alt+Enter and Ctrl-J insert a newline; Enter sends (AC-01). Dumb terminals have no raw keys, so they keep one line. */
+    /**
+     * Alt+Enter and Ctrl-J insert a newline; Enter sends (spec 009 AC-01). Shift, Alt and Ctrl+Enter
+     * also do, as {@code modifyOtherKeys} or CSI u sequences (spec 014 AC-02). Dumb terminals have no
+     * raw keys, so they keep one line.
+     */
     private void multiLine() {
         reader.getWidgets().put("jharness-newline", () -> {
             reader.getBuffer().write("\n");
@@ -97,6 +105,10 @@ final class Tui {
         KeyMap<Binding> main = reader.getKeyMaps().get(LineReader.MAIN);
         main.bind(new Reference("jharness-newline"), KeyMap.alt('\r'));
         main.bind(new Reference("jharness-newline"), KeyMap.ctrl('J'));
+        for (int mod = 2; mod <= 8; mod++) {
+            main.bind(new Reference("jharness-newline"), "\u001b[27;" + mod + ";13~");
+            main.bind(new Reference("jharness-newline"), "\u001b[13;" + mod + "u");
+        }
         reader.setVariable(LineReader.SECONDARY_PROMPT_PATTERN, ". ");
     }
 
@@ -145,7 +157,7 @@ final class Tui {
         while (true) {
             String line;
             try {
-                line = reader.readLine("> ");
+                line = readPrompt();
             } catch (UserInterruptException e) {
                 continue;
             } catch (EndOfFileException e) {
@@ -174,6 +186,23 @@ final class Tui {
             out.println("could not save history: " + e.getMessage());
         }
         out.flush();
+    }
+
+    /** The {@code > } prompt, with modified keys reported only while it reads (spec 014 AC-01). */
+    private String readPrompt() {
+        boolean keys = !terminal.getType().startsWith("dumb");
+        if (keys) {
+            out.print(MODIFY_KEYS_ON);
+            out.flush();
+        }
+        try {
+            return reader.readLine("> ");
+        } finally {
+            if (keys) {
+                out.print(MODIFY_KEYS_OFF);
+                out.flush();
+            }
+        }
     }
 
     /** Runs a turn with Esc watched (not on dumb terminals, which have no raw input). */
