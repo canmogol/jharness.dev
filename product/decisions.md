@@ -60,7 +60,7 @@ Last updated: 2026-11-20
 | D-047 | Phase 2 order: proxy and rules, then the OS sandbox, then build tools; in-house proxy in `jharness-net`; "always" network answers go to the project rules file | Accepted |
 | D-048 | Every child process runs in an OS sandbox (Seatbelt; bubblewrap on Linux): writes only to the workspace and a private temp folder, credential folders hidden, no network until spec 013; no sandbox, no process | Accepted |
 | D-049 | Build tools: typed Maven, Gradle and npm operations in trusted projects; network only to the proxy port (Seatbelt rule on macOS, an in-binary bridge over a Unix socket on Linux); writes to their caches only | Accepted |
-| D-050 | Gradle on macOS may use any loopback port, for its daemon: a recorded exception to Article V | Accepted |
+| D-050 | Gradle on macOS may use any loopback port, for its daemon, and so can also accept LAN connections: a recorded exception to Article V | Accepted |
 
 ---
 
@@ -683,9 +683,10 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Decision.**
 - On macOS, Gradle runs get three more Seatbelt rules: bind, accept and connect on any `localhost` port, TCP and UDP. Maven, npm, git and `rg` keep only the proxy port.
-- This is a recorded exception to Article V, which now names it (constitution 1.5): a Gradle build on macOS can reach any service listening on the Mac's loopback (databases, Docker, a local proxy) without the egress proxy. Outside hosts stay blocked.
+- This is a recorded exception to Article V, which now names it (constitution 1.5): a Gradle build on macOS can reach any service listening on the Mac's loopback (databases, Docker, a local proxy) without the egress proxy. It can also listen on `0.0.0.0` and accept connections from other machines on the LAN: Seatbelt's `localhost` rule matches a wildcard bind, and accepted connections aren't checked. It still can't open connections to outside hosts. A test pins this (and that Linux stays closed), so a change in Seatbelt is noticed.
 - Linux is unchanged: bubblewrap's loopback is private to the sandbox, so Gradle needs no exception there.
 - `process.started` carries `loopback: true` for these runs.
+- Separately, JVM build tools get `-Djava.net.preferIPv4Stack=true`: Seatbelt's `localhost` doesn't match a dual-stack socket's `::ffff:127.0.0.1`, so without it a JVM can't reach the proxy (or Gradle its daemon).
 
 **Why.** Gradle 9 forks a single-use daemon even with `--no-daemon`, and the client and daemon talk over loopback TCP; its lock handling uses loopback UDP. Seatbelt can't limit loopback to one process's own sockets, so the choice was this exception or no Gradle on macOS. Gradle runs already need a trusted project and approval, and the build code they run is the project's own.
 
@@ -755,7 +756,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q52 | Can builds run offline before the proxy and the OS sandbox exist, and where do "always" network answers go? | No: proxy, then sandbox, then builds; "always" appends to the project's `.jharness/network.rules` | Build scripts can't reach the network unchecked; saved answers stay with the project | D-047 |
 | Q53 | How are child processes sandboxed, and what if the sandbox is missing? | Seatbelt on macOS, bubblewrap on Linux; workspace and private temp writable, credential folders hidden, no network yet; missing sandbox means no processes | A build script can't touch the rest of the machine; there is no unsandboxed fallback | D-048 |
 | Q54 | How do Maven, Gradle and npm run, and how do they reach the network? | Typed build and test ops in trusted projects, with approval; the sandbox opens only the proxy port (Seatbelt rule; a bridge over a Unix socket on Linux); caches writable, their config files not | Builds keep using the user's caches while every connection goes through the rules | D-049 |
-| Q55 | Should Gradle run on macOS, where its daemon needs loopback that Seatbelt can't narrow? | Yes, Gradle runs only, as a recorded Article V exception | Gradle works on every target; Maven and npm keep the proxy-only rule | D-050 |
+| Q55 | Should Gradle run on macOS, where its daemon needs loopback that Seatbelt can't narrow (and that also admits LAN connections)? | Yes, Gradle runs only, as a recorded Article V exception, LAN inbound included | Gradle works on every target; Maven and npm keep the proxy-only rule | D-050 |
 
 ---
 

@@ -25,7 +25,7 @@ Agent code cannot start processes. The host starts processes only through `Proce
 *Source: D-008, D-009, D-023, D-027*
 
 ### V. All network traffic goes through the host proxy
-Every outbound connection, from the Java `HttpClient` and from every command-line tool, goes through the host egress proxy and its rules files. No code may build an HTTP client or open a socket that skips it. Build tools run in an OS sandbox that only allows the proxy port. One exception: on macOS, Gradle runs may also use any loopback port, for Gradle's daemon ([D-050](decisions.md#d-050--gradle-on-macos-uses-loopback)).
+Every outbound connection, from the Java `HttpClient` and from every command-line tool, goes through the host egress proxy and its rules files. No code may build an HTTP client or open a socket that skips it. Build tools run in an OS sandbox that only allows the proxy port. One exception: on macOS, Gradle runs may also use any loopback port, for Gradle's daemon, which also lets them accept connections from the LAN ([D-050](decisions.md#d-050--gradle-on-macos-uses-loopback)).
 *Source: D-012, D-025, D-049, D-050*
 
 ### VI. Strings at the boundary

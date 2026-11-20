@@ -14,7 +14,7 @@ Spec: `spec.md` · Status: Done · Created: 2026-11-19
 | II Host owns side effects | Agent code sends typed requests; the host builds argv, settings files and sandbox rules | Yes |
 | III Untrusted | No change to the isolate; three new `api` methods with JSON strings | Yes |
 | IV No shell | argv lists only; wrappers only in trusted projects (the constitution's exception); `ProcessBuilder` stays in `ProcessRunner` and in the bridge, which runs inside the sandbox and starts the argv `ProcessRunner` gave it | Yes |
-| V Proxy | Every tool is pointed at the proxy, and the sandbox blocks every other connection; the bridge only connects to the proxy's socket | Exception (D-050: Gradle on macOS may use any loopback port, for its daemon; outside hosts stay blocked) |
+| V Proxy | Every tool is pointed at the proxy, and the sandbox blocks every other connection; the bridge only connects to the proxy's socket | Exception (D-050: Gradle on macOS may use any loopback port, for its daemon, which also admits LAN connections; it can't connect out to other hosts) |
 | VI Strings | Requests and results are JSON strings | Yes |
 | VII Safe by default | Builds need trust and approval; no network without the proxy; the password is redacted from output | Yes |
 | VIII Events | `api.call`, `permission.*`, `process.started` (with `network`), `process.completed`, `network.*` | Yes |

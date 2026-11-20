@@ -120,6 +120,64 @@ class ProxyNetworkTest {
         assertTrue(events.stream().anyMatch(e -> e.type().equals("process.started") && e.body().path("loopback").asBoolean()));
     }
 
+    /**
+     * D-050: on macOS the loopback grant can't stop a listener on 0.0.0.0, and Seatbelt doesn't check
+     * accepted connections, so a Gradle build there can accept connections from the LAN. Pinned here
+     * so a change in either direction is noticed. On Linux the listener is in the sandbox's own
+     * network namespace and nothing outside reaches it.
+     */
+    @Test
+    void loopbackGrantListenerIsReachableFromTheLanOnlyOnMacOs() throws Exception {
+        java.net.InetAddress lan = java.net.NetworkInterface.networkInterfaces()
+                .filter(i -> { try { return i.isUp() && !i.isLoopback(); } catch (java.net.SocketException e) { return false; } })
+                .flatMap(java.net.NetworkInterface::inetAddresses)
+                .filter(a -> a instanceof java.net.Inet4Address && !a.isLinkLocalAddress())
+                .findFirst().orElse(null);
+        assumeTrue(lan != null, "no LAN address here");
+        int port;
+        try (var probe = new java.net.ServerSocket(0)) {
+            port = probe.getLocalPort();
+        }
+        Files.writeString(ws.resolve("Listen.java"), """
+                import java.net.*;
+                public class Listen {
+                    public static void main(String[] a) throws Exception {
+                        try (ServerSocket s = new ServerSocket()) {
+                            s.bind(new InetSocketAddress("0.0.0.0", Integer.parseInt(a[0])));
+                            s.setSoTimeout(8000);
+                            System.out.println("listening");
+                            try (Socket c = s.accept()) {
+                                System.out.println("accepted " + c.getInetAddress().getHostAddress());
+                            }
+                        }
+                    }
+                }
+                """);
+        Path jvm = Path.of(System.getProperty("java.home"), "bin", "java").toRealPath();
+        var result = new java.util.concurrent.CompletableFuture<ProcessResult>();
+        Thread.ofVirtual().start(() -> result.complete(new ProcessRunner(bus, () -> Origin.main(1), 30_000, net.sandbox)
+                .run(new Executable("java", jvm), List.of("-XX:-UsePerfData", "-Djava.net.preferIPv4Stack=true", "Listen.java",
+                        Integer.toString(port)), ws, Duration.ofSeconds(30), Map.of(), new ChildSandbox.Grants(List.of(), true, true))));
+        boolean connected = false;
+        long end = System.nanoTime() + Duration.ofSeconds(6).toNanos();
+        while (!connected && System.nanoTime() < end && !result.isDone()) {
+            try (var c = new java.net.Socket()) {
+                c.connect(new java.net.InetSocketAddress(lan, port), 500);
+                connected = true;
+            } catch (java.io.IOException e) {
+                Thread.sleep(200);
+            }
+        }
+        ProcessResult r = result.get(40, java.util.concurrent.TimeUnit.SECONDS);
+        if (net.sandbox.mechanism() == ChildSandbox.Mechanism.SEATBELT) {
+            assertTrue(connected, r.full());
+            assertTrue(r.output().contains("accepted " + lan.getHostAddress()), r.full());
+        } else {
+            assertFalse(connected, r.full());
+            assertFalse(r.output().contains("accepted"), r.full());
+        }
+    }
+
     @Test
     void theProxyStillAppliesTheRules() {
         // Same proxy, but the target port has no allow rule: the built-in loopback deny blocks it.
