@@ -4,13 +4,13 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-/** The {@code agent} section: {@code maxSteps}, the most RunJS steps in one turn (1 to 200, default 25). */
+/** The {@code agent} section: {@code maxSteps}, the most RunJS steps in one turn (1 to 500, default 100; D-051). */
 public record AgentSettings(int maxSteps) {
 
-    public static final int MAX_STEPS_LIMIT = 200;
+    public static final int MAX_STEPS_LIMIT = 500;
 
     public static AgentSettings defaults() {
-        return new AgentSettings(25);
+        return new AgentSettings(100);
     }
 
     static AgentSettings parse(JsonNode section, String source) throws ConfigException {

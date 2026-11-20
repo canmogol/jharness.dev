@@ -170,6 +170,46 @@ class TuiTest {
     }
 
     @Test
+    void shiftEnterAddsLinesAndTheKeyModeIsOnOnlyWhileThePromptReads() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws14"));
+        var raw = new org.jline.terminal.Attributes();
+        raw.setInputFlag(org.jline.terminal.Attributes.InputFlag.ICRNL, false);
+        // Shift+Enter (modifyOtherKeys), Shift+Enter (CSI u), Ctrl+Enter (modifyOtherKeys), then Enter.
+        String keys = "a\u001b[27;2;13~b\u001b[13;2uc\u001b[27;5;13~d\r/exit\r";
+        Terminal t = TerminalBuilder.builder().system(false).type("xterm-256color").attributes(raw)
+                .streams(new ByteArrayInputStream(keys.getBytes(StandardCharsets.UTF_8)), screen).build();
+        t.setSize(new org.jline.terminal.Size(200, 50));
+        Tui tui = new Tui(t, null, java.util.Map.of());
+        Path log;
+        try (Session session = replaySession(tmp.resolve("home14"), ws, "{}", tui, "Four lines.")) {
+            log = session.logPath();
+            tui.run(session);
+        }
+        var started = dev.jharness.events.SessionLog.read(log).stream().filter(e -> e.get("type").asText().equals("turn.started")).toList();
+        assertEquals(1, started.size(), started + " screen: " + screen().replace("\u001b", "<ESC>"));
+        assertEquals("a\nb\nc\nd", started.getFirst().get("prompt").asText());
+        String sc = screen();
+        int on = sc.indexOf(Tui.MODIFY_KEYS_ON);
+        int off = sc.indexOf(Tui.MODIFY_KEYS_OFF);
+        int reply = sc.indexOf("Four lines.");
+        assertTrue(on >= 0 && off > on && reply > off, "on, then off before the turn runs: " + sc.replace("\u001b", "<ESC>"));
+        assertEquals(sc.split(java.util.regex.Pattern.quote(Tui.MODIFY_KEYS_ON), -1).length,
+                sc.split(java.util.regex.Pattern.quote(Tui.MODIFY_KEYS_OFF), -1).length, "every on has an off");
+    }
+
+    @Test
+    void dumbTerminalsGetNoKeyMode() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws14d"));
+        Terminal t = TerminalBuilder.builder().system(false).type("dumb")
+                .streams(new ByteArrayInputStream("/exit\n".getBytes(StandardCharsets.UTF_8)), screen).build();
+        Tui tui = new Tui(t, null, java.util.Map.of());
+        try (Session session = replaySession(tmp.resolve("home14d"), ws, "{}", tui, "unused")) {
+            tui.run(session);
+        }
+        assertFalse(screen().contains("\u001b[>4"), screen());
+    }
+
+    @Test
     void thinkingShownDimOrHidden() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws6"));
         Tui tui = new Tui(terminal("one\n/thinking\ntwo\n/exit\n"), null);
