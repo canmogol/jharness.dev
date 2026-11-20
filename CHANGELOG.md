@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- last-commit: 9c3e68b -->
+<!-- last-commit: 9c3e68bb05bbb4977c3e629ed79a88ec8893cd8a -->
 
 ## 2026-11-20 · 013 Maven, Gradle and npm in the sandbox
 
