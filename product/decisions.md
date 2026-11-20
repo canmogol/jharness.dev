@@ -683,7 +683,7 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Decision.**
 - On macOS, Gradle runs get three more Seatbelt rules: bind, accept and connect on any `localhost` port, TCP and UDP. Maven, npm, git and `rg` keep only the proxy port.
-- This is a recorded exception to Article V: a Gradle build on macOS can reach any service listening on the Mac's loopback (databases, Docker, a local proxy) without the egress proxy. Outside hosts stay blocked.
+- This is a recorded exception to Article V, which now names it (constitution 1.5): a Gradle build on macOS can reach any service listening on the Mac's loopback (databases, Docker, a local proxy) without the egress proxy. Outside hosts stay blocked.
 - Linux is unchanged: bubblewrap's loopback is private to the sandbox, so Gradle needs no exception there.
 - `process.started` carries `loopback: true` for these runs.
 

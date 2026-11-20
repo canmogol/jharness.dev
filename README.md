@@ -17,6 +17,19 @@ This repository is planned with spec-driven development: product docs first, the
 | `user-stories.md` | Stakeholder-level user stories |
 | `specs/NNN-feature/` | One folder per feature: `spec.md`, `plan.md`, `tasks.md` |
 
+## IDs used in the docs
+
+| ID | Means | Defined in |
+| --- | --- | --- |
+| `P0`–`P4` | Roadmap phase | `product/roadmap.md` |
+| `US-N.N` | User story | `user-stories.md` |
+| `D-NNN` | Accepted decision | `product/decisions.md` |
+| `QNN` | Question behind a decision (Q&A table) | `product/decisions.md` |
+| `NNN-<slug>` | Feature: spec folder and its branch | `specs/` |
+| `AC-NN` | Acceptance criterion, numbered per spec | `specs/NNN-<slug>/spec.md` |
+| `TNNN` | Task, numbered per spec | `specs/NNN-<slug>/tasks.md` |
+| Article I–XI | Constitution rule | `product/constitution.md` |
+
 ## How a feature gets built
 
 1. Write `specs/NNN-feature/spec.md`: stories and acceptance criteria.
