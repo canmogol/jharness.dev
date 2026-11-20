@@ -71,6 +71,33 @@ class ProxyNetworkTest {
         assertTrue(events.stream().anyMatch(e -> e.type().equals("process.started") && e.body().path("network").asBoolean()));
     }
 
+    /** Maven and Gradle are JVMs: with the build tools' {@code JAVA_TOOL_OPTIONS}, a JVM reaches the proxy too. */
+    @Test
+    void aJvmReachesTheProxyWithTheBuildToolOptions() throws Exception {
+        Files.writeString(ws.resolve("Get.java"), """
+                import java.net.*;
+                public class Get {
+                    public static void main(String[] a) throws Exception {
+                        Authenticator.setDefault(new Authenticator() {
+                            protected PasswordAuthentication getPasswordAuthentication() {
+                                return new PasswordAuthentication(System.getProperty("http.proxyUser"),
+                                        System.getProperty("http.proxyPassword").toCharArray());
+                            }
+                        });
+                        var c = (HttpURLConnection) URI.create(a[0]).toURL().openConnection();
+                        System.out.print(new String(c.getInputStream().readAllBytes()));
+                    }
+                }
+                """);
+        Path java = Path.of(System.getProperty("java.home"), "bin", "java").toRealPath();
+        // The stub is on 127.0.0.1, which the JDK skips the proxy for by default; real hosts aren't.
+        var env = Map.of("JAVA_TOOL_OPTIONS", BuildOperations.javaToolOptions(net.sandbox.route(), net.sandbox.policy().tmp()));
+        ProcessResult r = new ProcessRunner(bus, () -> Origin.main(1), 30_000, net.sandbox).run(new Executable("java", java),
+                List.of("-XX:-UsePerfData", "-Dhttp.nonProxyHosts=", "Get.java", target()), ws, Duration.ofSeconds(60), env, new ChildSandbox.Grants(List.of(), true));
+        assertEquals(0, r.exitCode(), r.full());
+        assertTrue(r.output().endsWith(TestProxy.BODY), r.full());
+    }
+
     @Test
     void directConnectionsFailEvenWithNetwork() {
         ProcessResult r = curl(new ChildSandbox.Grants(List.of(), true), target());

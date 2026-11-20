@@ -56,7 +56,7 @@ EgressProxy.serveUnix(Path socket);                     // relays each Unix conn
 | Tool | How |
 | --- | --- |
 | Maven | `--global-settings <session>/net/maven-settings.xml` (0600) with `http` and `https` proxy entries |
-| Gradle, and JVMs Maven forks | `JAVA_TOOL_OPTIONS`: `http(s).proxyHost/Port/User/Password`, `jdk.http.auth.tunneling.disabledSchemes=`, `java.io.tmpdir` |
+| Gradle, and JVMs Maven forks | `JAVA_TOOL_OPTIONS`: `http(s).proxyHost/Port/User/Password`, `jdk.http.auth.tunneling.disabledSchemes=`, `java.io.tmpdir`, `java.net.preferIPv4Stack=true` (Seatbelt's `localhost` doesn't match a dual-stack socket's `::ffff:127.0.0.1`) |
 | npm | `npm_config_proxy`, `npm_config_https_proxy`, `npm_config_update_notifier=false`, `npm_config_fund=false`, `npm_config_audit=false` |
 
 `JAVA_TOOL_OPTIONS` is echoed by the JVM ("Picked up …"), so `ProcessRunner` replaces the proxy password with `***` in all captured output. `PATH` for a build tool adds the folder it was found in and `$JAVA_HOME/bin`.

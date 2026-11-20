@@ -317,6 +317,8 @@ public final class BuildOperations {
     static String javaToolOptions(ChildSandbox.ProxyRoute route, Path tmp) {
         List<String> o = new ArrayList<>();
         o.add("-Djava.io.tmpdir=" + tmp);
+        // A dual-stack JVM socket to 127.0.0.1 is ::ffff:127.0.0.1, which Seatbelt's "localhost" doesn't match.
+        o.add("-Djava.net.preferIPv4Stack=true");
         for (String scheme : List.of("http", "https")) {
             o.add("-D" + scheme + ".proxyHost=127.0.0.1");
             o.add("-D" + scheme + ".proxyPort=" + route.port());

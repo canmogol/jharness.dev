@@ -161,7 +161,7 @@ class BuildOperationsTest {
         String jto = ops().env(Tool.GRADLE, ops().executable(Tool.GRADLE), route, tmp).get("JAVA_TOOL_OPTIONS");
         assertTrue(jto.contains("-Dhttps.proxyHost=127.0.0.1") && jto.contains("-Dhttps.proxyPort=4321")
                 && jto.contains("-Dhttps.proxyPassword=s3cr3t") && jto.contains("-Djdk.http.auth.tunneling.disabledSchemes=")
-                && jto.contains("-Djava.io.tmpdir=" + tmp), jto);
+                && jto.contains("-Djava.io.tmpdir=" + tmp) && jto.contains("-Djava.net.preferIPv4Stack=true"), jto);
 
         String xml = BuildOperations.mavenSettings(route);
         assertTrue(xml.contains("<protocol>https</protocol><host>127.0.0.1</host><port>4321</port><username>jharness</username><password>s3cr3t</password>"), xml);
