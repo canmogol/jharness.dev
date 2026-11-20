@@ -1,6 +1,19 @@
 # Changelog
 
-<!-- last-commit: 027a11c488ccf75b1815fa9a7ff5ec4032506583 -->
+<!-- last-commit: 9c3e68bb05bbb4977c3e629ed79a88ec8893cd8a -->
+
+## 2026-11-20 · 013 Maven, Gradle and npm in the sandbox
+
+- Added `api.maven` (`compile`, `test`, `verify`, `package`, `clean`), `api.gradle` (`build`, `test`, `check`, `assemble`, `clean`) and `api.npm` (`ci`, `install`, `test`, `run <script>`). Requests are typed, with no free-form arguments, and builds run only in trusted projects after approval; "always" saves rules such as `maven test`.
+- Fixed flags: Maven in batch mode, Gradle with `--no-daemon`, npm `ci` and `install` with `--ignore-scripts`. `./mvnw` and `./gradlew` run when present, and `./gradlew` must pin `distributionSha256Sum`.
+- Git and build calls take `timeoutMs` (default 2 min, at most 10). Time spent in a process no longer counts against the run's wall clock.
+- The OS sandbox opens one network path for build tools, the proxy port: a Seatbelt rule on macOS, and on Linux a bridge mode of the JHarness binary (`__proxy-bridge`) that forwards to the proxy over a Unix socket. git and `rg` still have no network.
+- Build tools get the proxy settings from a generated Maven settings file, `JAVA_TOOL_OPTIONS` and `npm_config_*` variables, never from argv. The proxy password is shown as `***` in captured output. Java build tools use IPv4 so Seatbelt lets them reach the proxy.
+- Build tools may write to their caches (`~/.m2/repository`, parts of `~/.gradle`, `~/.npm`), but not to their config files.
+- On macOS, Gradle runs may use any loopback port for Gradle's daemon. Seatbelt can't narrow this, so a Gradle build there can also accept LAN connections; it still can't connect out to other hosts. A test pins this behavior on macOS and checks that Linux stays closed.
+- The native smoke binary runs an npm script through the proxy (via the bridge on Linux) and checks that a direct connection fails.
+- The README has a table of the IDs used in the docs (D, Q, AC, T, US, P, Article).
+- Decisions: build tools in the sandbox (D-049, which moves Gradle's proxy settings from D-025's argv into `JAVA_TOOL_OPTIONS`); Gradle on macOS gets loopback, a recorded exception that Article V now names (D-050, constitution 1.5).
 
 ## 2026-11-19 · 012 OS sandbox for child processes
 
