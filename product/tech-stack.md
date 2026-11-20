@@ -114,7 +114,7 @@ The sandbox also limits network access to the proxy port, so a build script can'
 | Platform | Mechanism | Network for build tools |
 | --- | --- | --- |
 | Linux | bubblewrap (`/usr/bin/bwrap`); Landlock not used for now (D-048) | Private network namespace; `jharness __proxy-bridge` inside forwards `127.0.0.1:<port>` to the proxy's Unix socket |
-| macOS | Seatbelt (`/usr/bin/sandbox-exec` with a generated deny-by-default profile) | `(allow network-outbound (remote ip "localhost:<port>"))` |
+| macOS | Seatbelt (`/usr/bin/sandbox-exec` with a generated deny-by-default profile) | `(allow network-outbound (remote ip "localhost:<port>"))`; Gradle also gets any `localhost` port (D-050) |
 
 ## Platforms and release
 

@@ -79,6 +79,21 @@ class ProxyNetworkTest {
     }
 
     @Test
+    void loopbackGrantReachesLocalServicesOnlyOnMacOs() {
+        // D-050: Gradle's loopback grant opens every local port on macOS (the recorded Article V
+        // exception); on Linux the sandbox's loopback is its own, so host services stay out of reach.
+        ProcessResult r = curl(new ChildSandbox.Grants(List.of(), true, true), target());
+        if (net.sandbox.mechanism() == ChildSandbox.Mechanism.SEATBELT) {
+            assertEquals(0, r.exitCode(), r.output());
+            assertEquals(TestProxy.BODY, r.output());
+        } else {
+            assertNotEquals(0, r.exitCode(), r.output());
+            assertFalse(r.output().contains(TestProxy.BODY), r.output());
+        }
+        assertTrue(events.stream().anyMatch(e -> e.type().equals("process.started") && e.body().path("loopback").asBoolean()));
+    }
+
+    @Test
     void theProxyStillAppliesTheRules() {
         // Same proxy, but the target port has no allow rule: the built-in loopback deny blocks it.
         ProcessResult r = curl(new ChildSandbox.Grants(List.of(), true), "-x", net.proxyUrl(), "http://127.0.0.1:9/");

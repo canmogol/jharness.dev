@@ -56,14 +56,7 @@ class BuildOperationsTest {
     }
 
     private String fails(Tool t, String json) {
-        // Gradle is refused on macOS before validation (spec 013 open question), so check its argv directly.
-        return assertThrows(RuntimeException.class, () -> {
-            if (t == Tool.GRADLE) {
-                ops().args(t, req(json));
-            } else {
-                ops().check(t, req(json));
-            }
-        }).getMessage();
+        return assertThrows(RuntimeException.class, () -> ops().check(t, req(json))).getMessage();
     }
 
     @Test

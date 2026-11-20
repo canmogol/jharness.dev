@@ -59,13 +59,23 @@ public final class ChildSandbox {
      *
      * @param writable extra folders the child may write (they must exist)
      * @param network whether the child may connect to the proxy port
+     * @param loopback whether the child may also listen on and connect to any loopback port; on
+     *     macOS only Gradle gets this, for its daemon (D-050, an Article V exception). Linux ignores
+     *     it: loopback there is private to the sandbox anyway
      */
-    public record Grants(List<Path> writable, boolean network) {
+    public record Grants(List<Path> writable, boolean network, boolean loopback) {
 
-        public static final Grants NONE = new Grants(List.of(), false);
+        public static final Grants NONE = new Grants(List.of(), false, false);
 
         public Grants {
             writable = List.copyOf(writable);
+            if (loopback && !network) {
+                throw new IllegalArgumentException("loopback needs network");
+            }
+        }
+
+        public Grants(List<Path> writable, boolean network) {
+            this(writable, network, false);
         }
     }
 
@@ -234,7 +244,7 @@ public final class ChildSandbox {
         if (g.network() && route == null) {
             throw new OperationException("this run needs the network, but the session has no egress proxy");
         }
-        Grants real = new Grants(g.writable().stream().map(ChildSandbox::realOrAbsolute).toList(), g.network());
+        Grants real = new Grants(g.writable().stream().map(ChildSandbox::realOrAbsolute).toList(), g.network(), g.loopback());
         List<String> out = new ArrayList<>();
         switch (mechanism) {
             case SEATBELT -> {
@@ -293,6 +303,14 @@ public final class ChildSandbox {
         if (g.network()) {
             // The only network rule: the proxy's port on loopback (D-049). Everything else stays denied.
             sb.append("(allow network-outbound (remote ip \"localhost:").append(route.port()).append("\"))\n");
+        }
+        if (g.loopback()) {
+            // D-050, Article V exception for Gradle: its client and daemon talk over loopback TCP and it
+            // uses loopback UDP for lock contention. Seatbelt can't limit this to Gradle's own sockets,
+            // so the build can reach any local service; outside hosts stay blocked.
+            sb.append("(allow network-bind (local ip \"localhost:*\"))\n");
+            sb.append("(allow network-inbound (local ip \"localhost:*\"))\n");
+            sb.append("(allow network-outbound (remote ip \"localhost:*\"))\n");
         }
         return sb.toString();
     }

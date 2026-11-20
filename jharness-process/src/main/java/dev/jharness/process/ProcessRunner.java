@@ -114,7 +114,8 @@ public final class ProcessRunner {
         e.putAll(sandbox.env());
 
         var started = Json.object().put("executable", exe.name()).put("path", exe.path().toString())
-                .put("cwd", cwd.toString()).put("sandbox", sandbox.mechanism().wire()).put("network", grants.network());
+                .put("cwd", cwd.toString()).put("sandbox", sandbox.mechanism().wire()).put("network", grants.network())
+                .put("loopback", grants.loopback());
         var argsJson = started.putArray("args");
         args.forEach(argsJson::add);
         bus.publish(origin.get(), "process.started", started);

@@ -31,7 +31,7 @@ Agent code can run Maven, Gradle and npm through typed operations (`api.maven`, 
 | AC-04 | `timeoutMs` is accepted on every git, Maven, Gradle and npm call. Without it the timeout is `timeouts.process` (2 min); values above `timeouts.processMax` (10 min) or below 1 are rejected. On timeout the whole process tree is killed and the result has `timedOut: true` with the output so far. |
 | AC-05 | Results are `{exitCode, output, truncated, timedOut, durationMs}`, where `output` is the last `timeouts.outputChars` (30,000) characters. `process.completed` in the session log keeps the output from the start, up to 1 MiB. The proxy password never appears in argv, in events or in returned output. |
 | AC-06 | Build tools reach the network only through the proxy. Maven gets a generated `--global-settings` file with the proxy. Gradle and every JVM it starts get the proxy system properties through `JAVA_TOOL_OPTIONS`. npm gets `npm_config_proxy` and `npm_config_https_proxy`. The rules decide each host (`network.allowed`, `network.blocked`, `network.asked`). |
-| AC-07 | The OS sandbox opens only the proxy port, and only for build tools. On macOS, Seatbelt allows outbound connections to `localhost:<proxy port>` only. On Linux, bubblewrap keeps its own network namespace, and a small bridge inside it (the JHarness binary itself) forwards `127.0.0.1:<proxy port>` over a Unix socket to the proxy. Direct connections to anything else fail. git and `rg` still have no network. |
+| AC-07 | The OS sandbox opens only the proxy port, and only for build tools. On macOS, Seatbelt allows outbound connections to `localhost:<proxy port>` only. On Linux, bubblewrap keeps its own network namespace, and a small bridge inside it (the JHarness binary itself) forwards `127.0.0.1:<proxy port>` over a Unix socket to the proxy. Direct connections to anything else fail. git and `rg` still have no network. Exception (D-050): on macOS, Gradle runs may also use any loopback port, for Gradle's daemon. |
 | AC-08 | Besides the workspace and the temp folder, build tools may write only to their caches: `~/.m2/repository` and `~/.m2/wrapper`; `~/.gradle/caches`, `wrapper`, `native`, `jdks`, `daemon`, `notifications` and `.tmp`; and `~/.npm`. `~/.m2/settings.xml`, `~/.gradle/init.d`, `~/.gradle/gradle.properties` and `~/.npmrc` stay read-only. JVMs get `-Djava.io.tmpdir` set to the private temp folder. |
 | AC-09 | Tests on macOS locally and on Linux in CI check three things. A sandboxed client reaches an allowed stub server through the proxy, and fails to connect directly. Maven, npm and Gradle (when installed) run their ops in the sandbox. The native smoke binary checks an npm script that connects through the bridge and proxy, and fails to connect directly. |
 
@@ -41,7 +41,6 @@ Agent code can run Maven, Gradle and npm through typed operations (`api.maven`, 
 - Offline mode (D-033), `api.http`, and the injection and escape test suites.
 - Local servers in tests (for example Spring Boot on a random port): on macOS, Seatbelt can't tell them apart from other local services, so they fail there for now.
 - Checkpoints of build outputs: `/undo` does not remove `target/`, `build/` or `node_modules/`.
-- Gradle on macOS: refused with a message for now (see the open question).
 - Installing new npm packages by name, `npx`, pnpm and yarn (D-009).
 
 ## Dependencies and assumptions
@@ -51,4 +50,4 @@ Agent code can run Maven, Gradle and npm through typed operations (`api.maven`, 
 
 ## Open questions
 
-- Gradle on macOS. Gradle 9 forks a single-use daemon even with `--no-daemon`, and the client and daemon talk over loopback TCP. Seatbelt can't allow that without also letting the build reach every other local service, which would skip the proxy (Article V). Until the user decides, `api.gradle` fails on macOS with a message; it works on Linux, where loopback is private to the sandbox. Options: allow loopback TCP for Gradle on macOS as a recorded exception, or keep refusing.
+None. (Gradle on macOS was settled by D-050: Gradle runs there may use any loopback port, as a recorded exception to Article V.)

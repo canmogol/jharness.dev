@@ -14,7 +14,7 @@ Spec: `spec.md` · Status: Done · Created: 2026-11-19
 | II Host owns side effects | Agent code sends typed requests; the host builds argv, settings files and sandbox rules | Yes |
 | III Untrusted | No change to the isolate; three new `api` methods with JSON strings | Yes |
 | IV No shell | argv lists only; wrappers only in trusted projects (the constitution's exception); `ProcessBuilder` stays in `ProcessRunner` and in the bridge, which runs inside the sandbox and starts the argv `ProcessRunner` gave it | Yes |
-| V Proxy | Every tool is pointed at the proxy, and the sandbox blocks every other connection; the bridge only connects to the proxy's socket | Yes |
+| V Proxy | Every tool is pointed at the proxy, and the sandbox blocks every other connection; the bridge only connects to the proxy's socket | Exception (D-050: Gradle on macOS may use any loopback port, for its daemon; outside hosts stay blocked) |
 | VI Strings | Requests and results are JSON strings | Yes |
 | VII Safe by default | Builds need trust and approval; no network without the proxy; the password is redacted from output | Yes |
 | VIII Events | `api.call`, `permission.*`, `process.started` (with `network`), `process.completed`, `network.*` | Yes |
@@ -28,7 +28,7 @@ Spec: `spec.md` · Status: Done · Created: 2026-11-19
 // jharness-process
 public final class ChildSandbox {
     public record ProxyRoute(int port, Path socket, String user, String password) {}
-    public record Grants(List<Path> writable, boolean network) { public static final Grants NONE; }
+    public record Grants(List<Path> writable, boolean network, boolean loopback) { public static final Grants NONE; }
     public ChildSandbox withProxy(ProxyRoute route, List<String> bridgeCommand);
     public static List<String> selfBridgeCommand();     // native: [<binary>, "__proxy-bridge"]; JVM: [java, -cp, cp, ProxyBridge]
     List<String> wrap(List<String> argv, Path cwd, Grants g);
@@ -48,7 +48,7 @@ EgressProxy.serveUnix(Path socket);                     // relays each Unix conn
 
 | Platform | Rule |
 | --- | --- |
-| macOS | `(allow network-outbound (remote ip "localhost:<port>"))` only when `Grants.network` |
+| macOS | `(allow network-outbound (remote ip "localhost:<port>"))` only when `Grants.network`; Gradle adds `network-bind`, `network-inbound` and `network-outbound` for `localhost:*` (`Grants.loopback`, D-050) |
 | Linux | `--bind <socket> <socket>`, argv becomes `<bridge> <socket> <port> -- <tool argv>`; the namespace's loopback is private |
 
 ### Pointing tools at the proxy
@@ -83,5 +83,5 @@ Every op also takes `timeoutMs`. `tests` matches `[A-Za-z0-9_.*#,+$-]{1,200}` an
 | --- | --- |
 | Tests that start local servers fail on macOS (Seatbelt can't tell them apart from other local services) | Out of scope for 013; listed in the spec; Linux works because loopback is private |
 | A tool ignores proxy settings | Its connections fail in the sandbox; the error names the host |
-| Gradle starts a single-use daemon JVM and talks to it over loopback TCP | Works on Linux (private loopback); refused on macOS until the open question in the spec is settled |
+| Gradle starts a single-use daemon JVM and talks to it over loopback TCP | Works on Linux (private loopback); on macOS Gradle gets loopback as a recorded exception (D-050) |
 | Unix domain sockets in Native Image | Checked by the native smoke binary on all targets |

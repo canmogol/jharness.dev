@@ -84,11 +84,6 @@ public final class BuildOperations {
 
     static final String BASE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 
-    /** Spec 013 open question: Gradle's client and daemon need loopback TCP, which the macOS sandbox can't limit to them. */
-    static final String GRADLE_ON_MACOS = "gradle can't run in the macOS sandbox yet: Gradle's client and its daemon talk over"
-            + " local TCP, and the sandbox blocks that so a build can't reach other services on this Mac. Run Gradle yourself"
-            + " for now, or use Maven or npm; on Linux it works.";
-
     private final ProcessRunner runner;
     private final Workspace workspace;
     private final Duration timeout;
@@ -146,9 +141,6 @@ public final class BuildOperations {
         if (!trusted) {
             throw new OperationException(tool.api() + " runs the project's own build code; trust this project first"
                     + " (JHarness asks when it opens a folder; see ~/.jharness/trusted.json)");
-        }
-        if (tool == Tool.GRADLE && runner.sandbox().mechanism() == ChildSandbox.Mechanism.SEATBELT) {
-            throw new OperationException(GRADLE_ON_MACOS);
         }
         args(tool, req);
         executable(tool);
@@ -384,7 +376,12 @@ public final class BuildOperations {
             }
         }
         return runner.run(exe, argv, workspace.root(), CallTimeout.of(req, timeout, max),
-                env(tool, exe, route, sandbox.policy().tmp()), new ChildSandbox.Grants(caches, true));
+                env(tool, exe, route, sandbox.policy().tmp()), grants(tool, caches));
+    }
+
+    /** Gradle also gets loopback, for its daemon (D-050); the other tools reach only the proxy port. */
+    static ChildSandbox.Grants grants(Tool tool, List<Path> caches) {
+        return new ChildSandbox.Grants(caches, true, tool == Tool.GRADLE);
     }
 
     /** Result as the JSON string {@code api.maven}, {@code api.gradle} and {@code api.npm} return. */
