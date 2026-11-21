@@ -81,7 +81,8 @@ class GitOperationsTest {
 
     @Test
     void hooksAndFsmonitorDoNotRun() throws Exception {
-        Path marker = tmp.resolve("ran");
+        // Inside .git: the sandbox lets git write there, so a hook that ran would leave the marker.
+        Path marker = ws.resolve(".git/ran");
         Path hook = ws.resolve(".git/hooks/pre-commit");
         Files.writeString(hook, "#!/bin/sh\ntouch " + marker + "\n");
         Files.setPosixFilePermissions(hook, PosixFilePermissions.fromString("rwx------"));

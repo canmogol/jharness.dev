@@ -21,7 +21,11 @@ import dev.jharness.security.Workspace;
  */
 public final class GitOperations {
 
-    /** Prefix on every call: no hooks, no fsmonitor, no transports, no pager, literal pathspecs. */
+    /**
+     * Prefix on every call: no hooks, no fsmonitor, no transports, no pager, no signing or signature
+     * checks (they run {@code gpg.program}), no submodule recursion, no background maintenance,
+     * literal pathspecs (spec 015).
+     */
     static final List<String> HARDENING = List.of(
             "-c", "core.hooksPath=/dev/null",
             "-c", "core.fsmonitor=false",
@@ -29,6 +33,12 @@ public final class GitOperations {
             "-c", "protocol.ext.allow=never",
             "-c", "core.pager=cat",
             "-c", "credential.helper=",
+            "-c", "commit.gpgSign=false",
+            "-c", "tag.gpgSign=false",
+            "-c", "log.showSignature=false",
+            "-c", "submodule.recurse=false",
+            "-c", "gc.auto=0",
+            "-c", "maintenance.auto=false",
             "--no-pager",
             "--literal-pathspecs");
 
@@ -106,11 +116,11 @@ public final class GitOperations {
         List<String> a = new ArrayList<>();
         switch (op) {
             case "status" -> {
-                a.addAll(List.of("status", "--porcelain=v1", "--branch"));
+                a.addAll(List.of("status", "--porcelain=v1", "--branch", "--ignore-submodules=all"));
                 paths(a, req, false);
             }
             case "diff" -> {
-                a.addAll(List.of("diff", "--no-color", "--no-ext-diff", "--no-textconv"));
+                a.addAll(List.of("diff", "--no-color", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all"));
                 if (bool(req, "staged")) {
                     a.add("--staged");
                 }
@@ -168,9 +178,73 @@ public final class GitOperations {
     }
 
     public ProcessResult run(ObjectNode req) {
+        List<String> args = args(req);
+        Duration t = CallTimeout.of(req, timeout, max);
+        Map<String, String> env = env();
         List<String> argv = new ArrayList<>(HARDENING);
-        argv.addAll(args(req));
-        return runner.run(git, argv, workspace.root(), CallTimeout.of(req, timeout, max), ENV);
+        argv.addAll(filterOverrides(repoFilters(runner.run(git, FILTER_QUERY, workspace.root(), t, env))));
+        argv.addAll(args);
+        return runner.run(git, argv, workspace.root(), t, env);
+    }
+
+    /** Lists every {@code filter.*} key with the scope it comes from. Exit 1 means none. */
+    static final List<String> FILTER_QUERY = concat(HARDENING,
+            List.of("config", "--show-scope", "--name-only", "--get-regexp", "^filter\\."));
+
+    /** Scopes that come from the repository rather than the user (D-052). */
+    private static final Set<String> REPO_SCOPES = Set.of("local", "worktree");
+
+    /**
+     * The filter drivers the repository's own config defines, from {@link #FILTER_QUERY} output
+     * ({@code local<TAB>filter.<driver>.<key>} lines). Driver names may contain dots.
+     */
+    static Set<String> repoFilters(ProcessResult r) {
+        if (r.exitCode() == 1 && r.full().isBlank()) {
+            return Set.of();
+        }
+        if (r.exitCode() != 0) {
+            throw new OperationException("git config failed (exit " + r.exitCode() + "): " + r.output().strip());
+        }
+        Set<String> drivers = new java.util.TreeSet<>();
+        for (String line : r.full().split("\n")) {
+            int tab = line.indexOf('\t');
+            if (tab < 0 || !REPO_SCOPES.contains(line.substring(0, tab))) {
+                continue;
+            }
+            String key = line.substring(tab + 1).strip();
+            int last = key.lastIndexOf('.');
+            if (key.startsWith("filter.") && last > "filter.".length()) {
+                drivers.add(key.substring("filter.".length(), last));
+            }
+        }
+        return drivers;
+    }
+
+    /** Empty {@code clean}, {@code smudge} and {@code process} turn a driver off (AC-01). */
+    static List<String> filterOverrides(Set<String> drivers) {
+        List<String> a = new ArrayList<>();
+        for (String d : drivers) {
+            for (String k : List.of("clean=", "smudge=", "process=", "required=false")) {
+                a.addAll(List.of("-c", "filter." + d + "." + k));
+            }
+        }
+        return a;
+    }
+
+    /** {@link #ENV}, plus {@code GIT_WORK_TREE} when the workspace is the repository root (AC-03). */
+    Map<String, String> env() {
+        if (!java.nio.file.Files.exists(workspace.root().resolve(".git"), java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return ENV;
+        }
+        Map<String, String> e = new java.util.HashMap<>(ENV);
+        e.put("GIT_WORK_TREE", workspace.root().toString());
+        return Map.copyOf(e);
+    }
+
+    private static List<String> concat(List<String> a, List<String> b) {
+        List<String> r = new ArrayList<>(a);
+        r.addAll(b);
+        return List.copyOf(r);
     }
 
     /** Result as the JSON string {@code api.git} returns. */

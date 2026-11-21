@@ -89,7 +89,7 @@ Process results return the exit code and the last 30,000 characters of output (c
 
 | Tool | Notes |
 | --- | --- |
-| git | Hooks, fsmonitor and `ext::` protocol disabled on every call |
+| git | Hooks, fsmonitor, `ext::` protocol, signing, signature checks and repo-defined filter drivers disabled on every call; `GIT_WORK_TREE` pinned to the workspace (D-052) |
 | Maven (`mvn`, `./mvnw`) | Batch mode; wrapper only in trusted projects |
 | Gradle (`./gradlew`, `gradle`) | Plain console, `--no-daemon`; wrapper must pin `distributionSha256Sum` |
 | npm | `--ignore-scripts` on install; `npm ci` with a lockfile |
