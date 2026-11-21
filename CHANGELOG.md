@@ -1,6 +1,14 @@
 # Changelog
 
-<!-- last-commit: 9c3e68bb05bbb4977c3e629ed79a88ec8893cd8a -->
+<!-- last-commit: a44cd6be12f7b54d6f46e0e77830e48f45f64955 -->
+
+## 2026-11-20 · 014 Shift+Enter and a higher step limit
+
+- Shift+Enter and Ctrl+Enter insert a newline at the prompt in terminals that report them. While the `> ` prompt reads a line, JHarness turns on xterm `modifyOtherKeys` level 1 and resets it afterward, so approvals and Esc during a turn see ordinary keys. Alt+Enter and Ctrl-J still work; Enter sends.
+- `/help` and the README name Shift+Enter; the README shows how to map it to Alt+Enter in VS Code, kitty and iTerm2.
+- `agent.maxSteps` now defaults to 100 steps per turn (was 25) and accepts 1 to 500 (was up to 200).
+- The TUI tests use in-process terminals, so output can't lag behind a PTY copy thread.
+- Decision: Shift+Enter through `modifyOtherKeys`, not the kitty keyboard protocol, and the new step limit (D-051).
 
 ## 2026-11-20 · 013 Maven, Gradle and npm in the sandbox
 
