@@ -84,6 +84,19 @@ class AgentIsolateTest {
         }
     }
 
+    /** Spec 018 RUN-02: the CPU limit trips inside regex backtracking with no message; it is still named. */
+    @Test
+    void cpuLimitInsideRegexBacktrackingIsNamed() throws Exception {
+        try (AgentIsolate iso = isolate(Map.of("sandbox.MaxCPUTime", "1s"))) {
+            var s = fx.services(new DefaultGate());
+            RunResult r = iso.run("/^(a+)+\\1$/.test('a'.repeat(60) + '!')", s);
+            assertEquals("limit", r.status(), r.toString());
+            assertEquals("sandbox.MaxCPUTime", r.limit(), r.toString());
+            assertTrue(r.error().contains("CPU time"), r.error());
+            assertEquals("ok", iso.run("/^(a+)+$/.test('a'.repeat(5000) + '!')", s).status(), "TRegex matches this one in linear time");
+        }
+    }
+
     @Test
     void heapLimitTripsAndTheNextRunWorks() throws Exception {
         try (AgentIsolate iso = isolate(Map.of("sandbox.MaxHeapMemory", "64MB", "engine.MaxIsolateMemory", "256MB"))) {

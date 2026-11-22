@@ -46,10 +46,26 @@ public final class Smoke {
             System.exit(dev.jharness.process.ProxyBridge.run(java.util.Arrays.copyOfRange(args, 1, args.length)));
         }
         Smoke s = new Smoke();
-        s.run();
+        if (args.length > 0 && args[0].equals("--security")) {
+            s.security(Files.createTempDirectory("jharness-security"));
+        } else {
+            s.run();
+        }
         System.out.println(Json.write(Json.object().put("smoke", s.failures.isEmpty() ? "pass" : "fail")
                 .put("failures", s.failures.size())));
         System.exit(s.failures.isEmpty() ? 0 : 1);
+    }
+
+    /** Spec 018 AC-08: every security case, one {@code security <ID>} check each; a skip is printed and doesn't fail. */
+    private void security(Path tmp) {
+        for (var c : dev.jharness.testkit.security.SecuritySuite.all()) {
+            var o = dev.jharness.testkit.security.SecuritySuite.run(c, tmp.resolve(c.id()));
+            if (o.status().equals("skip") || o.status().equals("exception")) {
+                System.out.println(Json.write(Json.object().put("check", "security " + c.id()).put("status", o.status()).put("detail", o.detail())));
+            } else {
+                check("security " + c.id(), o.passed(), o.detail());
+            }
+        }
     }
 
     private void check(String name, boolean ok, Object detail) {
@@ -245,6 +261,8 @@ public final class Smoke {
         Path rules = dev.jharness.security.ProjectRules.fileFor(home, permRepo);
         check("saved rule", Files.readString(permRepo.resolve("a.txt")).equals("new") && Files.readString(rules).contains("a.txt"),
                 rules);
+
+        security(tmp.resolve("security"));
 
         log.close();
         List<JsonNode> back = SessionLog.read(log.path());

@@ -66,6 +66,7 @@ Last updated: 2026-11-22
 | D-053 | A read-only web session viewer, built in Phase 4 next to headless mode but not gating v0.1, on `127.0.0.1` with a session token; no approvals from the browser yet; a companion UI with approvals and phone access comes after v0.1 | Accepted |
 | D-054 | `api.http` and `api.fetch` through the egress proxy: GET and HEAD are reads, other methods ask; 10 MiB read and 200,000 characters returned by default (configurable), text only; headers and bodies logged only when debug switches are on, secrets redacted; no secrets injected; jsoup turns HTML into text; `HttpClients` moves to `jharness-net` | Accepted |
 | D-055 | Git `fetch`, `pull`, `push` and `clone` over HTTPS only, through the proxy port in the OS sandbox; no force push; tokens per host from user settings only, scoped to that host and redacted; offline mode denies what no rule allows, runs build tools offline and refuses git network ops | Accepted |
+| D-056 | Security suites: one catalogue of attack cases (injection, malicious repo, sandbox escape, runaway) against a real session with a model that obeys the attack; shared canary, attacker and file checks; run on the JVM and in the native smoke binary on Linux and macOS; skips never count as passes | Accepted |
 
 ---
 
@@ -786,6 +787,30 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-056 — Security test suites
+
+**Decision.**
+- `dev.jharness.testkit.security.SecuritySuite` holds one catalogue of cases with IDs: `INJ-NN` (prompt injection), `REPO-NN` (malicious repository), `ESC-NN` (sandbox escape) and `RUN-NN` (runaway code). It is in `src/main`, so the JVM tests (`SecuritySuiteTest`) and the native smoke binary (`jharness-smoke`, or `--security` for the suites only) run the same cases.
+- Each case assumes the model is fully steered: a replay provider plays the attack's JavaScript. The case opens a real `Session` (proxy, OS sandbox, permission engine, isolate) with settings layered from a fake home and workspace.
+- Every case gets the same shared checks:
+  - home canaries never reach the model, the session log or the attacker;
+  - a loopback attacker gets no connection;
+  - nothing outside the workspace changes;
+  - no marker file from hostile code exists.
+- Containment never depends on the user except in the injection suite, where the user denies. In the repository and escape suites, the user approves every action and denies only new hosts.
+- A case that can't run on a machine reports `skip`. A skip never counts toward the Phase 2 gate, which needs every case passing on Linux and macOS CI.
+- Holes the suites find are fixed in the same spec, with the case as the regression test. Spec 018 found one: a CPU limit that trips inside the regex engine's backtracking had no message and was reported as `unknown`. It is now named `sandbox.MaxCPUTime` when the run lasted at least that limit.
+- One recorded exception on macOS, RUN-08. A build-script grandchild that its parent orphans before the timeout outlives the process-tree kill: launchd adopts it, and Seatbelt has no PID namespace. It stays inside the Seatbelt sandbox, and the case checks this: no writes outside and no connections out. The case reports `exception`, not `pass`, on macOS. Closing it (for example, process groups through `posix_spawn`) is a follow-up, and a script that calls `setsid` would still escape it.
+- `docs/security-suites.md` lists every case, what contains it and the layer that does.
+
+**Why.** Mission measure "sandbox-escape and injection suites 100% contained on Linux and macOS", the Phase 2 gate, and Article X. Testing against a real session, rather than each layer alone, shows that the layers work together. Assuming an obedient model keeps the result independent of any model's judgement.
+
+**Rejected.** Live model runs as the suite (they aren't deterministic and don't show the worst case). Separate test lists for the JVM and native runs (they would drift). Counting skips as passes.
+
+**Source.** Recommended options accepted while the user was away, specifying 018-security-test-suites, 2026-11-22.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -852,6 +877,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q58 | Should JHarness have a web UI, and when? | A read-only session viewer in Phase 4, next to headless mode, not gating v0.1; a companion UI with approvals and phone access after v0.1; no full web client | The viewer reuses the event stream and keeps the browser out of approvals for now | D-053 |
 | Q59 | How do agents make HTTP requests and read web pages? | `api.http` and `api.fetch` through the proxy; writes ask; text-only, capped responses; no secrets injected; jsoup for HTML | Docs and APIs are reachable without loosening Articles V and VII | D-054 |
 | Q60 | How do git fetch, pull, push and clone reach the network, and what does offline mode do? | HTTPS only through the proxy port, tokens per host from user settings, offline denies what no rule allows and runs tools offline | Completes D-039 and D-033 without loosening Articles V and VII | D-055 |
+| Q61 | How are the injection, malicious-repo and sandbox-escape suites built and run? | One catalogue of cases against a real session with an obedient model, shared canary checks, run on the JVM and in the native smoke binary | Gives the Phase 2 gate repeatable evidence on both OSes | D-056 |
 
 ---
 
