@@ -1,6 +1,17 @@
 # Changelog
 
-<!-- last-commit: 399e428971aeff12ec65fb8aecec1c2cbb48f58d -->
+<!-- last-commit: 008182dfa785150cf94a249ede7cbaa91502972c -->
+
+## 2026-11-22 · 017 Git network operations and offline mode
+
+- `api.git` adds `fetch`, `pull` (fast-forward only), `push` (never forced, no deletes or tags) and `clone`. `fetch` needs only the network rules; `pull`, `push` and `clone` ask first, and plan mode denies them. The prompt shows the URL git will use, e.g. `git push origin main → https://github.com/a/b.git`.
+- Only HTTPS remotes work. Every other transport, redirects and cookie files are off, and a remote that isn't `https://` is refused before anything is sent. Calls are refused when the repository's own config sets credential helpers, `core.askPass`, `core.sshCommand`, `protocol.*`, cookie files, or upload or receive packs.
+- git runs in the OS sandbox with only the proxy port open. The proxy settings reach git through `GIT_CONFIG_*` environment entries, never argv, and no askpass, credential helper or terminal prompt runs.
+- `"git": {"credentials": {"github.com": "GITHUB_TOKEN"}}` in the user settings maps a host to a secret from the environment or `~/.jharness/secrets`. The token is sent only to that host and shows as `***` in output and events. Project settings can't set it, and a mapped secret that isn't set stops start-up.
+- Offline mode: `--offline`, or `"offline": true` in any settings layer, an untrusted project's included. The proxy denies everything no `allow` rule matches, model endpoints are allowed automatically only on loopback or private addresses, Maven runs with `-o`, Gradle with `--offline` and npm offline, and git network ops fail at once. `session.started` records `offline` and the start line shows it.
+- On macOS, Seatbelt now and then refuses a sandboxed connect to the proxy port with `EPERM`. git network runs that never reach the proxy retry up to 3 times; the README says to re-run a build that fails this way.
+- The native smoke binary clones from a local HTTPS git server through the proxy and checks that a denied host fails at the proxy.
+- Decision: git network operations and offline mode (D-055).
 
 ## 2026-11-22 · 016 `api.http` and web fetch
 
