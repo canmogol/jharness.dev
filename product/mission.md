@@ -46,7 +46,7 @@ The binding rules are in `constitution.md`. In short: one binary; the host owns 
 
 ## Scope for v0.1
 
-Interactive TUI, headless mode and a read-only web session viewer; RunJS with file, git, Maven, Gradle, npm and HTTP operations; permissions, project trust, network rules; checkpoints and undo; subagents, custom agents, hooks and slash commands; MCP client; sessions with resume; ModelJars, OpenAI-compatible and Claude providers; macOS (Apple Silicon) and Linux.
+Interactive TUI and headless mode (a read-only web session viewer if ready, D-053); RunJS with file, git, Maven, Gradle, npm and HTTP operations; permissions, project trust, network rules; checkpoints and undo; subagents, custom agents, hooks and slash commands; MCP client; sessions with resume; ModelJars, OpenAI-compatible and Claude providers; macOS (Apple Silicon) and Linux.
 
 ## Not in v0.1
 

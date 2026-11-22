@@ -63,7 +63,7 @@ Last updated: 2026-11-22
 | D-050 | Gradle on macOS may use any loopback port, for its daemon, and so can also accept LAN connections: a recorded exception to Article V | Accepted |
 | D-051 | Shift+Enter for a new line through xterm `modifyOtherKeys` (on only while the prompt reads); `agent.maxSteps` 100 by default, at most 500 | Accepted |
 | D-052 | Command-execution checks: executables pinned to the file they resolved to; named environment variables only; argument size caps; git never runs programs from the repo's own config (filters, signing) and ignores `core.worktree` | Accepted |
-| D-053 | A read-only web session viewer in v0.1 (Phase 4, next to headless mode), on `127.0.0.1` with a session token; no approvals from the browser; a companion UI comes after v0.1 | Accepted |
+| D-053 | A read-only web session viewer, built in Phase 4 next to headless mode but not gating v0.1, on `127.0.0.1` with a session token; no approvals from the browser yet; a companion UI with approvals and phone access comes after v0.1 | Accepted |
 
 ---
 
@@ -726,15 +726,16 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** Roadmap item "Command-execution checks"; recommended options accepted while the user was away, specifying 015-command-execution-checks, 2026-11-21.
 
-## D-053 — A read-only web session viewer in v0.1
+## D-053 — A read-only web session viewer first
 
 **Decision.**
-- v0.1 gets a read-only web session viewer: the timeline, steps, diffs and thinking text of a live or finished session, in the browser. It reads the same event stream as headless mode's `stream-json` and ships with it in Phase 4.
-- The browser can't send prompts, answer approvals or change anything. A companion UI that can goes on the After v0.1 list and needs its own decision. A full web client (`jharness serve`) is not planned.
+- A read-only web session viewer: the timeline, steps, diffs and thinking text of a live or finished session, in the browser. It reads the same event stream as headless mode's `stream-json` and is built in Phase 4 next to it. It doesn't gate v0.1: if it isn't ready, it ships in a later release.
+- The browser can't send prompts, answer approvals or change anything. Approving from the browser is the goal: a companion UI that can goes on the After v0.1 list and needs its own decision. A full web client (`jharness serve`) is not planned.
+- Phone and tablet access (LAN or remote, with real authentication and TLS) is left to that later decision. Until then the viewer is reachable only from the same machine, or through an SSH port forward.
 - The viewer is served by the binary itself from embedded static files. It binds to `127.0.0.1` only, with a random per-session token and `Host` and `Origin` checks. Its spec settles the server (the JDK's `com.sun.net.httpserver` with Server-Sent Events, once a Native Image check passes), the module (`jharness-web`) and the architecture-test entry for its listening socket.
 - The mission's "Not in v0.1" line now excludes a GUI that drives the agent, not this viewer.
 
-**Why.** Events are already the source of truth (Article VIII), so a viewer is a second reader of the stream that headless mode needs anyway. Keeping the browser out of approvals means a web page can't approve an action through a local server, at least until the injection and escape suites (the Phase 2 gate) exist.
+**Why.** The user wants richer diffs, readable long sessions, use from a phone or tablet, and demos. Events are already the source of truth (Article VIII), so a viewer is a second reader of the stream that headless mode needs anyway. Keeping the browser out of approvals means a web page can't approve an action through a local server, at least until the injection and escape suites (the Phase 2 gate) exist.
 
 **Rejected.** A companion UI with approvals in v0.1 (browser-reachable approvals before the security suites). A full web client (it moves JHarness away from a terminal agent). No web UI at all (long sessions and diffs read better in a browser).
 
@@ -805,7 +806,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q55 | Should Gradle run on macOS, where its daemon needs loopback that Seatbelt can't narrow (and that also admits LAN connections)? | Yes, Gradle runs only, as a recorded Article V exception, LAN inbound included | Gradle works on every target; Maven and npm keep the proxy-only rule | D-050 |
 | Q56 | Can Shift+Enter start a new line, and how many steps may a turn take? | Yes where the terminal reports it (`modifyOtherKeys`, only while the prompt reads); 100 steps by default, at most 500 | Familiar multi-line input without breaking Esc or Ctrl-C; longer tasks finish | D-051 |
 | Q57 | Which command-execution checks are missing, and should git run filters and signing programs from a repo's config? | Pin executables, name the environment, cap arguments; no: repo-defined filters, signing and `core.worktree` are turned off, global drivers stay | A cloned repo can't run code through git, trusted or not | D-052 |
-| Q58 | Should JHarness have a web UI, and when? | A read-only session viewer in Phase 4, next to headless mode; a companion UI with approvals after v0.1; no full web client | The viewer reuses the event stream and keeps the browser out of approvals | D-053 |
+| Q58 | Should JHarness have a web UI, and when? | A read-only session viewer in Phase 4, next to headless mode, not gating v0.1; a companion UI with approvals and phone access after v0.1; no full web client | The viewer reuses the event stream and keeps the browser out of approvals for now | D-053 |
 
 ---
 
