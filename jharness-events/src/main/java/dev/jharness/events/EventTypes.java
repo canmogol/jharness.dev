@@ -28,6 +28,7 @@ public final class EventTypes {
         HOST.put("permission.rule_added", List.of("kind"));
         HOST.put("process.started", List.of("executable", "args"));
         HOST.put("process.completed", List.of("executable", "exitCode", "durationMs", "output"));
+        HOST.put("process.refused", List.of("executable", "path", "reason"));
         HOST.put("sandbox.run_started", List.of("profile"));
         HOST.put("sandbox.run_completed", List.of("status", "durationMs"));
         HOST.put("sandbox.limit_exceeded", List.of("limit", "message"));

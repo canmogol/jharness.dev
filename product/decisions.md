@@ -3,7 +3,7 @@
 Decision log for JHarness. Each entry records what was decided, why, and what was rejected.
 Status values: **Accepted** (settled), **Proposed** (recommended, not yet confirmed), **Open** (needs an answer before the related work starts).
 
-Last updated: 2026-11-20
+Last updated: 2026-11-21
 
 ---
 
@@ -62,6 +62,7 @@ Last updated: 2026-11-20
 | D-049 | Build tools: typed Maven, Gradle and npm operations in trusted projects; network only to the proxy port (Seatbelt rule on macOS, an in-binary bridge over a Unix socket on Linux); writes to their caches only | Accepted |
 | D-050 | Gradle on macOS may use any loopback port, for its daemon, and so can also accept LAN connections: a recorded exception to Article V | Accepted |
 | D-051 | Shift+Enter for a new line through xterm `modifyOtherKeys` (on only while the prompt reads); `agent.maxSteps` 100 by default, at most 500 | Accepted |
+| D-052 | Command-execution checks: executables pinned to the file they resolved to; named environment variables only; argument size caps; git never runs programs from the repo's own config (filters, signing) and ignores `core.worktree` | Accepted |
 
 ---
 
@@ -710,6 +711,20 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** User request on 2026-11-20; recommended options accepted while the user was away, specifying 014-shift-enter-and-step-limit, 2026-11-20.
 
+## D-052 — Command-execution checks
+
+**Decision.**
+- Every `Executable` is pinned to the file it resolved to (file key, size, modification time). `ProcessRunner` checks the pin before each start; a changed file fails the run with a `process.refused` event. `Executables.resolve` skips files and folders that are writable by others (`o+w`).
+- Children get `PATH`, `HOME`, `LANG`, `LC_ALL` and the sandbox's `TMPDIR`, plus only the named variables that git and the build operations set. Any other name is refused.
+- `ProcessRunner` refuses more than 4,096 arguments, any argument over 131,072 UTF-8 bytes, or more than 1 MiB in total.
+- Git turns off every filter driver that the repository's own config defines (scope `local` or `worktree`), found with `git config --show-scope` before each call. It also turns off commit and tag signing, signature display, submodule recursion and automatic gc and maintenance, and it sets `GIT_WORK_TREE` to the workspace root when that root holds `.git`. Drivers from the user's global config keep working.
+
+**Why.** Probes on git 2.53 showed that a cloned repo's `.git/config` could make `git add` and `git status` run a filter, `git commit` run `gpg.program`, and `git log` run it to verify a signature. They also showed `core.worktree` pointing git at a folder outside the workspace. The OS sandbox limits what those programs can reach, but D-011 says a repo's code runs only after trust, and git ran it either way. Pinning stops a binary swapped mid-session from running under an earlier approval.
+
+**Rejected.** Turning off every filter driver, including global ones (it would break git-lfs for users who set it up globally). Parsing `.git/config` in Java (it misses includes). Refusing to run git in repos that define filters (it breaks normal repos).
+
+**Source.** Roadmap item "Command-execution checks"; recommended options accepted while the user was away, specifying 015-command-execution-checks, 2026-11-21.
+
 ---
 
 ## Questions and answers
@@ -774,6 +789,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q54 | How do Maven, Gradle and npm run, and how do they reach the network? | Typed build and test ops in trusted projects, with approval; the sandbox opens only the proxy port (Seatbelt rule; a bridge over a Unix socket on Linux); caches writable, their config files not | Builds keep using the user's caches while every connection goes through the rules | D-049 |
 | Q55 | Should Gradle run on macOS, where its daemon needs loopback that Seatbelt can't narrow (and that also admits LAN connections)? | Yes, Gradle runs only, as a recorded Article V exception, LAN inbound included | Gradle works on every target; Maven and npm keep the proxy-only rule | D-050 |
 | Q56 | Can Shift+Enter start a new line, and how many steps may a turn take? | Yes where the terminal reports it (`modifyOtherKeys`, only while the prompt reads); 100 steps by default, at most 500 | Familiar multi-line input without breaking Esc or Ctrl-C; longer tasks finish | D-051 |
+| Q57 | Which command-execution checks are missing, and should git run filters and signing programs from a repo's config? | Pin executables, name the environment, cap arguments; no: repo-defined filters, signing and `core.worktree` are turned off, global drivers stay | A cloned repo can't run code through git, trusted or not | D-052 |
 
 ---
 

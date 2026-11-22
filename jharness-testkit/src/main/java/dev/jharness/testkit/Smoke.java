@@ -86,6 +86,20 @@ public final class Smoke {
                 throw new IllegalStateException("git " + c + " failed");
             }
         }
+        // A hostile repo config (spec 015): git must not run this filter or signing program.
+        Path hostile = tmp.resolve("hostile.sh");
+        Path hostileRan = root.resolve(".git/hostile-ran");
+        Files.writeString(hostile, "#!/bin/sh\ntouch " + hostileRan + "\ncat\n");
+        Files.setPosixFilePermissions(hostile, java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+        Files.writeString(root.resolve(".gitattributes"), "*.txt filter=evil\n");
+        for (List<String> c : List.of(List.of("config", "filter.evil.clean", hostile.toString()),
+                List.of("config", "commit.gpgSign", "true"), List.of("config", "gpg.program", hostile.toString()))) {
+            List<String> cmd = new ArrayList<>(List.of(gitExe.path().toString()));
+            cmd.addAll(c);
+            if (new ProcessBuilder(cmd).directory(root.toFile()).start().waitFor() != 0) {
+                throw new IllegalStateException("git " + c + " failed");
+            }
+        }
         Files.createDirectories(root.resolve("src"));
         Files.writeString(root.resolve("src/App.java"), "class App {\n  // TODO fix\n  int answer() { return 41; }\n}\n");
         Workspace ws = new Workspace(root);
@@ -119,6 +133,7 @@ public final class Smoke {
                     && v.path("hits").asInt() == 1 && v.path("commit").asInt() == 0 && v.path("log").asText().contains("Fix answer"),
                     r.ok() ? v : r.forModel());
             check("edit applied", Files.readString(root.resolve("src/App.java")).contains("return 42"), "return 42");
+            check("git ignores the repo's filter and gpg.program", !Files.exists(hostileRan), "no marker");
             RunResult err = iso.run("const a = 1;\napi.readFile('../outside');\n", api);
             check("confinement and line numbers", err.status().equals("error") && err.line() == 2 && err.error().contains("outside"),
                     err.forModel());

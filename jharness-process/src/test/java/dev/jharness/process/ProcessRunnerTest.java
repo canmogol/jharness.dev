@@ -65,12 +65,12 @@ class ProcessRunnerTest {
 
     @Test
     void environmentIsClean() throws Exception {
-        ProcessResult r = runner(30_000).run(fixture("env"), List.of(), tmp, Duration.ofSeconds(10), Map.of("EXTRA", "1"));
+        ProcessResult r = runner(30_000).run(fixture("env"), List.of(), tmp, Duration.ofSeconds(10), Map.of("GIT_TERMINAL_PROMPT", "0"));
         List<String> names = r.output().lines().map(l -> l.split("=", 2)[0]).toList();
         for (String n : names) {
-            assertTrue(List.of("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "EXTRA", "PWD", "SHLVL", "_", "OLDPWD").contains(n), n);
+            assertTrue(List.of("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "GIT_TERMINAL_PROMPT", "PWD", "SHLVL", "_", "OLDPWD").contains(n), n);
         }
-        assertTrue(r.output().contains("EXTRA=1"));
+        assertTrue(r.output().contains("GIT_TERMINAL_PROMPT=0"));
     }
 
     @Test

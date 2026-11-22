@@ -8,7 +8,8 @@ import java.util.Set;
 
 /**
  * Resolves the tools JHarness may run to absolute paths (D-008, D-027). {@code PATH} entries that
- * are relative or inside the workspace are skipped, so a repository can't plant its own {@code git}.
+ * are relative or inside the workspace are skipped, so a repository can't plant its own {@code git};
+ * so are files and folders anyone may write to.
  */
 public final class Executables {
 
@@ -40,7 +41,7 @@ public final class Executables {
             Path candidate = d.resolve(name);
             if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) {
                 Path real = realOrSelf(candidate);
-                if (ws != null && real.startsWith(ws)) {
+                if (ws != null && real.startsWith(ws) || othersCanWrite(real) || othersCanWrite(real.getParent())) {
                     continue;
                 }
                 return Optional.of(new Executable(name, real, d));
@@ -52,6 +53,18 @@ public final class Executables {
     /** Resolves from this process's {@code PATH}. */
     public static Optional<Executable> resolve(String name, Path workspace) {
         return resolve(name, System.getenv("PATH"), workspace);
+    }
+
+    /** A file or folder anyone may write to (mode {@code o+w}) could be swapped under us (spec 015, AC-05). */
+    static boolean othersCanWrite(Path p) {
+        if (p == null) {
+            return false;
+        }
+        try {
+            return Files.getPosixFilePermissions(p).contains(java.nio.file.attribute.PosixFilePermission.OTHERS_WRITE);
+        } catch (IOException | UnsupportedOperationException e) {
+            return true;
+        }
     }
 
     private static Path realOrSelf(Path p) {

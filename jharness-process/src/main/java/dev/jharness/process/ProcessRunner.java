@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -21,7 +22,8 @@ import dev.jharness.events.Origin;
 /**
  * The only place JHarness starts a process (constitution Article IV, D-008). It takes an argv list,
  * never a command string; the executable comes from {@link Executables}; the environment is cleared
- * except for a fixed set; stdin is empty; the whole process tree is killed on timeout (D-028); and
+ * except for named variables; the executable must still be the file it resolved to; argument sizes are capped;
+ * stdin is empty; the whole process tree is killed on timeout (D-028); and
  * every process runs inside the OS sandbox, or not at all (D-048).
  */
 public final class ProcessRunner {
@@ -85,14 +87,18 @@ public final class ProcessRunner {
         if (!sandbox.available()) {
             throw new OperationException("cannot run " + exe.name() + ": no OS sandbox (" + sandbox.reason() + ")");
         }
+        checkArgs(args);
+        checkEnv(env);
+        try {
+            exe.verify();
+        } catch (OperationException ex) {
+            bus.publish(origin.get(), "process.refused", Json.object().put("executable", exe.name())
+                    .put("path", exe.path().toString()).put("reason", ex.getMessage()));
+            throw ex;
+        }
         List<String> argv = new ArrayList<>(args.size() + 1);
         argv.add(exe.path().toString());
-        for (String a : args) {
-            if (a == null || a.indexOf('\0') >= 0) {
-                throw new IllegalArgumentException("argument contains a NUL character");
-            }
-            argv.add(a);
-        }
+        argv.addAll(args);
         ProcessBuilder pb = new ProcessBuilder(sandbox.wrap(argv, cwd, grants))
                 .directory(cwd.toFile())
                 .redirectErrorStream(true)
@@ -106,10 +112,6 @@ public final class ProcessRunner {
         }
         e.put("LANG", "C.UTF-8");
         e.put("LC_ALL", "C.UTF-8");
-        String tmp = System.getenv("TMPDIR");
-        if (tmp != null) {
-            e.put("TMPDIR", tmp);
-        }
         e.putAll(env);
         e.putAll(sandbox.env());
 
@@ -149,6 +151,52 @@ public final class ProcessRunner {
                 .put("timedOut", timedOut).put("output", r.full()).put("outputTruncated", r.fullTruncated());
         bus.publish(origin.get(), "process.completed", done);
         return r;
+    }
+
+    /** Argument limits (spec 015, AC-07); Linux caps one argument at 128 KiB. */
+    static final int MAX_ARGS = 4096;
+    static final int MAX_ARG_BYTES = 131_072;
+    static final int MAX_TOTAL_BYTES = 1 << 20;
+
+    /**
+     * The only variables a caller may add to the clean base of {@code PATH}, {@code HOME}, {@code LANG},
+     * {@code LC_ALL} and the sandbox's {@code TMPDIR} (spec 015, AC-06).
+     */
+    static final Set<String> ENV_NAMES = Set.of(
+            "PATH", "JAVA_HOME", "JAVA_TOOL_OPTIONS",
+            "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "GIT_OPTIONAL_LOCKS", "GIT_WORK_TREE",
+            "npm_config_proxy", "npm_config_https_proxy", "npm_config_update_notifier", "npm_config_fund",
+            "npm_config_audit", "npm_config_color", "npm_config_progress");
+
+    static void checkArgs(List<String> args) {
+        if (args.size() > MAX_ARGS) {
+            throw new IllegalArgumentException("too many arguments: " + args.size() + " (at most " + MAX_ARGS + ")");
+        }
+        long total = 0;
+        for (String a : args) {
+            if (a == null || a.indexOf('\0') >= 0) {
+                throw new IllegalArgumentException("argument contains a NUL character");
+            }
+            int bytes = a.getBytes(StandardCharsets.UTF_8).length;
+            if (bytes > MAX_ARG_BYTES) {
+                throw new IllegalArgumentException("argument too long: " + bytes + " bytes (at most " + MAX_ARG_BYTES + ")");
+            }
+            total += bytes;
+        }
+        if (total > MAX_TOTAL_BYTES) {
+            throw new IllegalArgumentException("arguments too long: " + total + " bytes (at most " + MAX_TOTAL_BYTES + ")");
+        }
+    }
+
+    static void checkEnv(Map<String, String> env) {
+        for (Map.Entry<String, String> v : env.entrySet()) {
+            if (!ENV_NAMES.contains(v.getKey())) {
+                throw new IllegalArgumentException("environment variable " + v.getKey() + " is not one JHarness passes to processes");
+            }
+            if (v.getValue() == null || v.getValue().indexOf('\0') >= 0) {
+                throw new IllegalArgumentException("environment variable " + v.getKey() + " has no value or a NUL character");
+            }
+        }
     }
 
     /** Kills every descendant first (they would be re-parented once the parent dies), then the process. */
