@@ -14,7 +14,7 @@ public record HttpSettings(long maxResponseBytes, int maxChars) {
     public static final int MIN_CHARS = 1_000, MAX_CHARS = 1_000_000;
 
     public static HttpSettings defaults() {
-        return new HttpSettings(5L * 1024 * 1024, 100_000);
+        return new HttpSettings(10L * 1024 * 1024, 200_000);
     }
 
     static HttpSettings parse(JsonNode section, String source) throws ConfigException {

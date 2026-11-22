@@ -34,7 +34,7 @@ type BuildResultJson = string;
 /** {"status": number, "url": string, "headers": {[name: string]: string}, "contentType": string,
  *   "body": string, "bytes": number, "truncated": boolean, "binary": boolean}
  *   — status 4xx and 5xx are normal results; url is the final URL after redirects; header names are
- *   lowercase; body is text, at most 100,000 characters; binary is true for non-text types, whose body
+ *   lowercase; body is text, cut at the user's limit (200,000 characters by default; truncated says so); binary is true for non-text types, whose body
  *   is not returned */
 type HttpResultJson = string;
 

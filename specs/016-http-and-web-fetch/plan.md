@@ -69,8 +69,8 @@ Proxy denials: the egress proxy marks its own 403 refusals with `X-JHarness-Prox
 | --- | --- | --- |
 | `timeouts.http` | 30 s | ≤ `timeouts.httpMax` |
 | `timeouts.httpMax` | 2 min | — |
-| `http.maxResponseBytes` | 5 MiB | 64 KiB to 50 MiB |
-| `http.maxChars` | 100,000 | 1,000 to 1,000,000 |
+| `http.maxResponseBytes` | 10 MiB | 64 KiB to 50 MiB |
+| `http.maxChars` | 200,000 | 1,000 to 1,000,000 |
 
 ### Events
 

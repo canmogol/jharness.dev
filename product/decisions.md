@@ -64,7 +64,7 @@ Last updated: 2026-11-22
 | D-051 | Shift+Enter for a new line through xterm `modifyOtherKeys` (on only while the prompt reads); `agent.maxSteps` 100 by default, at most 500 | Accepted |
 | D-052 | Command-execution checks: executables pinned to the file they resolved to; named environment variables only; argument size caps; git never runs programs from the repo's own config (filters, signing) and ignores `core.worktree` | Accepted |
 | D-053 | A read-only web session viewer, built in Phase 4 next to headless mode but not gating v0.1, on `127.0.0.1` with a session token; no approvals from the browser yet; a companion UI with approvals and phone access comes after v0.1 | Accepted |
-| D-054 | `api.http` and `api.fetch` through the egress proxy: GET and HEAD are reads, other methods ask; 5 MiB read, 100,000 characters returned, text only; no secrets injected; jsoup turns HTML into text; `HttpClients` moves to `jharness-net` | Accepted |
+| D-054 | `api.http` and `api.fetch` through the egress proxy: GET and HEAD are reads, other methods ask; 10 MiB read and 200,000 characters returned by default (configurable), text only; no secrets injected; jsoup turns HTML into text; `HttpClients` moves to `jharness-net` | Accepted |
 
 ---
 
@@ -748,7 +748,7 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 - `api.http({method, url, headers, body, timeoutMs})` sends one request and returns `{status, url, headers, contentType, body, bytes, truncated, binary}`. `api.fetch({url, timeoutMs})` GETs a page and returns readable text: `{status, url, title, text, truncated}`.
 - Every request uses the one `HttpClient` from `HttpClients`, so it goes through the egress proxy and the network rules (D-025). Hosts that no rule matches are asked about by the proxy, as today.
 - GET and HEAD are reads: the network rules alone decide. POST, PUT, PATCH and DELETE change state. They ask for approval (D-010), plan mode denies them, and "always" saves a `<METHOD> <host>` rule in the user-folder permissions file (D-040).
-- At most 5 MiB of a response is read and 100,000 characters are returned (`http.maxResponseBytes`, `http.maxChars`). Text types come back as UTF-8; binary bodies come back as type and size only. GET and HEAD follow up to 5 redirects, and each hop goes through the proxy again; other methods don't follow redirects.
+- By default at most 10 MiB of a response is read and 200,000 characters are returned. Both are settings: `http.maxResponseBytes` (64 KiB to 50 MiB) and `http.maxChars` (1,000 to 1,000,000). Text types come back as UTF-8; binary bodies come back as type and size only. GET and HEAD follow up to 5 redirects, and each hop goes through the proxy again; other methods don't follow redirects.
 - The agent may set any request header except `Host`, `Content-Length`, `Connection`, `Transfer-Encoding`, `Upgrade`, `Expect` and `Proxy-*`. JHarness sets its own `User-Agent`. No user secret is ever added to a request; authenticated calls with the user's tokens need a later decision.
 - Timeouts: `timeouts.http` (30 s) and `timeouts.httpMax` (2 min), as D-028 set out.
 - `http.request` and `http.response` events record method, URL, status, type, size and time. Headers and bodies stay out of the log, since they may hold tokens.

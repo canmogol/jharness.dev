@@ -124,8 +124,8 @@ class SettingsTest {
         Settings d = Settings.defaults();
         assertEquals(Duration.ofSeconds(30), d.timeouts().http());
         assertEquals(Duration.ofMinutes(2), d.timeouts().httpMax());
-        assertEquals(5L * 1024 * 1024, d.http().maxResponseBytes());
-        assertEquals(100_000, d.http().maxChars());
+        assertEquals(10L * 1024 * 1024, d.http().maxResponseBytes());
+        assertEquals(200_000, d.http().maxChars());
         Settings s = Settings.parse("{\"timeouts\":{\"http\":\"10s\",\"httpMax\":\"1m\"},\"http\":{\"maxResponseBytes\":65536,\"maxChars\":2000}}", "s");
         assertEquals(Duration.ofSeconds(10), s.timeouts().http());
         assertEquals(Duration.ofMinutes(1), s.timeouts().httpMax());
