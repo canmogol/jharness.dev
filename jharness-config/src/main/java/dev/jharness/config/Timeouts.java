@@ -12,13 +12,16 @@ import com.fasterxml.jackson.databind.JsonNode;
  * @param processMax the most a single call may ask for
  * @param rg timeout for {@code rg}
  * @param outputChars characters of output returned to the model (at most 150,000)
+ * @param http default timeout for {@code api.http} and {@code api.fetch} (spec 016)
+ * @param httpMax the most a single HTTP call may ask for
  */
-public record Timeouts(Duration process, Duration processMax, Duration rg, int outputChars) {
+public record Timeouts(Duration process, Duration processMax, Duration rg, int outputChars, Duration http, Duration httpMax) {
 
     public static final int MAX_OUTPUT_CHARS = 150_000;
 
     public static Timeouts defaults() {
-        return new Timeouts(Duration.ofMinutes(2), Duration.ofMinutes(10), Duration.ofSeconds(60), 30_000);
+        return new Timeouts(Duration.ofMinutes(2), Duration.ofMinutes(10), Duration.ofSeconds(60), 30_000,
+                Duration.ofSeconds(30), Duration.ofMinutes(2));
     }
 
     static Timeouts parse(JsonNode section, String source) throws ConfigException {
@@ -33,6 +36,8 @@ public record Timeouts(Duration process, Duration processMax, Duration rg, int o
         Duration processMax = d.processMax;
         Duration rg = d.rg;
         int chars = d.outputChars;
+        Duration http = d.http;
+        Duration httpMax = d.httpMax;
         for (Map.Entry<String, JsonNode> e : section.properties()) {
             String where = source + ": timeouts." + e.getKey();
             String v = e.getValue().asText();
@@ -40,19 +45,24 @@ public record Timeouts(Duration process, Duration processMax, Duration rg, int o
                 case "process" -> process = duration(where, v);
                 case "processMax" -> processMax = duration(where, v);
                 case "rg" -> rg = duration(where, v);
+                case "http" -> http = duration(where, v);
+                case "httpMax" -> httpMax = duration(where, v);
                 case "outputChars" -> {
                     if (!e.getValue().canConvertToInt() || e.getValue().asInt() <= 0 || e.getValue().asInt() > MAX_OUTPUT_CHARS) {
                         throw new ConfigException(where + "=" + v + ": expected a whole number from 1 to " + MAX_OUTPUT_CHARS);
                     }
                     chars = e.getValue().asInt();
                 }
-                default -> throw new ConfigException(where + " is not a known setting (known: process, processMax, rg, outputChars)");
+                default -> throw new ConfigException(where + " is not a known setting (known: process, processMax, rg, outputChars, http, httpMax)");
             }
         }
         if (process.compareTo(processMax) > 0) {
             throw new ConfigException(source + ": timeouts.process must not exceed timeouts.processMax");
         }
-        return new Timeouts(process, processMax, rg, chars);
+        if (http.compareTo(httpMax) > 0) {
+            throw new ConfigException(source + ": timeouts.http must not exceed timeouts.httpMax");
+        }
+        return new Timeouts(process, processMax, rg, chars, http, httpMax);
     }
 
     private static Duration duration(String where, String v) throws ConfigException {

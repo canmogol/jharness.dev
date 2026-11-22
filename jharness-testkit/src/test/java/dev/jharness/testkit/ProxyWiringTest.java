@@ -23,7 +23,7 @@ import dev.jharness.agent.Session;
 import dev.jharness.agent.TurnResult;
 import dev.jharness.config.Settings;
 import dev.jharness.events.Event;
-import dev.jharness.llm.http.HttpClients;
+import dev.jharness.net.http.HttpClients;
 import dev.jharness.security.Prompter;
 import dev.jharness.testkit.StubModelServer.Reply;
 

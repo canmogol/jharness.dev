@@ -285,7 +285,7 @@ public final class EgressProxy implements AutoCloseable {
         }
         InetAddress ip = check(hp.host(), hp.port());
         if (ip == null) {
-            respond(out, 403, "Forbidden", "");
+            respond(out, 403, "Forbidden", DENIED_HEADER);
             return;
         }
         Socket up = new Socket();
@@ -337,7 +337,7 @@ public final class EgressProxy implements AutoCloseable {
         int port = u.getPort() < 0 ? 80 : u.getPort();
         InetAddress ip = check(host, port);
         if (ip == null) {
-            respond(out, 403, "Forbidden", "");
+            respond(out, 403, "Forbidden", DENIED_HEADER);
             return;
         }
         String path = u.getRawPath() == null || u.getRawPath().isEmpty() ? "/" : u.getRawPath();
@@ -500,6 +500,10 @@ public final class EgressProxy implements AutoCloseable {
     }
 
     // --- Plumbing ---------------------------------------------------------------------------
+
+    /** Marks the proxy's own refusals, so a client can tell them from a server's 403 (spec 016). */
+    public static final String DENIED = "X-JHarness-Proxy";
+    private static final String DENIED_HEADER = DENIED + ": denied\r\n";
 
     private static void respond(OutputStream out, int code, String text, String extra) throws IOException {
         out.write(("HTTP/1.1 " + code + " " + text + "\r\n" + extra + "Content-Length: 0\r\nConnection: close\r\n\r\n")

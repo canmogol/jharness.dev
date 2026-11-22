@@ -17,6 +17,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.jharness.events.EventException;
 import dev.jharness.events.Json;
+import dev.jharness.net.http.HttpException;
+import dev.jharness.net.http.HttpOperations;
 import dev.jharness.process.BuildOperations;
 import dev.jharness.process.GitOperations;
 import dev.jharness.process.OperationException;
@@ -86,7 +88,7 @@ public final class HostApi {
 
     private static String message(Exception e) {
         if (e instanceof Workspace.PathException || e instanceof OperationException || e instanceof EventException
-                || e instanceof IllegalArgumentException) {
+                || e instanceof IllegalArgumentException || e instanceof HttpException) {
             return e.getMessage();
         }
         if (e instanceof java.nio.file.NoSuchFileException n) {
@@ -450,6 +452,36 @@ public final class HostApi {
         } finally {
             clock.resume();
         }
+    }
+
+    /** {@code api.http} (spec 016): GET and HEAD need only the network rules; other methods ask. */
+    @HostAccess.Export
+    public String http(String json) {
+        HttpOperations.Request r;
+        try {
+            if (s.http() == null) {
+                throw new IllegalArgumentException("http is not available in this session");
+            }
+            r = s.http().check(args(json));
+        } catch (RuntimeException e) {
+            return reject("http", e);
+        }
+        return call("http", r.kind(), r.summary(), r.detail(), () -> Json.write(outsideRunClock(() -> s.http().http(r))));
+    }
+
+    /** {@code api.fetch} (spec 016): a GET whose page comes back as Markdown-like text. */
+    @HostAccess.Export
+    public String fetch(String json) {
+        HttpOperations.Request r;
+        try {
+            if (s.http() == null) {
+                throw new IllegalArgumentException("fetch is not available in this session");
+            }
+            r = s.http().checkFetch(args(json));
+        } catch (RuntimeException e) {
+            return reject("fetch", e);
+        }
+        return call("fetch", r.kind(), "fetch " + r.uri(), r.detail(), () -> Json.write(outsideRunClock(() -> s.http().fetch(r))));
     }
 
     @HostAccess.Export

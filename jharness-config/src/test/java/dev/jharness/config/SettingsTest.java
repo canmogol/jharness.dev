@@ -120,6 +120,26 @@ class SettingsTest {
     }
 
     @Test
+    void httpSectionAndTimeouts() throws Exception {
+        Settings d = Settings.defaults();
+        assertEquals(Duration.ofSeconds(30), d.timeouts().http());
+        assertEquals(Duration.ofMinutes(2), d.timeouts().httpMax());
+        assertEquals(5L * 1024 * 1024, d.http().maxResponseBytes());
+        assertEquals(100_000, d.http().maxChars());
+        Settings s = Settings.parse("{\"timeouts\":{\"http\":\"10s\",\"httpMax\":\"1m\"},\"http\":{\"maxResponseBytes\":65536,\"maxChars\":2000}}", "s");
+        assertEquals(Duration.ofSeconds(10), s.timeouts().http());
+        assertEquals(Duration.ofMinutes(1), s.timeouts().httpMax());
+        assertEquals(65536, s.http().maxResponseBytes());
+        assertEquals(2000, s.http().maxChars());
+        assertTrue(bad("{\"timeouts\":{\"http\":\"5m\"}}").getMessage().contains("httpMax"));
+        assertTrue(bad("{\"http\":{\"maxResponseBytes\":10}}").getMessage().contains("http.maxResponseBytes"));
+        assertTrue(bad("{\"http\":{\"maxResponseBytes\":1e12}}").getMessage().contains("http.maxResponseBytes"));
+        assertTrue(bad("{\"http\":{\"maxChars\":5000000}}").getMessage().contains("http.maxChars"));
+        assertTrue(bad("{\"http\":{\"cookies\":true}}").getMessage().contains("http.cookies"));
+        assertTrue(bad("{\"http\":[]}").getMessage().contains("\"http\""));
+    }
+
+    @Test
     void uiSection() throws Exception {
         assertEquals("steps", Settings.defaults().ui().events());
         assertEquals("all", Settings.parse("{\"ui\":{\"events\":\"all\"}}", "s").ui().events());

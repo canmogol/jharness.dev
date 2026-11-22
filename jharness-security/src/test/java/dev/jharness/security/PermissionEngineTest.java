@@ -107,6 +107,35 @@ class PermissionEngineTest {
         assertFalse(later.decide(git("restore")).allowed(), "other git ops still ask");
     }
 
+    static Operation http(String method, String host) {
+        boolean read = method.equals("GET") || method.equals("HEAD");
+        return new Operation("http", read ? Operation.Kind.HTTP : Operation.Kind.HTTP_WRITE, method + " https://" + host + "/x",
+                Json.object().put("method", method).put("host", host).put("op", method + " " + host));
+    }
+
+    @Test
+    void httpReadsNeedOnlyTheNetworkRulesAndWritesAsk() {
+        for (String mode : List.of("ask", "accept-edits", "plan", "bypass")) {
+            asked.clear();
+            PermissionEngine e = engine(mode, Prompter.Answer.DENY);
+            assertTrue(e.decide(http("GET", "docs.example.com")).allowed(), mode);
+            assertTrue(e.decide(http("HEAD", "docs.example.com")).allowed(), mode);
+            assertEquals(mode.equals("bypass"), e.decide(http("POST", "api.example.com")).allowed(), mode);
+            assertEquals(mode.equals("ask") || mode.equals("accept-edits") ? 1 : 0, asked.size(), mode + " asks");
+        }
+        assertTrue(engine("plan", Prompter.Answer.ONCE).decide(http("DELETE", "api.example.com")).reason().contains("plan mode"));
+    }
+
+    @Test
+    void alwaysSavesAnHttpRulePerMethodAndHost() throws Exception {
+        assertTrue(engine("ask", Prompter.Answer.ALWAYS).decide(http("POST", "api.example.com")).allowed());
+        assertTrue(Files.readString(ProjectRules.fileFor(home, ws)).contains("{\"kind\":\"http-write\",\"op\":\"POST api.example.com\"}"));
+        PermissionEngine later = engine("ask", Prompter.Answer.DENY);
+        assertTrue(later.decide(http("POST", "api.example.com")).allowed(), "saved rule");
+        assertFalse(later.decide(http("PUT", "api.example.com")).allowed(), "other methods still ask");
+        assertFalse(later.decide(http("POST", "other.example.com")).allowed(), "other hosts still ask");
+    }
+
     @Test
     void repositoryFilesCantAddRules() throws Exception {
         Files.createDirectories(ws.resolve(".jharness"));

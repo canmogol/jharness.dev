@@ -69,6 +69,18 @@
           "parameterTypes": [
             "java.lang.String"
           ]
+        },
+        {
+          "name": "http",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "fetch",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         }
       ]
     }

@@ -17,11 +17,15 @@ public record Operation(String api, Kind kind, String summary, ObjectNode detail
         /** A Maven, Gradle or npm run (spec 013): it runs the project's own build code. */
         BUILD,
         /** A connection through the egress proxy that no rule decided (spec 011); asked by the proxy itself. */
-        NETWORK;
+        NETWORK,
+        /** An {@code api.http} GET or HEAD, or an {@code api.fetch} (spec 016): the network rules alone decide. */
+        HTTP,
+        /** An {@code api.http} POST, PUT, PATCH or DELETE (spec 016): it changes state somewhere else. */
+        HTTP_WRITE;
 
         /** True for kinds that change state and need approval by default (D-010). */
         public boolean changesState() {
-            return this == WRITE || this == GIT_WRITE || this == BUILD;
+            return this == WRITE || this == GIT_WRITE || this == BUILD || this == HTTP_WRITE;
         }
 
         public String wire() {

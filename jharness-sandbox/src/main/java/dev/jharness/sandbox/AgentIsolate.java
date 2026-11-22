@@ -52,6 +52,8 @@ public final class AgentIsolate implements AutoCloseable {
                 maven: (q) => call('maven', [s(q)]),
                 gradle: (q) => call('gradle', [s(q)]),
                 npm: (q) => call('npm', [s(q)]),
+                http: (q) => call('http', [s(typeof q === 'string' ? {url: q} : q)]),
+                fetch: (q) => call('fetch', [s(typeof q === 'string' ? {url: q} : q)]),
                 emit: (e) => call('emit', [s(e)]),
               });
               const text = (v) => v === undefined ? null : (typeof v === 'string' ? v : JSON.stringify(v));

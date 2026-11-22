@@ -34,7 +34,7 @@ class ArchitectureTest {
             new Rule("process start", Pattern.compile("new\\s+ProcessBuilder\\b|Runtime\\s*\\.\\s*getRuntime\\s*\\(\\s*\\)\\s*\\.\\s*exec|\\.exec\\s*\\(\\s*new\\s+String"),
                     List.of("jharness-process/src/main/java/dev/jharness/process/ProcessRunner.java", BRIDGE)),
             new Rule("HTTP client", Pattern.compile("HttpClient\\s*\\.\\s*(newBuilder|newHttpClient)\\b"),
-                    List.of("jharness-llm/src/main/java/dev/jharness/llm/http/HttpClients.java")),
+                    List.of("jharness-net/src/main/java/dev/jharness/net/http/HttpClients.java")),
             new Rule("socket", Pattern.compile("new\\s+(Server)?Socket\\s*\\(|(Server)?SocketChannel\\s*\\.\\s*open|new\\s+DatagramSocket|HttpServer\\s*\\.\\s*create"),
                     List.of("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", BRIDGE)));
 

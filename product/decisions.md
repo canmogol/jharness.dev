@@ -64,6 +64,7 @@ Last updated: 2026-11-22
 | D-051 | Shift+Enter for a new line through xterm `modifyOtherKeys` (on only while the prompt reads); `agent.maxSteps` 100 by default, at most 500 | Accepted |
 | D-052 | Command-execution checks: executables pinned to the file they resolved to; named environment variables only; argument size caps; git never runs programs from the repo's own config (filters, signing) and ignores `core.worktree` | Accepted |
 | D-053 | A read-only web session viewer, built in Phase 4 next to headless mode but not gating v0.1, on `127.0.0.1` with a session token; no approvals from the browser yet; a companion UI with approvals and phone access comes after v0.1 | Accepted |
+| D-054 | `api.http` and `api.fetch` through the egress proxy: GET and HEAD are reads, other methods ask; 5 MiB read, 100,000 characters returned, text only; no secrets injected; jsoup turns HTML into text; `HttpClients` moves to `jharness-net` | Accepted |
 
 ---
 
@@ -741,6 +742,24 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** User accepted the recommendation in a discussion of the web UI, 2026-11-22.
 
+## D-054 — `api.http` and `api.fetch`
+
+**Decision.**
+- `api.http({method, url, headers, body, timeoutMs})` sends one request and returns `{status, url, headers, contentType, body, bytes, truncated, binary}`. `api.fetch({url, timeoutMs})` GETs a page and returns readable text: `{status, url, title, text, truncated}`.
+- Every request uses the one `HttpClient` from `HttpClients`, so it goes through the egress proxy and the network rules (D-025). Hosts that no rule matches are asked about by the proxy, as today.
+- GET and HEAD are reads: the network rules alone decide. POST, PUT, PATCH and DELETE change state. They ask for approval (D-010), plan mode denies them, and "always" saves a `<METHOD> <host>` rule in the user-folder permissions file (D-040).
+- At most 5 MiB of a response is read and 100,000 characters are returned (`http.maxResponseBytes`, `http.maxChars`). Text types come back as UTF-8; binary bodies come back as type and size only. GET and HEAD follow up to 5 redirects, and each hop goes through the proxy again; other methods don't follow redirects.
+- The agent may set any request header except `Host`, `Content-Length`, `Connection`, `Transfer-Encoding`, `Upgrade`, `Expect` and `Proxy-*`. JHarness sets its own `User-Agent`. No user secret is ever added to a request; authenticated calls with the user's tokens need a later decision.
+- Timeouts: `timeouts.http` (30 s) and `timeouts.httpMax` (2 min), as D-028 set out.
+- `http.request` and `http.response` events record method, URL, status, type, size and time. Headers and bodies stay out of the log, since they may hold tokens.
+- jsoup (MIT, pure Java) turns HTML into Markdown-like text, after a Native Image check on Linux and macOS. `HttpClients` moves from `jharness-llm` to `jharness-net`, so the sandbox can use it without depending on the model providers.
+
+**Why.** Agents need to read documentation and call web APIs. One client and the proxy keep Article V intact. Treating writes like file writes keeps approvals consistent. Caps keep a large page from flooding the model's context.
+
+**Rejected.** One `api.http` with a text mode (one call doing two jobs). GET only (blocks ordinary API work). Base64 binary bodies (images and archives waste context). Injecting secrets (reopens Article VII; needs its own design). An in-house HTML converter (weak on real-world HTML). Logging bodies (they may hold tokens).
+
+**Source.** User answers while specifying 016-http-and-web-fetch, 2026-11-22.
+
 ---
 
 ## Questions and answers
@@ -807,6 +826,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q56 | Can Shift+Enter start a new line, and how many steps may a turn take? | Yes where the terminal reports it (`modifyOtherKeys`, only while the prompt reads); 100 steps by default, at most 500 | Familiar multi-line input without breaking Esc or Ctrl-C; longer tasks finish | D-051 |
 | Q57 | Which command-execution checks are missing, and should git run filters and signing programs from a repo's config? | Pin executables, name the environment, cap arguments; no: repo-defined filters, signing and `core.worktree` are turned off, global drivers stay | A cloned repo can't run code through git, trusted or not | D-052 |
 | Q58 | Should JHarness have a web UI, and when? | A read-only session viewer in Phase 4, next to headless mode, not gating v0.1; a companion UI with approvals and phone access after v0.1; no full web client | The viewer reuses the event stream and keeps the browser out of approvals for now | D-053 |
+| Q59 | How do agents make HTTP requests and read web pages? | `api.http` and `api.fetch` through the proxy; writes ask; text-only, capped responses; no secrets injected; jsoup for HTML | Docs and APIs are reachable without loosening Articles V and VII | D-054 |
 
 ---
 
