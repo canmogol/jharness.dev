@@ -167,6 +167,27 @@ class CommandExecutionTest {
         }
     }
 
+    @Test
+    void gitNetworkEnvironmentUsesOnlyNamedVariables() {
+        // Spec 017: the proxy and tokens reach git as GIT_CONFIG_* entries.
+        for (String n : List.of("GIT_ASKPASS", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0", "GIT_CONFIG_KEY_12",
+                "npm_config_offline")) {
+            assertDoesNotThrow(() -> ProcessRunner.checkEnv(Map.of(n, "x")), n);
+        }
+        for (String n : List.of("GIT_CONFIG_KEY_", "GIT_CONFIG_KEY_123", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_SSH_COMMAND",
+                "GIT_SSL_NO_VERIFY", "GIT_TRACE")) {
+            assertThrows(IllegalArgumentException.class, () -> ProcessRunner.checkEnv(Map.of(n, "x")), n);
+        }
+    }
+
+    @Test
+    void secretsAreRedactedFromOutputAndEvents() throws Exception {
+        ProcessResult r = runner().run(new Executable("fixture", script("echo", "echo tok-123 and dG9rLTEyMw== and tok-1234")),
+                List.of(), ws, Duration.ofSeconds(10), Map.of(), ChildSandbox.Grants.NONE, List.of("tok-123", "dG9rLTEyMw==", "tok-1234"));
+        assertEquals("*** and *** and ***", r.output().strip());
+        assertFalse(r.full().contains("tok-"), r.full());
+    }
+
     // --- Argument limits (AC-07) ---
 
     @Test

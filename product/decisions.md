@@ -65,6 +65,7 @@ Last updated: 2026-11-22
 | D-052 | Command-execution checks: executables pinned to the file they resolved to; named environment variables only; argument size caps; git never runs programs from the repo's own config (filters, signing) and ignores `core.worktree` | Accepted |
 | D-053 | A read-only web session viewer, built in Phase 4 next to headless mode but not gating v0.1, on `127.0.0.1` with a session token; no approvals from the browser yet; a companion UI with approvals and phone access comes after v0.1 | Accepted |
 | D-054 | `api.http` and `api.fetch` through the egress proxy: GET and HEAD are reads, other methods ask; 10 MiB read and 200,000 characters returned by default (configurable), text only; headers and bodies logged only when debug switches are on, secrets redacted; no secrets injected; jsoup turns HTML into text; `HttpClients` moves to `jharness-net` | Accepted |
+| D-055 | Git `fetch`, `pull`, `push` and `clone` over HTTPS only, through the proxy port in the OS sandbox; no force push; tokens per host from user settings only, scoped to that host and redacted; offline mode denies what no rule allows, runs build tools offline and refuses git network ops | Accepted |
 
 ---
 
@@ -761,6 +762,28 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** User answers while specifying 016-http-and-web-fetch, 2026-11-22; debug logging switches added at the user's request before 016 merged, 2026-11-22.
 
+## D-055 — Git network operations and offline mode
+
+**Decision.**
+- `api.git` adds `fetch`, `pull` (fast-forward only), `push` and `clone`. This completes D-039. `fetch` is a read; `pull`, `push` and `clone` ask, and plan mode denies them. Push never forces or deletes, and doesn't push tags.
+- Only HTTPS remotes work: `protocol.https.allow=always`, and every other transport is set to never, ssh included (as D-025 says). Redirects and cookie files are off. Calls are refused when the repository's own config sets credential helpers, `core.askPass`, `core.sshCommand`, `protocol.*`, cookie files, or upload or receive packs.
+- git runs in the OS sandbox with only the proxy port open (D-049). The proxy and its credentials reach git through `GIT_CONFIG_*` environment entries, never argv. No askpass, credential helper or terminal prompt runs.
+- `"git": {"credentials": {"<host>": "<SECRET_NAME>"}}` in the user settings maps a host to a secret (D-042). The token is sent as an `extraHeader` scoped to `https://<host>/`, so it goes only to that host, and it is redacted from output and events. Project settings can't set it.
+- Offline mode (`--offline`, or `"offline": true` in any settings layer, including an untrusted project's) works as follows:
+  - the proxy denies everything no `allow` rule matches, and the files' `default` lines don't apply;
+  - model endpoints are allowed automatically only on loopback or private addresses;
+  - Maven runs with `-o`, Gradle with `--offline` and npm with `npm_config_offline=true`;
+  - git network ops fail up front.
+- On macOS, Seatbelt now and then refuses the first connect to the proxy port. git network runs that never reach the proxy are retried up to 3 times; nothing was sent at that point.
+
+  This settles how D-033 is applied.
+
+**Why.** US-2.6 and US-3.3. HTTPS through the proxy keeps Article V intact for git. A per-host token mapped by the user makes push useful without giving the repository or the model a say over secrets. Keeping explicit `allow` rules in offline mode lets a LAN mirror or a local model keep working.
+
+**Rejected.** SSH remotes (they bypass the HTTP proxy). Plain-HTTP remotes (tokens in clear). The user's own git credential helpers (programs outside JHarness's control). Proxy settings on argv (visible in `ps`). Offline mode that ignores `allow` rules (it would break local mirrors).
+
+**Source.** Recommended options accepted while the user was away, specifying 017-git-network-and-offline-mode, 2026-11-22.
+
 ---
 
 ## Questions and answers
@@ -828,6 +851,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q57 | Which command-execution checks are missing, and should git run filters and signing programs from a repo's config? | Pin executables, name the environment, cap arguments; no: repo-defined filters, signing and `core.worktree` are turned off, global drivers stay | A cloned repo can't run code through git, trusted or not | D-052 |
 | Q58 | Should JHarness have a web UI, and when? | A read-only session viewer in Phase 4, next to headless mode, not gating v0.1; a companion UI with approvals and phone access after v0.1; no full web client | The viewer reuses the event stream and keeps the browser out of approvals for now | D-053 |
 | Q59 | How do agents make HTTP requests and read web pages? | `api.http` and `api.fetch` through the proxy; writes ask; text-only, capped responses; no secrets injected; jsoup for HTML | Docs and APIs are reachable without loosening Articles V and VII | D-054 |
+| Q60 | How do git fetch, pull, push and clone reach the network, and what does offline mode do? | HTTPS only through the proxy port, tokens per host from user settings, offline denies what no rule allows and runs tools offline | Completes D-039 and D-033 without loosening Articles V and VII | D-055 |
 
 ---
 

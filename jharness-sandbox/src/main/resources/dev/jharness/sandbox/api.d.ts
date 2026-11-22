@@ -81,7 +81,11 @@ interface HttpRequest {
   timeoutMs?: number;
 }
 
-/** Local git only; no fetch, pull, push or clone. */
+/**
+ * fetch, pull, push and clone use https:// remotes only, through the network rules. remote defaults
+ * to "origin"; ref is a branch or tag name (no refspecs); pull is fast-forward only; push never
+ * forces. clone's dir defaults to the URL's last segment. They fail at once in offline mode.
+ */
 type GitRequest = Timed & (
   | { op: "status"; paths?: string[] }
   | { op: "diff"; staged?: boolean; stat?: boolean; rev?: string; paths?: string[] }
@@ -90,7 +94,11 @@ type GitRequest = Timed & (
   | { op: "branch" }
   | { op: "add"; paths: string[] }
   | { op: "commit"; message: string }
-  | { op: "restore"; staged?: boolean; paths: string[] });
+  | { op: "restore"; staged?: boolean; paths: string[] }
+  | { op: "fetch"; remote?: string; ref?: string; prune?: boolean }
+  | { op: "pull"; remote?: string; ref?: string }
+  | { op: "push"; remote?: string; ref?: string; setUpstream?: boolean }
+  | { op: "clone"; url: string; dir?: string });
 
 /** tests: a test class or pattern such as "AppTest", "AppTest#adds" or "com.x.*Test" */
 type MavenRequest = Timed & (
@@ -126,7 +134,7 @@ declare const api: {
   listFiles(query?: ListQuery | string): FilesJson;
   /** Searches file contents line by line. */
   grep(query: GrepQuery | string): MatchesJson;
-  /** Runs a typed git operation. add, commit and restore need approval. */
+  /** Runs a typed git operation. add, commit, restore, pull, push and clone need approval. */
   git(request: GitRequest | string): GitResultJson;
   /**
    * Maven, Gradle and npm run the project's own build code, so they need a trusted project and

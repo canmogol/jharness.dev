@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
@@ -125,10 +126,35 @@ class ApiTest {
         ok(all, "api.writeFile('d.txt', 'a a')");
         assertTrue(run(all, "api.editFile('d.txt', 'a', 'b')").error().contains("occurs 2 times"));
         assertTrue(run(all, "api.grep({})").error().contains("pattern"));
-        assertTrue(run(all, "api.git({op: 'push'})").error().contains("network operations"));
+        assertTrue(run(all, "api.git({op: 'push'})").error().contains("no remote named \"origin\""));
         assertTrue(run(all, "api.emit({type: 'api.call'})").error().contains("agent.*"));
         assertTrue(run(all, "api.readFile('src')").error().contains("folder"));
         assertTrue(run(all, "api.listFiles('not json')").error().contains("JSON"));
+    }
+
+    /** Spec 017 AC-07: kinds, the prompt names the remote URL, and bad remotes fail before the gate. */
+    @Test
+    void gitNetworkOpsAskWithTheUrl() throws Exception {
+        List<dev.jharness.security.Operation> asked = new java.util.concurrent.CopyOnWriteArrayList<>();
+        PermissionGate deny = op -> {
+            asked.add(op);
+            return dev.jharness.security.Decision.deny("test");
+        };
+        new ProcessBuilder("git", "remote", "add", "origin", "https://example.com/a/b.git").directory(fx.root.toFile()).start().waitFor();
+        assertTrue(run(deny, "api.git({op: 'push', ref: 'main'})").error().contains("denied"));
+        assertTrue(run(deny, "api.git({op: 'clone', url: 'https://example.com/a/lib.git'})").error().contains("denied"));
+        assertTrue(run(deny, "api.git({op: 'fetch'})").error().contains("denied"));
+        assertEquals(List.of("git push origin main → https://example.com/a/b.git", "git clone https://example.com/a/lib.git into lib",
+                "git fetch origin → https://example.com/a/b.git"), asked.stream().map(dev.jharness.security.Operation::summary).toList());
+        assertEquals(List.of(dev.jharness.security.Operation.Kind.GIT_WRITE, dev.jharness.security.Operation.Kind.GIT_WRITE,
+                dev.jharness.security.Operation.Kind.GIT_READ), asked.stream().map(dev.jharness.security.Operation::kind).toList());
+
+        asked.clear();
+        new ProcessBuilder("git", "remote", "set-url", "origin", "git@github.com:a/b.git").directory(fx.root.toFile()).start().waitFor();
+        assertTrue(run(deny, "api.git({op: 'pull'})").error().contains("https:// remotes only"));
+        assertTrue(run(deny, "api.git({op: 'clone', url: 'https://example.com/x.git', dir: '../x'})").error().contains("outside"),
+                "the clone folder passes the file policy");
+        assertTrue(asked.isEmpty(), "rejected before the gate: " + asked);
     }
 
     @Test

@@ -151,7 +151,8 @@ final class Tui {
         events = session.settings().ui().events();
         showThinking = session.settings().ui().thinking().equals("show");
         session.bus().subscribe(this::onEvent);
-        out.println("JHarness in " + session.workspace().root() + " · model " + modelName(session) + " · /help for commands");
+        out.println("JHarness in " + session.workspace().root() + " · model " + modelName(session)
+                + (session.offline() ? " · offline" : "") + " · /help for commands");
         out.println(styler.dim("Session log: " + session.logPath()));
         out.flush();
         while (true) {

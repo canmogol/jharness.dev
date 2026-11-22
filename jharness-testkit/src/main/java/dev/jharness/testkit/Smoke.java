@@ -216,6 +216,7 @@ public final class Smoke {
         }
 
         buildThroughProxy(tmp, bus, o);
+        gitCloneThroughProxy(tmp, bus, o);
 
         // The agent loop with recorded replies: the P1 gate scenario.
         Path repo = SampleRepo.create(tmp.resolve("repo"));
@@ -305,6 +306,60 @@ public final class Smoke {
                 }
                 check("npm through the sandbox and the proxy (" + sb.mechanism().wire() + ")", out.contains("proxied ok") && out.contains("direct-failed")
                         && !out.contains(new String(cred.getPassword())), out);
+            }
+        }
+    }
+
+    /**
+     * Spec 017: {@code git clone} over HTTPS from a local server, in the OS sandbox, through the
+     * egress proxy, which resolves {@code git.test} to loopback; a denied host fails at the proxy.
+     */
+    private void gitCloneThroughProxy(Path tmp, EventBus bus, Origin o) throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("git-ws")).toRealPath();
+        var exe = dev.jharness.process.Executables.resolve("git", ws).orElseThrow();
+        try (SmokeGitServer srv = new SmokeGitServer(Files.createDirectories(tmp.resolve("git-srv")), exe.path())) {
+            Path g = tmp.resolve("git.rules");
+            Files.writeString(g, "default deny\nallow " + SmokeGitServer.HOST + "\n");
+            List<Event> net = new java.util.concurrent.CopyOnWriteArrayList<>();
+            bus.subscribe(e -> {
+                if (e.type().startsWith("network.")) {
+                    net.add(e);
+                }
+            });
+            try (dev.jharness.net.EgressProxy proxy = dev.jharness.net.EgressProxy.start(() -> new dev.jharness.net.NetworkRules(
+                    dev.jharness.net.RulesFile.load(g), dev.jharness.net.RulesFile.empty(tmp.resolve("gp.rules")), true, List.of()),
+                    null, bus, () -> o, tmp.resolve("gp.rules"),
+                    h -> h.equals(SmokeGitServer.HOST) ? new java.net.InetAddress[] {java.net.InetAddress.getLoopbackAddress()}
+                            : new java.net.InetAddress[] {java.net.InetAddress.ofLiteral("93.184.216.34")})) {
+                Path sock = Files.createTempDirectory("jh-smoke-git-").resolve("proxy.sock");
+                dev.jharness.process.ChildSandbox sb = dev.jharness.process.ChildSandbox.detect(dev.jharness.process.ChildSandbox.Policy
+                        .forSession(ws, Files.createDirectories(tmp.resolve("git-tmp")), Path.of(System.getProperty("user.home"))));
+                if (sb.mechanism() == dev.jharness.process.ChildSandbox.Mechanism.BUBBLEWRAP && sb.available()) {
+                    proxy.serveUnix(sock);
+                }
+                var cred = proxy.credentials();
+                sb = sb.withProxy(new dev.jharness.process.ChildSandbox.ProxyRoute(proxy.address().getPort(), sock, cred.getUserName(),
+                        new String(cred.getPassword())), dev.jharness.process.ChildSandbox.selfBridgeCommand());
+                var ops = new GitOperations(new ProcessRunner(bus, () -> o, 30_000, sb), exe, new Workspace(ws), Duration.ofSeconds(60),
+                        Duration.ofMinutes(10), false, java.util.Map.of(), List.of(java.util.Map.entry("http.sslCAInfo", srv.ca.toString())));
+                String out;
+                try {
+                    out = ops.run(Json.parseObject("{\"op\":\"clone\",\"url\":\"" + srv.url() + "\"}")).output();
+                } catch (RuntimeException e) {
+                    out = e.toString();
+                }
+                Path readme = ws.resolve("repo/README.md");
+                boolean cloned = Files.isRegularFile(readme) && Files.readString(readme).equals("served over https\n");
+                check("git clone over https through the sandbox and the proxy (" + sb.mechanism().wire() + ")",
+                        cloned && net.stream().anyMatch(e -> e.type().equals("network.allowed")), cloned + " " + out.strip());
+                String denied;
+                try {
+                    denied = ops.run(Json.parseObject("{\"op\":\"clone\",\"url\":\"https://denied.test/x.git\"}")).output();
+                } catch (RuntimeException e) {
+                    denied = e.toString();
+                }
+                check("git clone of a denied host fails at the proxy", !Files.exists(ws.resolve("x"))
+                        && net.stream().anyMatch(e -> e.type().equals("network.blocked")), denied.strip());
             }
         }
     }

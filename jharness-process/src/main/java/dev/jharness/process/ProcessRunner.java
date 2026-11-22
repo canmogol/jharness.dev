@@ -84,6 +84,15 @@ public final class ProcessRunner {
      */
     public ProcessResult run(Executable exe, List<String> args, Path cwd, Duration timeout, Map<String, String> env,
             ChildSandbox.Grants grants) {
+        return run(exe, args, cwd, timeout, env, grants, List.of());
+    }
+
+    /**
+     * @param secrets values passed in {@code env} that must not show in the output or events, such as
+     *     git tokens (spec 017); the proxy password is always redacted
+     */
+    public ProcessResult run(Executable exe, List<String> args, Path cwd, Duration timeout, Map<String, String> env,
+            ChildSandbox.Grants grants, List<String> secrets) {
         if (!sandbox.available()) {
             throw new OperationException("cannot run " + exe.name() + ": no OS sandbox (" + sandbox.reason() + ")");
         }
@@ -130,7 +139,11 @@ public final class ProcessRunner {
             throw new UncheckedIOException("cannot start " + exe.name() + ": " + ex.getMessage(), ex);
         }
         ChildSandbox.ProxyRoute route = sandbox.route();
-        Capture capture = new Capture(outputChars, route != null ? route.password() : null);
+        List<String> hidden = new ArrayList<>(secrets);
+        if (route != null) {
+            hidden.add(route.password());
+        }
+        Capture capture = new Capture(outputChars, hidden);
         Thread reader = Thread.ofVirtual().start(() -> capture.drain(p));
         boolean timedOut = false;
         try {
@@ -164,9 +177,12 @@ public final class ProcessRunner {
      */
     static final Set<String> ENV_NAMES = Set.of(
             "PATH", "JAVA_HOME", "JAVA_TOOL_OPTIONS",
-            "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "GIT_OPTIONAL_LOCKS", "GIT_WORK_TREE",
-            "npm_config_proxy", "npm_config_https_proxy", "npm_config_update_notifier", "npm_config_fund",
+            "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "GIT_OPTIONAL_LOCKS", "GIT_WORK_TREE", "GIT_ASKPASS", "GIT_CONFIG_COUNT",
+            "npm_config_offline", "npm_config_proxy", "npm_config_https_proxy", "npm_config_update_notifier", "npm_config_fund",
             "npm_config_audit", "npm_config_color", "npm_config_progress");
+
+    /** {@code GIT_CONFIG_KEY_<n>} and {@code GIT_CONFIG_VALUE_<n>}: how git gets the proxy without argv (spec 017). */
+    static final java.util.regex.Pattern GIT_CONFIG_ENTRY = java.util.regex.Pattern.compile("GIT_CONFIG_(KEY|VALUE)_[0-9]{1,2}");
 
     static void checkArgs(List<String> args) {
         if (args.size() > MAX_ARGS) {
@@ -190,7 +206,7 @@ public final class ProcessRunner {
 
     static void checkEnv(Map<String, String> env) {
         for (Map.Entry<String, String> v : env.entrySet()) {
-            if (!ENV_NAMES.contains(v.getKey())) {
+            if (!ENV_NAMES.contains(v.getKey()) && !GIT_CONFIG_ENTRY.matcher(v.getKey()).matches()) {
                 throw new IllegalArgumentException("environment variable " + v.getKey() + " is not one JHarness passes to processes");
             }
             if (v.getValue() == null || v.getValue().indexOf('\0') >= 0) {
@@ -216,17 +232,22 @@ public final class ProcessRunner {
         private final int tailChars;
         private final StringBuilder full = new StringBuilder();
         private final StringBuilder tail = new StringBuilder();
-        private final String secret;
+        private final List<String> secrets;
         private long total;
 
-        Capture(int tailChars, String secret) {
+        Capture(int tailChars, List<String> secrets) {
             this.tailChars = tailChars;
-            this.secret = secret == null || secret.isEmpty() ? null : secret;
+            // Longest first, so a secret that contains another is replaced whole.
+            this.secrets = secrets.stream().filter(x -> x != null && !x.isEmpty()).distinct()
+                    .sorted(java.util.Comparator.comparingInt(String::length).reversed()).toList();
         }
 
-        /** The proxy password reaches children through the environment, and JVMs echo it ("Picked up ..."). */
+        /** Secrets reach children through the environment, and JVMs echo them ("Picked up ..."). */
         private String redact(String s) {
-            return secret == null ? s : s.replace(secret, "***");
+            for (String x : secrets) {
+                s = s.replace(x, "***");
+            }
+            return s;
         }
 
         void drain(Process p) {

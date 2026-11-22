@@ -373,12 +373,19 @@ public final class HostApi {
     public String git(String json) {
         ObjectNode a;
         Operation.Kind kind;
+        String summary;
         try {
             if (s.git() == null) {
                 throw new IllegalArgumentException("git is not installed");
             }
             a = args(json);
             kind = GitOperations.kind(a);
+            if (a.path("op").asText().equals("clone")) {
+                // The new folder must pass the file policy like any write (spec 017).
+                s.files().write(s.git().cloneTarget(a));
+            }
+            // For fetch, pull and push this reads the remote's URL, and refuses non-HTTPS remotes and offline mode.
+            summary = s.git().summary(a);
             for (JsonNode p : a.path("paths")) {
                 // add and restore change files; every path must pass the file policy.
                 if (kind == Operation.Kind.GIT_WRITE) {
@@ -391,7 +398,7 @@ public final class HostApi {
             return reject("git", e);
         }
         String op = a.path("op").asText();
-        return call("git", kind, "git " + op, a, () -> {
+        return call("git", kind, summary, a, () -> {
             List<Path> restored = new java.util.ArrayList<>();
             if (s.checkpoints() != null && kind == Operation.Kind.GIT_WRITE) {
                 s.checkpoints().touchedGit(turn(), op);

@@ -71,6 +71,30 @@ class NetworkRulesTest {
     }
 
     @Test
+    void offlineDeniesWhatNoAllowMatches() throws Exception {
+        for (String general : List.of("", "default allow", "default ask")) {
+            NetworkRules r = new NetworkRules(RulesFile.parse(general + "\nallow mirror.example.com", Path.of("general")),
+                    RulesFile.parse("default allow", Path.of("project")), true, List.of(), true);
+            NetworkRules.Decision d = r.decide("example.com", 443, PUBLIC);
+            assertEquals(Rule.Action.DENY, d.action(), general);
+            assertEquals("offline mode: no allow rule matches example.com", d.reason());
+            assertEquals(Rule.Action.ALLOW, decide(r, "mirror.example.com", 443, PUBLIC), "explicit allows still work");
+            assertTrue(r.offline());
+        }
+        assertFalse(rules("", "", true).offline());
+    }
+
+    @Test
+    void localHosts() {
+        for (String h : List.of("localhost", "LOCALHOST", "ollama.localhost", "127.0.0.1", "192.168.68.140", "10.0.0.5", "[::1]", "fd00::1")) {
+            assertTrue(NetworkRules.local(h), h);
+        }
+        for (String h : List.of("api.anthropic.com", "93.184.216.34", "localhost.example.com", "[2001:db8::1]", "10.example")) {
+            assertFalse(NetworkRules.local(h), h);
+        }
+    }
+
+    @Test
     void trustedProjectComesFirstAndCanOverride() throws Exception {
         NetworkRules r = rules("default deny\ndeny npm.example.com", "default allow\nallow npm.example.com\ndeny tracker.example.com", true);
         assertEquals(Rule.Action.ALLOW, decide(r, "npm.example.com", 443, PUBLIC), "project allow overrides a general deny");

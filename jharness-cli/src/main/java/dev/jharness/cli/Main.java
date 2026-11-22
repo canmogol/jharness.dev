@@ -33,6 +33,9 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--model", paramLabel = "NAME", description = "Model profile from settings.json (default: \"model\").")
     String model;
 
+    @Option(names = "--offline", description = "Offline mode: deny every connection no allow rule matches, run build tools offline, no git fetch, pull, push or clone.")
+    boolean offline;
+
     @Option(names = {"-p", "--print"}, paramLabel = "PROMPT",
             description = "Run one prompt without the terminal UI and print the reply. Changes are denied, since no one can approve them.")
     String prompt;
@@ -88,11 +91,14 @@ public final class Main implements Callable<Integer> {
         }
     }
 
-    /** User, project and session layers; {@code --model} is the session layer (D-043). */
+    /** User, project and session layers; {@code --model} and {@code --offline} are the session layer (D-043). */
     private Settings.Layered layered(Path h, Path ws, boolean trusted) throws ConfigException {
         var session = dev.jharness.events.Json.object();
         if (model != null) {
             session.put("model", model);
+        }
+        if (offline) {
+            session.put("offline", true);
         }
         return Settings.layered(h, ws, trusted, session);
     }

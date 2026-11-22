@@ -107,6 +107,8 @@ public final class Session implements AutoCloseable {
     public static Session open(Path home, Path workspacePath, Settings settings, Access access, ProviderFactory providers)
             throws IOException, ConfigException {
         Workspace ws = new Workspace(workspacePath);
+        // Before anything starts, so a missing secret leaves nothing running (spec 017).
+        Map<String, String> tokens = gitTokens(settings, Secrets.load(home, System::getenv));
         EventBus bus = new EventBus(EventBus.newSessionId());
         SessionLog log = SessionLog.open(home, ws.root(), bus.session());
         bus.subscribe(log);
@@ -114,7 +116,7 @@ public final class Session implements AutoCloseable {
         EgressProxy proxy = startProxy(home, ws.root(), settings, access, bus, turns);
         ModelProvider provider = providers.create(bus, turns);
         bus.publish(turns.get(), "session.started", Json.object().put("workspace", ws.root().toString())
-                .put("provider", provider.provider()).put("model", provider.model()).put("trusted", access.trusted()));
+                .put("provider", provider.provider()).put("model", provider.model()).put("trusted", access.trusted()).put("offline", settings.offline()));
         // <sessionDir>/tmp is the children's TMPDIR; <sessionDir>/net holds the proxy socket and Maven's settings (D-049).
         Path sessionDir = Files.createTempDirectory("jharness-");
         Path childTmp = Files.createDirectory(sessionDir.resolve("tmp"), OWNER_ONLY);
@@ -137,10 +139,10 @@ public final class Session implements AutoCloseable {
         bus.publish(turns.get(), "sandbox.os", os);
         ProcessRunner runner = new ProcessRunner(bus, turns, settings.timeouts().outputChars(), sandbox);
         Optional<Executable> git = Executables.resolve("git", ws.root());
-        GitOperations gitOps = git.map(g -> new GitOperations(runner, g, ws, settings.timeouts().process(), settings.timeouts().processMax()))
-                .orElse(null);
+        GitOperations gitOps = git.map(g -> new GitOperations(runner, g, ws, settings.timeouts().process(), settings.timeouts().processMax(),
+                settings.offline(), tokens)).orElse(null);
         BuildOperations builds = new BuildOperations(runner, ws, settings.timeouts(), access.trusted(), BuildOperations.findOnPath(ws.root()),
-                home, System.getenv("JAVA_HOME"));
+                home, System.getenv("JAVA_HOME"), settings.offline());
         FilePolicy files = new FilePolicy(ws, settings.files().mounts(), settings.files().deny());
         Search search = Search.create(ws, runner, settings.timeouts(), files.denyList());
         PermissionGate gate = access.gate() != null ? access.gate()
@@ -162,6 +164,20 @@ public final class Session implements AutoCloseable {
         return s;
     }
 
+    /** The tokens for {@code git.credentials} (spec 017, AC-06); a mapped secret that isn't set stops start-up. */
+    static Map<String, String> gitTokens(Settings settings, Secrets secrets) throws ConfigException {
+        Map<String, String> tokens = new java.util.TreeMap<>();
+        for (Map.Entry<String, String> e : settings.git().credentials().entrySet()) {
+            String v = secrets.apply(e.getValue());
+            if (v == null || v.isBlank()) {
+                throw new ConfigException("git.credentials." + e.getKey() + ": secret " + e.getValue()
+                        + " is not set (set it in the environment or in ~/.jharness/secrets)");
+            }
+            tokens.put(e.getKey(), v.strip());
+        }
+        return tokens;
+    }
+
     public static Path generalNetworkRules(Path home) {
         return home.resolve(".jharness").resolve("network.rules");
     }
@@ -175,9 +191,12 @@ public final class Session implements AutoCloseable {
             throws IOException, ConfigException {
         Path general = generalNetworkRules(home);
         Path project = projectNetworkRules(root);
-        List<Rule> endpoints = modelEndpoints(settings.models());
+        boolean offline = settings.offline();
+        // Offline, only model endpoints on this machine or a private network are allowed automatically (D-055).
+        List<Rule> endpoints = modelEndpoints(settings.models()).stream()
+                .filter(r -> !offline || NetworkRules.local(r.target().toString())).toList();
         boolean trusted = access.trusted();
-        EgressProxy p = EgressProxy.start(() -> new NetworkRules(RulesFile.load(general), RulesFile.load(project), trusted, endpoints),
+        EgressProxy p = EgressProxy.start(() -> new NetworkRules(RulesFile.load(general), RulesFile.load(project), trusted, endpoints, offline),
                 access.prompter(), bus, turns, project);
         HttpClients.useProxy(p.address(), p.credentials());
         return p;
@@ -197,6 +216,11 @@ public final class Session implements AutoCloseable {
             l.add(RulesFile.rule(Rule.Action.ALLOW, h + ":" + port, "model profile " + e.getKey()));
         }
         return List.copyOf(l);
+    }
+
+    /** Whether the session runs in offline mode (D-033, D-055). */
+    public boolean offline() {
+        return settings.offline();
     }
 
     /** The session's egress proxy, for {@code /network}. */
