@@ -20,7 +20,7 @@ First, check jsoup under Native Image, then move `HttpClients` to `jharness-net`
 | IV No shell | No process | — |
 | V Proxy | Every request uses the client from `HttpClients`, which always goes through the egress proxy; the architecture test keeps it the only builder | Yes |
 | VI Strings | Requests and results are JSON strings | Yes |
-| VII Safe by default | POST, PUT, PATCH and DELETE ask; plan mode denies them; no secrets are added to requests; headers and bodies stay out of the log | Yes |
+| VII Safe by default | POST, PUT, PATCH and DELETE ask; plan mode denies them; no secrets are added to requests; headers and bodies stay out of the log unless the user turns on the debug switches, and secret headers are redacted even then by default | Yes |
 | VIII Events | `http.request` and `http.response` for every call, plus the usual permission events | Yes |
 | IX Native first | jsoup is checked in the native binary on Linux and macOS before adoption (T001); the smoke binary uses it | Yes |
 | X Tested | Tests for request checks, header rules, redirects, caps, binary detection, approvals and plan mode, events, timeouts and the converter; a test that requests to a denied host fail at the proxy | Yes |
@@ -46,7 +46,7 @@ public final class PageText {                        // jsoup
 }
 
 // jharness-config
-record HttpSettings(long maxResponseBytes, int maxChars)   // "http": {"maxResponseBytes":..., "maxChars":...}
+record HttpSettings(long maxResponseBytes, int maxChars, boolean logHeaders, boolean logBodies, boolean redactSecrets)
 // Timeouts gains http (30 s) and httpMax (2 min)
 
 // jharness-security
@@ -71,13 +71,16 @@ Proxy denials: the egress proxy marks its own 403 refusals with `X-JHarness-Prox
 | `timeouts.httpMax` | 2 min | — |
 | `http.maxResponseBytes` | 10 MiB | 64 KiB to 50 MiB |
 | `http.maxChars` | 200,000 | 1,000 to 1,000,000 |
+| `http.logHeaders` | false | — |
+| `http.logBodies` | false | — |
+| `http.redactSecrets` | true | — |
 
 ### Events
 
 | Type | Fields |
 | --- | --- |
-| `http.request` | `method`, `url` |
-| `http.response` | `method`, `url`, `status`, `contentType`, `bytes`, `truncated`, `durationMs`, `redirects`, `error` (on failure) |
+| `http.request` | `method`, `url`; `headers` and `body` when logging is on |
+| `http.response` | `method`, `url`, `status`, `contentType`, `bytes`, `truncated`, `durationMs`, `redirects`, `error` (on failure); `headers` and `body` when logging is on |
 
 ## Checks
 

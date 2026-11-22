@@ -126,6 +126,11 @@ class SettingsTest {
         assertEquals(Duration.ofMinutes(2), d.timeouts().httpMax());
         assertEquals(10L * 1024 * 1024, d.http().maxResponseBytes());
         assertEquals(200_000, d.http().maxChars());
+        assertFalse(d.http().logHeaders() || d.http().logBodies());
+        assertTrue(d.http().redactSecrets());
+        Settings dbg = Settings.parse("{\"http\":{\"logHeaders\":true,\"logBodies\":true,\"redactSecrets\":false}}", "s");
+        assertTrue(dbg.http().logHeaders() && dbg.http().logBodies() && !dbg.http().redactSecrets());
+        assertTrue(bad("{\"http\":{\"logBodies\":\"yes\"}}").getMessage().contains("http.logBodies"));
         Settings s = Settings.parse("{\"timeouts\":{\"http\":\"10s\",\"httpMax\":\"1m\"},\"http\":{\"maxResponseBytes\":65536,\"maxChars\":2000}}", "s");
         assertEquals(Duration.ofSeconds(10), s.timeouts().http());
         assertEquals(Duration.ofMinutes(1), s.timeouts().httpMax());

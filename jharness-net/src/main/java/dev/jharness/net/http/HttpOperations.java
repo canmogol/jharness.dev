@@ -44,7 +44,9 @@ import dev.jharness.security.Operation;
  * {@code api.http} and {@code api.fetch} (spec 016, D-054). Requests are checked here, sent with the one
  * client from {@link HttpClients} (so through the egress proxy and its rules), redirects are followed by
  * hand, responses are read up to a cap and returned as text, and every call emits {@code http.request}
- * and {@code http.response} without headers or bodies.
+ * and {@code http.response}. The events carry headers and bodies only when {@code http.logHeaders} or
+ * {@code http.logBodies} is on, for debugging; secret headers are then redacted unless
+ * {@code http.redactSecrets} is off.
  */
 public final class HttpOperations {
 
@@ -63,6 +65,9 @@ public final class HttpOperations {
     private static final Set<String> HTTP_FIELDS = Set.of("method", "url", "headers", "body", "timeoutMs");
     private static final Set<String> FETCH_FIELDS = Set.of("url", "timeoutMs");
     static final String FETCH_ACCEPT = "text/html, text/plain;q=0.9, */*;q=0.1";
+    static final String REDACTED = "[redacted]";
+    private static final Set<String> SECRET_HEADERS = Set.of("authorization", "proxy-authorization", "cookie", "set-cookie");
+    private static final List<String> SECRET_WORDS = List.of("token", "key", "secret", "auth", "password", "session");
 
     /** A checked request. */
     public record Request(String method, URI uri, Map<String, String> headers, String body, Duration timeout) {
@@ -290,7 +295,17 @@ public final class HttpOperations {
     Response send(Request r) {
         long t0 = System.nanoTime();
         long deadline = t0 + r.timeout().toNanos();
-        bus.publish(origin.get(), "http.request", Json.object().put("method", r.method()).put("url", r.uri().toString()));
+        ObjectNode ev = Json.object().put("method", r.method()).put("url", r.uri().toString());
+        if (settings.logHeaders()) {
+            Map<String, String> sent = new TreeMap<>();
+            r.headers().forEach((k, v) -> sent.put(k.toLowerCase(Locale.ROOT), v));
+            sent.putIfAbsent("user-agent", USER_AGENT);
+            logHeaders(ev, sent);
+        }
+        if (settings.logBodies() && r.body() != null) {
+            ev.put("body", r.body());
+        }
+        bus.publish(origin.get(), "http.request", ev);
         URI uri = r.uri();
         int redirects = 0;
         try {
@@ -397,7 +412,24 @@ public final class HttpOperations {
         if (error != null) {
             o.put("error", error);
         }
+        if (resp != null && settings.logHeaders()) {
+            logHeaders(o, headerMap(resp.headers()));
+        }
+        if (resp != null && settings.logBodies() && !resp.binary()) {
+            o.put("body", resp.text());
+        }
         bus.publish(origin.get(), "http.response", o);
+    }
+
+    private void logHeaders(ObjectNode event, Map<String, String> headers) {
+        ObjectNode h = event.putObject("headers");
+        headers.forEach((k, v) -> h.put(k, settings.redactSecrets() && secret(k) ? REDACTED : v));
+    }
+
+    /** A header whose value is likely a credential: logged as {@value #REDACTED} unless redaction is off. */
+    static boolean secret(String name) {
+        String n = name.toLowerCase(Locale.ROOT);
+        return SECRET_HEADERS.contains(n) || !n.equals("www-authenticate") && SECRET_WORDS.stream().anyMatch(n::contains);
     }
 
     // --- Bodies ---------------------------------------------------------------------------------

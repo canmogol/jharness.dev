@@ -27,6 +27,10 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 - [x] T010 Native smoke: `api.fetch` of a local page through the proxy (AC-10)
 - [x] T011 `api.d.ts` types for `http` and `fetch`; README operations (AC-11)
 
+## Group 5 — Debug logging
+
+- [x] T012 `http.logHeaders`, `http.logBodies` and `http.redactSecrets`; headers and bodies in the events when on, secret headers redacted; settings and event tests (AC-08)
+
 ## Traceability
 
 | AC | Tasks |
@@ -38,7 +42,7 @@ Format: `- [ ] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 | AC-05 | T003, T006 |
 | AC-06 | T008, T009 |
 | AC-07 | T003, T006, T007 |
-| AC-08 | T006 |
+| AC-08 | T006, T012 |
 | AC-09 | T002 |
 | AC-10 | T001, T010 |
 | AC-11 | T011 |

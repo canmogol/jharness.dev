@@ -108,7 +108,7 @@ class HttpOperationsTest {
                 true, List.of()), Prompter.none(), bus, () -> Origin.main(1), tmp.resolve("ws/.jharness/network.rules"),
                 HttpOperationsTest::resolve);
         HttpClients.useProxy(proxy.address(), proxy.credentials());
-        ops = new HttpOperations(bus, () -> Origin.main(1), new HttpSettings(256 * 1024, 100_000), Timeouts.defaults());
+        ops = new HttpOperations(bus, () -> Origin.main(1), new HttpSettings(256 * 1024, 100_000, false, false, true), Timeouts.defaults());
     }
 
     @AfterEach
@@ -331,5 +331,59 @@ class HttpOperationsTest {
         }
         String all = events.toString() + req.body() + resp.body();
         assertFalse(all.contains("secret-body") || all.contains("Bearer tok"), all);
+    }
+
+    private ObjectNode debugEvents(boolean headers, boolean bodies, boolean redact, String json) {
+        var debug = new HttpOperations(bus, () -> Origin.main(1), new HttpSettings(256 * 1024, 100_000, headers, bodies, redact),
+                Timeouts.defaults());
+        debug.http(debug.check(Json.parseObject(json)));
+        var req = events.stream().filter(e -> e.type().equals("http.request")).findFirst().orElseThrow();
+        var resp = events.stream().filter(e -> e.type().equals("http.response")).findFirst().orElseThrow();
+        return Json.object().<ObjectNode>set("req", req.body()).set("resp", resp.body());
+    }
+
+    private String post() {
+        return "{\"url\":\"" + url("/echo") + "\",\"method\":\"POST\",\"body\":\"secret-body\","
+                + "\"headers\":{\"Authorization\":\"Bearer tok\",\"X-Api-Key\":\"k1\",\"X-Test\":\"visible\"}}";
+    }
+
+    @Test
+    void debugLoggingAddsHeadersAndBodiesWithSecretsRedacted() {
+        var ev = debugEvents(true, true, true, post());
+        var req = ev.get("req");
+        var resp = ev.get("resp");
+        assertEquals("[redacted]", req.get("headers").get("authorization").asText());
+        assertEquals("[redacted]", req.get("headers").get("x-api-key").asText());
+        assertEquals("visible", req.get("headers").get("x-test").asText());
+        assertEquals(HttpOperations.USER_AGENT, req.get("headers").get("user-agent").asText());
+        assertEquals("secret-body", req.get("body").asText());
+        assertEquals("text/plain", resp.get("headers").get("content-type").asText());
+        assertTrue(resp.get("body").asText().startsWith("POST|secret-body|visible|"), resp.toString());
+        assertFalse(ev.toString().contains("Bearer tok") || ev.toString().contains("k1\""), ev.toString());
+    }
+
+    @Test
+    void debugSwitchesAreSeparateAndRedactionCanBeTurnedOff() {
+        var headersOnly = debugEvents(true, false, false, post());
+        assertEquals("Bearer tok", headersOnly.get("req").get("headers").get("authorization").asText());
+        assertFalse(headersOnly.get("req").has("body") || headersOnly.get("resp").has("body"));
+        events.clear();
+        var bodiesOnly = debugEvents(false, true, true, post());
+        assertFalse(bodiesOnly.get("req").has("headers") || bodiesOnly.get("resp").has("headers"));
+        assertEquals("secret-body", bodiesOnly.get("req").get("body").asText());
+        events.clear();
+        var bin = debugEvents(false, true, true, "{\"url\":\"" + url("/bin") + "\"}");
+        assertFalse(bin.get("resp").has("body"), "binary bodies log only their size");
+    }
+
+    @Test
+    void secretHeaderNames() {
+        for (String n : List.of("Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Api-Key", "X-Auth-Token",
+                "Private-Token", "X-Client-Secret")) {
+            assertTrue(HttpOperations.secret(n), n);
+        }
+        for (String n : List.of("Accept", "Content-Type", "User-Agent", "WWW-Authenticate", "X-Test")) {
+            assertFalse(HttpOperations.secret(n), n);
+        }
     }
 }
