@@ -1,6 +1,16 @@
 # Changelog
 
-<!-- last-commit: a44cd6be12f7b54d6f46e0e77830e48f45f64955 -->
+<!-- last-commit: 274a69005c0bfc58d1a3b40860a79ff3b2f16386 -->
+
+## 2026-11-21 · 015 Command-execution checks
+
+- Git no longer runs programs from a repository's own config. Filter drivers defined in `.git/config` (found with `git config --show-scope` before each call) are switched off; global ones such as git-lfs keep working. Commit and tag signing, signature display, submodule recursion and automatic gc and maintenance are off; `status` and `diff` ignore submodules.
+- Git runs with `GIT_WORK_TREE` set to the workspace root, so `core.worktree` can't point it at another folder.
+- Each executable is pinned to the file it resolved to (file key, size, modification time). If the file changes during the session, the run is refused with a `process.refused` event. Tools in folders anyone can write to (`o+w`) are skipped.
+- Child processes get only named environment variables; any other name is refused, and JHarness's own `TMPDIR` is no longer passed on.
+- Argument lists are capped: 4,096 arguments, 131,072 UTF-8 bytes each, 1 MiB in total.
+- A `CommandExecutionTest` suite tests each check against a hostile repo config, and the native smoke binary checks that git ignores a repo's filter and `gpg.program`. The git hook test now puts its marker where the sandbox lets git write, so it can't pass by accident.
+- Decision: command-execution checks (D-052).
 
 ## 2026-11-20 · 014 Shift+Enter and a higher step limit
 
