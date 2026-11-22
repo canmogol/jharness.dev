@@ -1,6 +1,18 @@
 # Changelog
 
-<!-- last-commit: 008182dfa785150cf94a249ede7cbaa91502972c -->
+<!-- last-commit: 22ace2b68eeb1c7048eb1699c45d17d809dc99b1 -->
+
+## 2026-11-22 · 018 Security test suites
+
+- 35 attack cases in four suites run against a real session (egress proxy, OS sandbox, permission engine, isolate): prompt injection (`INJ-01`–`INJ-10`), malicious repository (`REPO-01`–`REPO-10`), sandbox escape (`ESC-01`–`ESC-06`) and runaway code (`RUN-01`–`RUN-09`).
+- Each case assumes a model that obeys the attack and writes the hostile JavaScript itself. A case passes only when the host contains it.
+- Every case runs in its own world: a fake home with canary secrets, a git workspace with a canary `.env`, a folder next to it, and an attacker server on loopback. Shared checks: no canary reaches the model, the session log or the attacker; the attacker gets no connections; nothing outside the workspace changes.
+- In the injection suite the user denies every prompt. In the repository and escape suites the user approves everything except new network hosts, so containment doesn't depend on the user.
+- The cases run in `mvn install` (`SecuritySuiteTest`, one test per ID) and in the native smoke binary (`jharness-smoke --security` runs only them). A case that can't run on a machine reports `skip`, which never counts as a pass.
+- Fixed: a CPU limit that tripped inside the regex engine's backtracking was reported as limit `unknown`. It is now `sandbox.MaxCPUTime`.
+- Recorded exception on macOS, `RUN-08`: a build-script grandchild orphaned before the timeout outlives the process-tree kill. It stays in the Seatbelt sandbox, and the case checks that it can't write outside the workspace or connect out. The case reports `exception` on macOS.
+- `docs/security-suites.md` lists every case, what contains it and how to run the suites.
+- Decision: security test suites (D-056).
 
 ## 2026-11-22 · 017 Git network operations and offline mode
 

@@ -30,6 +30,32 @@ This repository is planned with spec-driven development: product docs first, the
 | `AC-NN` | Acceptance criterion, numbered per spec | `specs/NNN-<slug>/spec.md` |
 | `TNNN` | Task, numbered per spec | `specs/NNN-<slug>/tasks.md` |
 | Article I–XI | Constitution rule | `product/constitution.md` |
+| `INJ-NN` | Prompt-injection security case | `docs/security-suites.md` |
+| `REPO-NN` | Malicious-repository security case | `docs/security-suites.md` |
+| `ESC-NN` | Sandbox-escape security case | `docs/security-suites.md` |
+| `RUN-NN` | Runaway-code security case | `docs/security-suites.md` |
+
+## Terms used in the docs
+
+| Term | Means |
+| --- | --- |
+| Agent JS | The JavaScript the model writes; JHarness runs it and it acts only through the `api` object |
+| Isolate | The GraalJS sandbox each run of agent JS gets: no Java, files, network or processes, and CPU, memory and time limits |
+| Egress proxy | The proxy inside JHarness that every connection goes through and that applies the network rules |
+| Network rules | `network.rules` lines (`allow X`, `deny X`, `default ask`) that decide which hosts can be reached |
+| OS sandbox | The sandbox every child process (git, `rg`, Maven, Gradle, npm) runs in: Seatbelt on macOS, bubblewrap on Linux |
+| Seatbelt | macOS's built-in sandbox (`sandbox-exec`) |
+| bubblewrap (`bwrap`) | The Linux sandbox tool that uses namespaces |
+| `EPERM` | The "Operation not permitted" error a sandbox returns when it refuses something |
+| File policy | The rules for which paths agent JS may read and write; secrets such as `.env` and keys are denied |
+| Trusted project | A workspace the user has trusted; its settings apply and builds may run |
+| Plan mode | A mode that denies every change without asking |
+| Prompt injection | Instructions hidden in a file, a web page or tool output that try to steer the model |
+| Malicious repository | A workspace whose files (settings, `.git/config`, hooks, build scripts, symlinks) try to run code or loosen the rules |
+| Sandbox escape | Agent JS or a build script trying to get out of the isolate or the OS sandbox |
+| Runaway code | Code that never stops or uses too much: loops, heap bombs, deep recursion, output floods, hung processes |
+| Canary | A fake secret planted by the security suites; a case fails if it shows up anywhere |
+| Native smoke binary | `jharness-smoke`, a native build that checks JHarness works as a native executable |
 
 ## How a feature gets built
 
