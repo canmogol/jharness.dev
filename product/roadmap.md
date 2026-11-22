@@ -86,6 +86,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [ ] Token counting, auto-compaction, prompt caching, `@file` mentions
 - [ ] Resume and fork sessions
 - [ ] Headless mode with text, JSON and stream-JSON output
+- [ ] Read-only web session viewer on `127.0.0.1`, reading the same event stream as headless mode; no approvals from the browser (D-053)
 - [ ] Usage tracking (tokens, cost)
 - [ ] Evals on real repo tasks
 - [ ] GitHub releases with checksums, Homebrew tap, install script
@@ -108,3 +109,4 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - Spike a model helper binary with the Rust backend, started over stdio; first for a small reviewer model (D-035, D-031)
 - Test memory protection keys on a Linux machine that has them; make `auto` the default if it works (D-036)
 - IDE integration
+- Web companion UI for a running session: prompts and approval answers from the browser (D-053)
