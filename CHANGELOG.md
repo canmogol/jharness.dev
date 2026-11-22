@@ -1,6 +1,23 @@
 # Changelog
 
-<!-- last-commit: 274a69005c0bfc58d1a3b40860a79ff3b2f16386 -->
+<!-- last-commit: 399e428971aeff12ec65fb8aecec1c2cbb48f58d -->
+
+## 2026-11-22 · 016 `api.http` and web fetch
+
+- Added `api.http({method, url, headers, body, timeoutMs})`, which returns `{status, url, headers, contentType, body, bytes, truncated, binary}`, and `api.fetch({url, timeoutMs})`, which returns a page as Markdown-like text (`{status, url, title, text, truncated}`). Both also take a bare URL string.
+- Every request goes through the egress proxy and the network rules. GET and HEAD need only the rules. POST, PUT, PATCH and DELETE ask first, "always" saves a rule such as `POST api.example.com`, and plan mode denies them.
+- Requests are checked before anything is sent. Only `http` and `https` URLs without user info are accepted, bodies are capped at 1 MiB, and `Host`, framing and `Proxy-*` headers are refused. JHarness sets its own `User-Agent` and never adds secrets or cookies to a request.
+- Redirects are followed by hand, up to 5, for GET and HEAD only; each hop goes through the proxy again. Proxy refusals carry an `X-JHarness-Proxy: denied` header and come back as "blocked by the network rules: <host>". Without a session proxy, nothing is sent.
+- By default a response is read up to 10 MiB and returned as text up to 200,000 characters. Change these with `http.maxResponseBytes` (64 KiB to 50 MiB) and `http.maxChars` (1,000 to 1,000,000). Binary bodies come back as type and size only.
+- Calls time out after `timeouts.http` (default 30 s, at most `timeouts.httpMax`, 2 min) and Esc cancels them. Waiting doesn't count against the run's wall clock.
+- `http.request` and `http.response` events record method, URL, status, type, size, time and redirects. They leave out headers and bodies unless the debug switches `http.logHeaders` and `http.logBodies` are on. Logged secret headers such as `Authorization`, `Cookie` and API keys show as `[redacted]` unless `http.redactSecrets` is false.
+- jsoup 1.24.1 turns HTML into text. It drops scripts, styles, navigation and hidden elements, and makes links absolute. The native smoke binary checks jsoup and an `api.fetch` through the proxy.
+- `HttpClients` moved from `jharness-llm` to `jharness-net` (`dev.jharness.net.http`).
+- Decision: `api.http` and `api.fetch` (D-054).
+
+## 2026-11-22
+
+- Decision: a read-only web session viewer, served on `127.0.0.1` with a session token and built in Phase 4 next to headless mode. It doesn't gate v0.1. Approvals from the browser and phone access come after v0.1 (D-053).
 
 ## 2026-11-21 · 015 Command-execution checks
 
