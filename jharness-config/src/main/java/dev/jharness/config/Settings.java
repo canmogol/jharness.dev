@@ -19,17 +19,18 @@ import dev.jharness.events.Json;
 /**
  * User settings from {@code ~/.jharness/settings.json}: {@code model}, {@code models}, {@code sandbox},
  * {@code timeouts}, {@code agent},
- * {@code permissions}, {@code files}, {@code ui} and {@code http}. Project and session layers come with the layered-settings feature. Unknown
+ * {@code permissions}, {@code files}, {@code ui}, {@code http}, {@code git} and {@code offline}. Project and session layers come with the layered-settings feature. Unknown
  * keys and bad values throw {@link ConfigException}, which stops start-up.
  */
 public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts timeouts, AgentSettings agent,
-        PermissionSettings permissions, FileSettings files, UiSettings ui, HttpSettings http) {
+        PermissionSettings permissions, FileSettings files, UiSettings ui, HttpSettings http, GitSettings git, boolean offline) {
 
-    private static final Set<String> TOP = Set.of("model", "models", "sandbox", "timeouts", "agent", "permissions", "files", "ui", "http");
+    private static final Set<String> TOP = Set.of("model", "models", "sandbox", "timeouts", "agent", "permissions", "files", "ui", "http", "git", "offline");
 
     public static Settings defaults() {
         return new Settings(ModelProfiles.empty(), SandboxSettings.defaults(), Timeouts.defaults(), AgentSettings.defaults(),
-                PermissionSettings.defaults(), FileSettings.defaults(), UiSettings.defaults(), HttpSettings.defaults());
+                PermissionSettings.defaults(), FileSettings.defaults(), UiSettings.defaults(), HttpSettings.defaults(),
+                GitSettings.defaults(), false);
     }
 
     public static Path userFile(Path home) {
@@ -71,8 +72,12 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
     static Settings parse(ObjectNode root, String source, boolean complete) throws ConfigException {
         for (Map.Entry<String, JsonNode> e : root.properties()) {
             if (!TOP.contains(e.getKey())) {
-                throw new ConfigException(source + ": unknown key \"" + e.getKey() + "\" (known: model, models, sandbox, timeouts, agent, permissions, files, ui, http)");
+                throw new ConfigException(source + ": unknown key \"" + e.getKey() + "\" (known: model, models, sandbox, timeouts, agent, permissions, files, ui, http, git, offline)");
             }
+        }
+        JsonNode offline = root.get("offline");
+        if (offline != null && !offline.isBoolean()) {
+            throw new ConfigException(source + ": \"offline\" must be true or false");
         }
         return new Settings(
                 ModelProfiles.parse(root.get("model"), root.get("models"), source, complete),
@@ -82,7 +87,9 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
                 PermissionSettings.parse(root.get("permissions"), source),
                 FileSettings.parse(root.get("files"), source),
                 UiSettings.parse(root.get("ui"), source),
-                HttpSettings.parse(root.get("http"), source));
+                HttpSettings.parse(root.get("http"), source),
+                GitSettings.parse(root.get("git"), source),
+                offline != null && offline.asBoolean());
     }
 
     // --- Layers (D-043) ------------------------------------------------------------------------
@@ -97,7 +104,9 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
     /**
      * User, then project, then session settings, merged key by key with later layers winning;
      * {@code files.deny} lists are joined. For an untrusted project only {@code files.deny} and
-     * {@code permissions.mode: plan} are taken from its file (D-011, D-043).
+     * {@code permissions.mode: plan} are taken from its file (D-011, D-043), and {@code offline: true},
+     * which only tightens (D-055). A project never sets {@code git}: tokens are mapped in the user's
+     * settings only.
      */
     public static Layered layered(Path home, Path workspace, boolean trusted, ObjectNode session) throws ConfigException {
         Path uf = userFile(home);
@@ -106,6 +115,11 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
         ObjectNode project = read(pf);
         parse(user, uf.toString(), false);
         List<String> ignored = new ArrayList<>();
+        if (project.has("git")) {
+            project = project.deepCopy();
+            project.remove("git");
+            ignored.add("git");
+        }
         if (!trusted) {
             project = untrusted(project, ignored);
         }
@@ -135,6 +149,10 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
         for (Map.Entry<String, JsonNode> top : project.properties()) {
             String k = top.getKey();
             JsonNode v = top.getValue();
+            if (k.equals("offline") && v.isBoolean() && v.asBoolean()) {
+                kept.set(k, v);
+                continue;
+            }
             if (!v.isObject()) {
                 ignored.add(k);
                 continue;

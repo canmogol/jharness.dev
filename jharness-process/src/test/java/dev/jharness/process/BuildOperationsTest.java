@@ -169,6 +169,22 @@ class BuildOperationsTest {
     }
 
     @Test
+    void offlineModeRunsToolsOffline() {
+        var exes = Map.of(Tool.MAVEN, new Executable("mvn", Path.of("/opt/maven/bin/mvn")),
+                Tool.GRADLE, new Executable("gradle", Path.of("/opt/gradle/bin/gradle")),
+                Tool.NPM, new Executable("npm", Path.of("/opt/node/lib/npm-cli.js"), Path.of("/opt/node/bin")));
+        BuildOperations off = new BuildOperations(runner, ws, Timeouts.defaults(), true, exes, home, null, true);
+        assertTrue(off.args(Tool.MAVEN, req("{\"op\":\"test\"}")).contains("-o"));
+        assertTrue(off.args(Tool.GRADLE, req("{\"op\":\"test\"}")).contains("--offline"));
+        var route = new ChildSandbox.ProxyRoute(4321, tmp.resolve("net/proxy.sock"), "jharness", "s3cr3t");
+        assertEquals("true", off.env(Tool.NPM, off.executable(Tool.NPM), route, tmp).get("npm_config_offline"));
+        assertDoesNotThrow(() -> ProcessRunner.checkEnv(off.env(Tool.NPM, off.executable(Tool.NPM), route, tmp)));
+        assertFalse(ops().args(Tool.MAVEN, req("{\"op\":\"test\"}")).contains("-o"));
+        assertFalse(ops().args(Tool.GRADLE, req("{\"op\":\"test\"}")).contains("--offline"));
+        assertNull(ops().env(Tool.NPM, ops().executable(Tool.NPM), route, tmp).get("npm_config_offline"));
+    }
+
+    @Test
     void permissionDetailNamesToolAndOp() {
         assertEquals("{\"tool\":\"maven\",\"op\":\"maven test\"}", Json.write(BuildOperations.detail(Tool.MAVEN, req("{\"op\":\"test\"}"))));
     }

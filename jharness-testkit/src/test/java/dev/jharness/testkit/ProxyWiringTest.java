@@ -121,4 +121,36 @@ class ProxyWiringTest {
             assertEquals(List.of("allow 192.168.68.140:1234", "allow [::1]:11434", "allow api.anthropic.com:443"), lines);
         }
     }
+
+    /** Spec 017 AC-08, AC-10: offline sessions allow only local model endpoints and record offline. */
+    @Test
+    void offlineSessionsKeepOnlyLocalModelEndpoints() throws Exception {
+        Settings s = Settings.parse("{\"offline\":true,\"models\":{\"lan\":{\"provider\":\"openai-compatible\",\"baseUrl\":\"http://192.168.68.140:1234/v1\",\"model\":\"q\"},"
+                + "\"c\":{\"provider\":\"anthropic\",\"model\":\"m\"},\"v6\":{\"provider\":\"openai-compatible\",\"baseUrl\":\"http://[::1]:11434/v1\",\"model\":\"q\"}}}",
+                "t");
+        List<Event> events = new CopyOnWriteArrayList<>();
+        try (Session session = Session.open(tmp.resolve("home4"), Files.createDirectories(tmp.resolve("ws4")), s, "lan",
+                Session.Access.prompter(Prompter.none()))) {
+            assertTrue(session.offline());
+            assertTrue(session.proxy().rules().offline());
+            List<String> lines = session.proxy().rules().automatic().stream().map(dev.jharness.net.Rule::line).sorted().toList();
+            assertEquals(List.of("allow 192.168.68.140:1234", "allow [::1]:11434"), lines);
+            var d = session.proxy().rules().decide("api.anthropic.com", 443, InetAddress.ofLiteral("160.79.104.10"));
+            assertEquals(dev.jharness.net.Rule.Action.DENY, d.action());
+            assertTrue(d.reason().startsWith("offline mode"), d.reason());
+            java.util.Optional<Path> log = java.util.Optional.of(session.logPath());
+            String first = Files.readAllLines(log.get()).getFirst();
+            assertTrue(first.contains("\"offline\":true"), first);
+        }
+    }
+
+    /** Spec 017 AC-06: a mapped git secret that isn't set stops start-up with its name. */
+    @Test
+    void missingGitSecretStopsStartUp() throws Exception {
+        Settings s = Settings.parse("{\"git\":{\"credentials\":{\"github.com\":\"JH_TEST_NO_SUCH_TOKEN\"}},"
+                + "\"models\":{\"lan\":{\"provider\":\"openai-compatible\",\"baseUrl\":\"http://127.0.0.1:1/v1\",\"model\":\"q\"}}}", "t");
+        var e = assertThrows(dev.jharness.config.ConfigException.class, () -> Session.open(tmp.resolve("home5"),
+                Files.createDirectories(tmp.resolve("ws5")), s, "lan", Session.Access.prompter(Prompter.none())).close());
+        assertTrue(e.getMessage().contains("JH_TEST_NO_SUCH_TOKEN") && e.getMessage().contains("git.credentials.github.com"), e.getMessage());
+    }
 }

@@ -75,6 +75,24 @@ class LayeredSettingsTest {
     }
 
     @Test
+    void offlineAndGitCredentialLayers() throws Exception {
+        Files.writeString(Settings.userFile(home), "{\"git\":{\"credentials\":{\"GitHub.com\":\"GITHUB_TOKEN\"}}}");
+        Files.writeString(Settings.projectFile(ws), "{\"offline\":true,\"git\":{\"credentials\":{\"evil.test\":\"ANTHROPIC_API_KEY\"}}}");
+        for (boolean trusted : new boolean[] {true, false}) {
+            var l = Settings.layered(home, ws, trusted, null);
+            assertTrue(l.settings().offline(), "offline: true only tightens, so it counts either way");
+            assertEquals(java.util.Map.of("github.com", "GITHUB_TOKEN"), l.settings().git().credentials(), "a project never maps tokens");
+            assertTrue(l.ignored().contains("git"), l.ignored().toString());
+        }
+        Files.writeString(Settings.projectFile(ws), "{\"offline\":false}");
+        Files.writeString(Settings.userFile(home), "{\"offline\":true}");
+        assertTrue(Settings.layered(home, ws, false, null).settings().offline(), "an untrusted project can't turn offline off");
+        assertFalse(Settings.layered(home, ws, true, null).settings().offline(), "a trusted project can");
+        Files.writeString(Settings.userFile(home), "{}");
+        assertTrue(Settings.layered(home, ws, true, Json.parseObject("{\"offline\":true}")).settings().offline(), "--offline");
+    }
+
+    @Test
     void projectErrorsNameTheProjectFile() throws Exception {
         Files.writeString(Settings.projectFile(ws), "{\"sandbox\":{\"main\":{\"sandbox.MaxThreads\":\"4\"}}}");
         ConfigException e = assertThrows(ConfigException.class, () -> Settings.layered(home, ws, true, null));

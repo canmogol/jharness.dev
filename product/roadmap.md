@@ -59,10 +59,10 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Command-execution checks (no shell, pinned executables, argument validation, git hardening, clean environment, process-tree kill)
 - [x] OS sandbox for build tools (bubblewrap or Landlock on Linux, Seatbelt on macOS)
 - [x] `api.http` and web fetch
-- [ ] Egress proxy in the host: every HTTP client and command-line tool goes through it (HTTP clients: spec 011; Maven, Gradle and npm: spec 013; git network operations still to come)
+- [x] Egress proxy in the host: every HTTP client and command-line tool goes through it (HTTP clients: spec 011; Maven, Gradle and npm: spec 013; git: spec 017)
 - [x] Rules files `~/.jharness/network.rules` (general) and `.jharness/network.rules` (project); DNS pinning; `/network` commands
 - [x] OS sandbox allows network only to the proxy port
-- [ ] Offline mode: network default deny, Maven/Gradle/npm offline flags, no update checks (D-033)
+- [x] Offline mode: network default deny, Maven/Gradle/npm offline flags, no update checks (D-033)
 - [ ] Injection, malicious-repo and sandbox-escape test suites, on JVM and native
 - [ ] Model profiles; retries and rate-limit handling
 - [ ] `--debug`, `jharness log <session>`, local crash reports

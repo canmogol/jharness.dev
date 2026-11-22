@@ -9,7 +9,8 @@ import java.util.Optional;
  * Decides one connection (D-012, D-025, AC-02): built-in denies unless an {@code allow} names the
  * address explicitly; the project file first (every line when trusted, only {@code deny} lines when
  * not); then the general file with the automatic allows; within a file {@code deny} beats
- * {@code allow}; no match falls to the default (the project's when trusted), else {@code ask}.
+ * {@code allow}; no match falls to the default (the project's when trusted), else {@code ask}. In
+ * offline mode (D-033, D-055) no match is denied and the files' {@code default} lines don't apply.
  */
 public final class NetworkRules {
 
@@ -25,8 +26,14 @@ public final class NetworkRules {
     private final RulesFile project;
     private final boolean trusted;
     private final List<Rule> automatic;
+    private final boolean offline;
 
     public NetworkRules(RulesFile general, RulesFile project, boolean trusted, List<Rule> automatic) {
+        this(general, project, trusted, automatic, false);
+    }
+
+    public NetworkRules(RulesFile general, RulesFile project, boolean trusted, List<Rule> automatic, boolean offline) {
+        this.offline = offline;
         this.general = general;
         this.project = project;
         this.trusted = trusted;
@@ -47,6 +54,30 @@ public final class NetworkRules {
 
     public List<Rule> automatic() {
         return automatic;
+    }
+
+    public boolean offline() {
+        return offline;
+    }
+
+    /**
+     * Whether a host is on this machine or a private network: {@code localhost} or an IP literal in
+     * the built-in ranges. In offline mode only such model endpoints are allowed automatically.
+     */
+    public static boolean local(String host) {
+        String h = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
+        if (h.equalsIgnoreCase("localhost") || h.toLowerCase(java.util.Locale.ROOT).endsWith(".localhost")) {
+            return true;
+        }
+        if (!h.matches("[0-9.]+|[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*")) {
+            return false;
+        }
+        try {
+            InetAddress ip = InetAddress.ofLiteral(h);
+            return BUILT_IN.stream().anyMatch(r -> r.contains(ip));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     /** The project rules that count: all of them when trusted, else only the denies. */
@@ -90,6 +121,9 @@ public final class NetworkRules {
         Optional<Rule> generalAllow = first(generalRules, Rule.Action.ALLOW, host, port, ip);
         if (generalAllow.isPresent()) {
             return allow(generalAllow.get());
+        }
+        if (offline) {
+            return new Decision(Rule.Action.DENY, "offline mode: no allow rule matches " + host);
         }
         if (trusted && project.defaultAction().isPresent()) {
             return new Decision(project.defaultAction().get(), "default " + project.defaultAction().get().word() + " (" + project.path() + ")");

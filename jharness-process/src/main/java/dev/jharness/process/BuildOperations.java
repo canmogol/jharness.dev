@@ -92,6 +92,7 @@ public final class BuildOperations {
     private final Map<Tool, Executable> onPath;
     private final Path home;
     private final String javaHome;
+    private final boolean offline;
 
     /**
      * @param trusted whether the project is trusted (D-011); builds run project code, so they need it
@@ -101,6 +102,13 @@ public final class BuildOperations {
      */
     public BuildOperations(ProcessRunner runner, Workspace workspace, Timeouts timeouts, boolean trusted,
             Map<Tool, Executable> onPath, Path home, String javaHome) {
+        this(runner, workspace, timeouts, trusted, onPath, home, javaHome, false);
+    }
+
+    /** @param offline run Maven with {@code -o}, Gradle with {@code --offline} and npm offline (D-033, D-055) */
+    public BuildOperations(ProcessRunner runner, Workspace workspace, Timeouts timeouts, boolean trusted,
+            Map<Tool, Executable> onPath, Path home, String javaHome, boolean offline) {
+        this.offline = offline;
         this.runner = runner;
         this.workspace = workspace;
         this.timeout = timeouts.process();
@@ -163,6 +171,9 @@ public final class BuildOperations {
         switch (tool) {
             case MAVEN -> {
                 a.addAll(List.of("-B", "-ntp", "-Dstyle.color=never"));
+                if (offline) {
+                    a.add("-o");
+                }
                 if (settings != null) {
                     a.addAll(List.of("--global-settings", settings.toString()));
                 }
@@ -179,6 +190,9 @@ public final class BuildOperations {
             }
             case GRADLE -> {
                 a.addAll(List.of("--console=plain", "--no-daemon"));
+                if (offline) {
+                    a.add("--offline");
+                }
                 String project = text(req, "project");
                 a.add((project != null ? matching(project, GRADLE_PROJECT, "project") + ":" : "") + op);
                 String tests = text(req, "tests");
@@ -308,6 +322,9 @@ public final class BuildOperations {
                 env.put("npm_config_audit", "false");
                 env.put("npm_config_color", "false");
                 env.put("npm_config_progress", "false");
+                if (offline) {
+                    env.put("npm_config_offline", "true");
+                }
             }
         }
         return env;

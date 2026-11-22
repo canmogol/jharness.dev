@@ -99,7 +99,7 @@ class GitOperationsTest {
 
     @Test
     void rejectsUnknownOpsFieldsAndUnsafeArguments() {
-        for (String bad : List.of("{\"op\":\"push\"}", "{\"op\":\"fetch\"}", "{\"op\":\"clone\"}", "{}", "{\"op\":\"status\",\"args\":[\"-c\"]}",
+        for (String bad : List.of("{\"op\":\"push\",\"ref\":\"+main\"}", "{\"op\":\"merge\"}", "{\"op\":\"clone\"}", "{}", "{\"op\":\"status\",\"args\":[\"-c\"]}",
                 "{\"op\":\"diff\",\"rev\":\"--output=/tmp/x\"}", "{\"op\":\"show\"}", "{\"op\":\"log\",\"rev\":\"-p\"}",
                 "{\"op\":\"add\"}", "{\"op\":\"add\",\"paths\":[]}", "{\"op\":\"commit\"}", "{\"op\":\"commit\",\"message\":\"  \"}",
                 "{\"op\":\"diff\",\"staged\":\"yes\"}", "{\"op\":\"log\",\"max\":0}")) {

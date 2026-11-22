@@ -131,6 +131,13 @@ class SettingsTest {
         Settings dbg = Settings.parse("{\"http\":{\"logHeaders\":true,\"logBodies\":true,\"redactSecrets\":false}}", "s");
         assertTrue(dbg.http().logHeaders() && dbg.http().logBodies() && !dbg.http().redactSecrets());
         assertTrue(bad("{\"http\":{\"logBodies\":\"yes\"}}").getMessage().contains("http.logBodies"));
+        assertFalse(d.offline());
+        assertTrue(d.git().credentials().isEmpty());
+        assertTrue(Settings.parse("{\"offline\":true}", "s").offline());
+        assertTrue(bad("{\"offline\":\"yes\"}").getMessage().contains("offline"));
+        assertTrue(bad("{\"git\":{\"credentials\":{\"github.com\":\"bad name\"}}}").getMessage().contains("git.credentials.github.com"));
+        assertTrue(bad("{\"git\":{\"credentials\":{\"https://x\":\"T\"}}}").getMessage().contains("host name"));
+        assertTrue(bad("{\"git\":{\"helper\":true}}").getMessage().contains("git.helper"));
         Settings s = Settings.parse("{\"timeouts\":{\"http\":\"10s\",\"httpMax\":\"1m\"},\"http\":{\"maxResponseBytes\":65536,\"maxChars\":2000}}", "s");
         assertEquals(Duration.ofSeconds(10), s.timeouts().http());
         assertEquals(Duration.ofMinutes(1), s.timeouts().httpMax());
