@@ -63,7 +63,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Rules files `~/.jharness/network.rules` (general) and `.jharness/network.rules` (project); DNS pinning; `/network` commands
 - [x] OS sandbox allows network only to the proxy port
 - [x] Offline mode: network default deny, Maven/Gradle/npm offline flags, no update checks (D-033)
-- [ ] Injection, malicious-repo and sandbox-escape test suites, on JVM and native
+- [x] Injection, malicious-repo and sandbox-escape test suites, on JVM and native (spec 018)
 - [ ] Model profiles; retries and rate-limit handling
 - [ ] `--debug`, `jharness log <session>`, local crash reports
 

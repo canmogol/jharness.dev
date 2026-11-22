@@ -16,6 +16,7 @@ This repository is planned with spec-driven development: product docs first, the
 | `plan.md` | How JHarness gets built: architecture, modules, phases, testing |
 | `user-stories.md` | Stakeholder-level user stories |
 | `specs/NNN-feature/` | One folder per feature: `spec.md`, `plan.md`, `tasks.md` |
+| `docs/security-suites.md` | The prompt-injection, malicious-repository, sandbox-escape and runaway-code cases, and how to run them |
 
 ## IDs used in the docs
 
@@ -104,6 +105,8 @@ git can `fetch`, `pull` (fast-forward only), `push` and `clone` over HTTPS throu
 `jharness --offline` (or `"offline": true` in settings) is for working without a connection. The proxy then denies everything no `allow` rule matches, and only model endpoints on this machine or your LAN are allowed automatically. Maven runs with `-o`, Gradle with `--offline` and npm from its cache, and git `fetch`, `pull`, `push` and `clone` fail at once. JHarness never checks for updates.
 
 The agent can also call web APIs with `api.http` and read pages as text with `api.fetch`, both through the same proxy and rules. GET and HEAD need only the network rules; POST, PUT, PATCH and DELETE ask first ("always" saves a rule such as `POST api.example.com`), and plan mode denies them. Responses are read up to 10 MiB and returned as text up to 200,000 characters by default. Change both in `settings.json` with `"http": {"maxResponseBytes": N, "maxChars": N}` (64 KiB to 50 MiB, and 1,000 to 1,000,000 characters); binary bodies aren't returned. Calls time out after 30 s by default (`timeouts.http`, at most `timeouts.httpMax`, 2 min). No secrets or cookies are added to requests, and headers and bodies stay out of the session log. To debug a request, set `"http": {"logHeaders": true, "logBodies": true}`. The `http.request` and `http.response` events then carry headers and bodies. Secret headers such as `Authorization`, `Cookie` and API keys are shown as `[redacted]` unless you also set `"redactSecrets": false`. Bodies are logged as they are, so turn this off again when you are done.
+
+The security suites attack a real session: prompt injection, a malicious repository, sandbox escapes and runaway code. They run with `mvn install` and in the native smoke binary (`jharness-smoke --security`). `docs/security-suites.md` lists every case and what contains it.
 
 ## License
 

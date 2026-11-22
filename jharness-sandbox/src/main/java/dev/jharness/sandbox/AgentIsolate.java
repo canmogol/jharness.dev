@@ -226,7 +226,7 @@ public final class AgentIsolate implements AutoCloseable {
             Value t = text.execute(v);
             return new RunResult("ok", t.isNull() ? null : t.asString(), null, 0, null, out.text(), ms(t0));
         } catch (PolyglotException e) {
-            return fromPolyglot(e, out, t0);
+            return fromPolyglot(e, out, t0, profile.values().get("sandbox.MaxCPUTime"));
         } finally {
             current = null;
             try {
@@ -237,11 +237,22 @@ public final class AgentIsolate implements AutoCloseable {
         }
     }
 
-    private static RunResult fromPolyglot(PolyglotException e, Capture out, long t0) {
+    private static RunResult fromPolyglot(PolyglotException e, Capture out, long t0, String cpuLimit) {
         int line = agentLine(e);
         String msg = e.getMessage() == null ? e.toString() : e.getMessage();
         if (e.isResourceExhausted()) {
-            return new RunResult("limit", null, msg, line, limitName(msg), out.text(), ms(t0));
+            String limit = e.getMessage() == null ? null : limitName(msg);
+            if (limit == null || limit.equals("unknown")) {
+                // The CPU limit can trip inside the regex engine's backtracking with no message (spec 018, RUN-02).
+                // Wall time is at least CPU time, so a run shorter than the limit can't have hit it.
+                if (cpuLimit != null && ms(t0) >= dev.jharness.config.Units.parseDuration(cpuLimit).toMillis()) {
+                    limit = "sandbox.MaxCPUTime";
+                    msg = "Maximum CPU time limit of " + cpuLimit + " exceeded.";
+                } else {
+                    limit = "unknown";
+                }
+            }
+            return new RunResult("limit", null, msg, line, limit, out.text(), ms(t0));
         }
         if (e.isCancelled()) {
             return new RunResult("cancelled", null, msg, line, null, out.text(), ms(t0));
