@@ -6,7 +6,7 @@ import java.util.function.Supplier;
 import dev.jharness.config.ModelProfile;
 import dev.jharness.events.EventBus;
 import dev.jharness.events.Origin;
-import dev.jharness.llm.http.HttpClients;
+import dev.jharness.net.http.HttpClients;
 
 /** Builds the provider for a model profile (D-032). */
 public final class ModelProviders {

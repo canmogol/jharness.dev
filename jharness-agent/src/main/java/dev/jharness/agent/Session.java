@@ -6,7 +6,7 @@ import java.nio.file.Files;
 import java.util.Map;
 import java.util.List;
 import java.net.URI;
-import dev.jharness.llm.http.HttpClients;
+import dev.jharness.net.http.HttpClients;
 import dev.jharness.net.EgressProxy;
 import dev.jharness.net.NetworkRules;
 import dev.jharness.net.Rule;
@@ -147,7 +147,8 @@ public final class Session implements AutoCloseable {
                 : new PermissionEngine(PermissionMode.of(settings.permissions().mode()), ProjectRules.load(home, ws.root()),
                         access.prompter(), bus, turns);
         Checkpoints checkpoints = new Checkpoints(Checkpoints.rootFor(home, ws.root(), bus.session()), bus, turns);
-        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds);
+        var http = new dev.jharness.net.http.HttpOperations(bus, turns, settings.http(), settings.timeouts());
+        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
         String system = SystemPrompt.build(ctx.ok() ? ctx.value() : null, SystemPrompt.readMemory(ws.root().resolve("JHARNESS.md")),

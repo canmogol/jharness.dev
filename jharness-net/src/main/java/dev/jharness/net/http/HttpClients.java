@@ -1,4 +1,4 @@
-package dev.jharness.llm.http;
+package dev.jharness.net.http;
 
 import java.net.Authenticator;
 import java.net.InetSocketAddress;
@@ -50,6 +50,11 @@ public final class HttpClients {
             authenticator = null;
             current = null;
         }
+    }
+
+    /** Whether a session's egress proxy is set; {@link HttpOperations} refuses to send without one. */
+    public static boolean proxied() {
+        return current != null;
     }
 
     public static HttpClient create() {

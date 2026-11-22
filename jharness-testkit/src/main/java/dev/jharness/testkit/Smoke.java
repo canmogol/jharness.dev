@@ -110,6 +110,12 @@ public final class Smoke {
         GitOperations git = new GitOperations(runner, gitExe, ws, Duration.ofSeconds(60));
         Search search = Search.create(ws, runner, Timeouts.defaults());
         check("search engine", true, search.engine());
+        var page = dev.jharness.net.http.PageText.of("<html><head><title>Guide</title><script>evil()</script></head><body>"
+                + "<nav>menu</nav><h1>Intro</h1><p>See <a href=\"/docs\">the docs</a>.</p><pre><code>int x;</code></pre></body></html>",
+                java.net.URI.create("https://example.invalid/a/"));
+        check("jsoup page text", page.title().equals("Guide") && page.text().contains("# Intro")
+                && page.text().contains("[the docs](https://example.invalid/docs)") && page.text().contains("```\nint x;\n```")
+                && !page.text().contains("evil") && !page.text().contains("menu"), page.text());
         check("java search", new JavaSearch(ws).grep("TODO", ws.root(), null, false, 10).get("matches").size() == 1, "1 match");
 
         IsolateManager isolates = new IsolateManager(settings.sandbox(), bus, () -> o);
@@ -186,7 +192,7 @@ public final class Smoke {
                 var t = session.loop().turn("hi", d -> {});
                 check("proxy model turn", t.reply().equals("proxied") && net.stream().anyMatch(e -> e.type().equals("network.allowed")), t + " " + net);
                 try {
-                    dev.jharness.llm.http.HttpClients.create().send(java.net.http.HttpRequest.newBuilder(
+                    dev.jharness.net.http.HttpClients.create().send(java.net.http.HttpRequest.newBuilder(
                             java.net.URI.create("https://127.0.0.1:" + tls.getLocalPort() + "/")).timeout(Duration.ofSeconds(5)).build(),
                             java.net.http.HttpResponse.BodyHandlers.discarding());
                 } catch (java.io.IOException e) {
@@ -194,6 +200,18 @@ public final class Smoke {
                 }
                 check("proxy CONNECT credentials", net.stream().anyMatch(e -> e.type().equals("network.allowed")
                         && e.body().get("port").asInt() == tls.getLocalPort()), net);
+
+                // Spec 016: api.fetch from agent JS, through the session's proxy, converted with jsoup.
+                stub.enqueue(new StubModelServer.Reply(200, "text/html; charset=utf-8",
+                        "<html><head><title>Docs</title><script>x()</script></head><body><h1>Hello</h1><p>See <a href=\"/b\">b</a></p></body></html>", 0));
+                var httpOps = new dev.jharness.net.http.HttpOperations(session.bus(), () -> o, ps.http(), ps.timeouts());
+                var fetchApi = new ApiServices(dev.jharness.security.FilePolicy.workspaceOnly(ws), PermissionGate.allowAll(), session.bus(),
+                        () -> o, search, git, null, null, httpOps);
+                try (AgentIsolate iso = new IsolateManager(settings.sandbox(), session.bus(), () -> o).create("main", "main")) {
+                    RunResult fr = iso.run("const p = JSON.parse(api.fetch('" + stub.baseUrl() + "/docs')); p.title + '|' + p.text", fetchApi);
+                    check("api.fetch through the proxy", fr.ok() && fr.value().equals("Docs|# Hello\n\nSee [b](" + stub.baseUrl() + "/b)"),
+                            fr.ok() ? fr.value() : fr.forModel());
+                }
             }
         }
 

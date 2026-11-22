@@ -13,5 +13,6 @@
 
   <dependencies>
     <dependency><groupId>dev.jharness</groupId><artifactId>jharness-config</artifactId></dependency>
+    <dependency><groupId>dev.jharness</groupId><artifactId>jharness-net</artifactId></dependency>
   </dependencies>
 </project>

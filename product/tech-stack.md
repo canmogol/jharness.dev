@@ -23,6 +23,7 @@ Last updated: 2026-11-18
 | CLI parsing | picocli | Annotation processor generates native-image config |
 | Terminal UI | JLine 3 | Line editing, raw mode, ANSI; verify under Native Image in P0 |
 | HTTP | `java.net.http.HttpClient` | SSE streaming for models; always built with a `ProxySelector` pointing at the egress proxy |
+| HTML to text | jsoup 1.24.1 | `api.fetch` turns pages into Markdown-like text (D-054); checked in the native smoke binary on Linux and macOS |
 | Egress proxy | Own small HTTP forward proxy in the host (CONNECT + plain HTTP), on `127.0.0.1` with per-session credentials | Enforces `~/.jharness/network.rules` and `.jharness/network.rules`; no TLS interception |
 | JSON | Jackson tree model | No DTO binding, so little reflection config |
 | Diff | java-diff-utils | Edit previews and patches |

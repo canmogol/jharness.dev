@@ -25,7 +25,10 @@ import dev.jharness.events.SessionLog;
  */
 public final class ProjectRules {
 
-    /** @param key the path for writes, the git operation for git writes, {@code "<tool> <op>"} for builds */
+    /**
+     * @param key the path for writes, the git operation for git writes, {@code "<tool> <op>"} for builds,
+     *     {@code "<METHOD> <host>"} for HTTP writes
+     */
     public record Rule(Operation.Kind kind, String key) {
 
         ObjectNode toJson() {
@@ -70,6 +73,8 @@ public final class ProjectRules {
                 r.rules.add(new Rule(Operation.Kind.GIT_WRITE, n.get("op").asText()));
             } else if (kind.equals("build") && n.path("op").isTextual()) {
                 r.rules.add(new Rule(Operation.Kind.BUILD, n.get("op").asText()));
+            } else if (kind.equals("http-write") && n.path("op").isTextual()) {
+                r.rules.add(new Rule(Operation.Kind.HTTP_WRITE, n.get("op").asText()));
             } else {
                 throw new IllegalArgumentException(r.file + ": unknown rule " + n);
             }
@@ -91,6 +96,7 @@ public final class ProjectRules {
             case WRITE -> op.detail().hasNonNull("path") ? new Rule(Operation.Kind.WRITE, op.detail().get("path").asText()) : null;
             case GIT_WRITE -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.GIT_WRITE, op.detail().get("op").asText()) : null;
             case BUILD -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.BUILD, op.detail().get("op").asText()) : null;
+            case HTTP_WRITE -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.HTTP_WRITE, op.detail().get("op").asText()) : null;
             default -> null;
         };
     }
