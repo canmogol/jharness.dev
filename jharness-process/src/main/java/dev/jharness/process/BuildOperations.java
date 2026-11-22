@@ -394,8 +394,13 @@ public final class BuildOperations {
                 throw new UncheckedIOException("cannot create " + c, e);
             }
         }
-        return runner.run(exe, argv, workspace.root(), CallTimeout.of(req, timeout, max),
-                env(tool, exe, route, sandbox.policy().tmp()), grants(tool, caches));
+        Map<String, String> env = env(tool, exe, route, sandbox.policy().tmp());
+        ChildSandbox.Grants grants = grants(tool, caches);
+        // Seatbelt now and then refuses a connect to the proxy port with EPERM (spec 019). The tools
+        // don't retry that themselves, so the whole approved run is repeated.
+        return runner.retryingProxyRefusals(exe.name(), CallTimeout.of(req, timeout, max),
+                r -> ProcessRunner.proxyRefused(r.full(), route.port()),
+                t -> runner.run(exe, argv, workspace.root(), t, env, grants));
     }
 
     /** Gradle also gets loopback, for its daemon (D-050); the other tools reach only the proxy port. */
