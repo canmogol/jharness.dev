@@ -137,6 +137,9 @@ public final class Main implements Callable<Integer> {
     }
 
     static int run(Main m, String... args) {
+        // Model text, file text and exception messages reach the terminal escaped (spec 022).
+        m.out = TerminalSafe.stream(m.out);
+        m.err = TerminalSafe.stream(m.err);
         CommandLine cl = new CommandLine(m);
         cl.setOut(new java.io.PrintWriter(m.out, true));
         cl.setErr(new java.io.PrintWriter(m.err, true));

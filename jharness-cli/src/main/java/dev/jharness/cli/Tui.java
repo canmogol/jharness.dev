@@ -59,7 +59,12 @@ final class Tui {
 
     private final Terminal terminal;
     private final LineReader reader;
+    /**
+     * Everything printed goes through {@code out}, which escapes control characters (spec 022). Only
+     * {@link Styler} output, which escapes its own input, and fixed key-mode sequences use {@code raw}.
+     */
     private final PrintWriter out;
+    private final PrintWriter raw;
     private final Styler styler;
     private final StringBuilder pending = new StringBuilder();
     private TerminalPrompter prompter;
@@ -86,7 +91,8 @@ final class Tui {
             b.variable(LineReader.HISTORY_FILE, historyFile);
         }
         this.reader = b.build();
-        this.out = terminal.writer();
+        this.raw = terminal.writer();
+        this.out = new PrintWriter(new TerminalSafe.SafeWriter(raw), false);
         this.styler = Styler.forTerminal(terminal, env);
         if (!terminal.getType().startsWith("dumb")) {
             multiLine();
@@ -143,7 +149,7 @@ final class Tui {
 
     TerminalPrompter prompter() {
         if (prompter == null) {
-            prompter = new TerminalPrompter(reader, styler);
+            prompter = new TerminalPrompter(reader, styler, out, raw);
         }
         return prompter;
     }
@@ -159,7 +165,7 @@ final class Tui {
         session.bus().subscribe(this::onEvent);
         out.println("JHarness in " + session.workspace().root() + " · model " + modelName(session)
                 + (session.offline() ? " · offline" : "") + " · /help for commands");
-        out.println(styler.dim("Session log: " + session.logPath()));
+        raw.println(styler.dim("Session log: " + session.logPath()));
         out.flush();
         while (true) {
             String line;
@@ -183,7 +189,7 @@ final class Tui {
             TurnResult r = turn(session, t);
             out.println();
             if (!r.stopReason().equals("done")) {
-                out.println(styler.error("[" + r.stopReason() + (r.error() == null ? "" : ": " + r.error()) + "]"));
+                raw.println(styler.error("[" + r.stopReason() + (r.error() == null ? "" : ": " + r.error()) + "]"));
             }
             out.flush();
         }
@@ -199,14 +205,14 @@ final class Tui {
     private String readPrompt() {
         boolean keys = !terminal.getType().startsWith("dumb");
         if (keys) {
-            out.print(MODIFY_KEYS_ON);
+            raw.print(MODIFY_KEYS_ON);
             out.flush();
         }
         try {
             return reader.readLine("> ");
         } finally {
             if (keys) {
-                out.print(MODIFY_KEYS_OFF);
+                raw.print(MODIFY_KEYS_OFF);
                 out.flush();
             }
         }
@@ -267,7 +273,7 @@ final class Tui {
                     p.reload();
                     out.println("Network rules reloaded.");
                 } catch (ConfigException e) {
-                    out.println(styler.error(e.getMessage()));
+                    raw.println(styler.error(e.getMessage()));
                 }
             }
             case "allow", "deny", "remove" -> {
@@ -290,11 +296,11 @@ final class Tui {
                     }
                     p.reload();
                 } catch (IllegalArgumentException e) {
-                    out.println(styler.error(e.getMessage()));
+                    raw.println(styler.error(e.getMessage()));
                 } catch (IOException e) {
-                    out.println(styler.error("cannot write " + file + ": " + e.getMessage()));
+                    raw.println(styler.error("cannot write " + file + ": " + e.getMessage()));
                 } catch (ConfigException e) {
-                    out.println(styler.error(e.getMessage()));
+                    raw.println(styler.error(e.getMessage()));
                 }
             }
             default -> out.println("Usage: /network [list|allow X|deny X|remove X|reload] [--project]");
@@ -318,7 +324,7 @@ final class Tui {
         int nl;
         boolean printed = false;
         while ((nl = pending.indexOf("\n")) >= 0) {
-            out.println(styler.line(pending.substring(0, nl)));
+            raw.println(styler.line(pending.substring(0, nl)));
             pending.delete(0, nl + 1);
             printed = true;
         }
@@ -339,7 +345,7 @@ final class Tui {
 
     private void flushPending() {
         if (!pending.isEmpty()) {
-            out.print(styler.line(pending.toString()));
+            raw.print(styler.line(pending.toString()));
             pending.setLength(0);
             out.flush();
         }
@@ -417,7 +423,7 @@ final class Tui {
                     out.println();
                     thinkingOpen = true;
                 }
-                out.print(styler.thinking(e.body().get("text").asText()));
+                raw.print(styler.thinking(e.body().get("text").asText()));
                 out.flush();
             }
             return;
@@ -432,7 +438,7 @@ final class Tui {
             case "loop.code" -> {
                 if (steps) {
                     out.println();
-                    out.println(styler.step("▸ step " + e.body().get("step").asInt() + ": running " + e.body().get("lines").asInt() + " lines"));
+                    raw.println(styler.step("▸ step " + e.body().get("step").asInt() + ": running " + e.body().get("lines").asInt() + " lines"));
                 }
             }
             case "file.changed" -> {
@@ -443,7 +449,7 @@ final class Tui {
                     p.shownPath = null;
                 } else if (!diff.isEmpty()) {
                     out.println();
-                    out.print(styler.diff(diff));
+                    raw.print(styler.diff(diff));
                 }
             }
             case "loop.result" -> {
@@ -451,17 +457,17 @@ final class Tui {
                 String limit = e.body().has("limit") ? " (" + e.body().get("limit").asText() + ")" : "";
                 if (steps) {
                     String text = "▸ step " + e.body().get("step").asInt() + ": " + status + limit;
-                    out.println(status.equals("ok") ? styler.step(text) : styler.error(text));
+                    raw.println(status.equals("ok") ? styler.step(text) : styler.error(text));
                 }
                 if (e.body().has("error")) {
                     int line = e.body().path("line").asInt(0);
-                    out.println(styler.error("  " + (line > 0 ? "line " + line + ": " : "") + e.body().get("error").asText()));
+                    raw.println(styler.error("  " + (line > 0 ? "line " + line + ": " : "") + e.body().get("error").asText()));
                 }
             }
             case "model.retry" -> {
                 if (steps) {
                     long s = (e.body().get("waitMs").asLong() + 999) / 1000;
-                    out.println(styler.dim("▸ " + e.body().get("reason").asText() + " from " + e.body().get("provider").asText()
+                    raw.println(styler.dim("▸ " + e.body().get("reason").asText() + " from " + e.body().get("provider").asText()
                             + ", retrying in " + s + " s (attempt " + e.body().get("attempt").asInt() + " of "
                             + e.body().get("attempts").asInt() + ")"));
                 }
@@ -471,7 +477,7 @@ final class Tui {
             }
         }
         if (events.equals("all")) {
-            out.println(styler.dim("· " + e.type() + " " + e.body()));
+            raw.println(styler.dim("· " + e.type() + " " + e.body()));
         }
         out.flush();
     }

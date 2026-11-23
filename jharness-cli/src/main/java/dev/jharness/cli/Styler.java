@@ -8,7 +8,8 @@ import org.jline.terminal.Terminal;
 
 /**
  * Styles TUI output with ANSI colors (spec 009 AC-02): Markdown lines of a streamed reply, step
- * lines, errors and diffs. With color off every method returns its input unchanged.
+ * lines, errors and diffs. Every method escapes control characters in its input first (spec 022), so
+ * its output can go to the terminal as is; with color off that is all it does.
  */
 final class Styler {
 
@@ -52,6 +53,7 @@ final class Styler {
 
     /** One line of Markdown, without its newline. */
     String line(String line) {
+        line = TerminalSafe.text(line);
         if (!color) {
             return line;
         }
@@ -113,6 +115,7 @@ final class Styler {
 
     /** A unified diff, line by line: additions green, removals red, hunk headers cyan. */
     String diff(String diff) {
+        diff = TerminalSafe.text(diff);
         if (!color || diff.isEmpty()) {
             return diff;
         }
@@ -137,6 +140,7 @@ final class Styler {
     }
 
     private String paint(String code, String text) {
-        return color ? code + text + RESET : text;
+        String t = TerminalSafe.text(text);
+        return color ? code + t + RESET : t;
     }
 }

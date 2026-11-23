@@ -12,13 +12,18 @@ final class TerminalPrompter implements Prompter {
 
     private final LineReader reader;
     private final Styler styler;
+    /** Escaping writer for text and the raw writer for styled output (spec 022). */
+    private final java.io.PrintWriter out;
+    private final java.io.PrintWriter raw;
     volatile EscWatcher watcher;
     /** The path whose diff the last question showed, so the TUI doesn't print it twice. */
     volatile String shownPath;
 
-    TerminalPrompter(LineReader reader, Styler styler) {
+    TerminalPrompter(LineReader reader, Styler styler, java.io.PrintWriter out, java.io.PrintWriter raw) {
         this.reader = reader;
         this.styler = styler;
+        this.out = out;
+        this.raw = raw;
     }
 
     @Override
@@ -37,15 +42,16 @@ final class TerminalPrompter implements Prompter {
     }
 
     private Answer question(Operation op) {
-        var w = reader.getTerminal().writer();
-        w.println();
+        out.println();
+        out.flush();
         String diff = op.detail().path("diff").asText("");
         if (!diff.isEmpty()) {
-            w.print(styler.diff(diff));
+            raw.print(styler.diff(diff));
+            raw.flush();
             shownPath = op.detail().path("path").asText(null);
         }
-        w.println("Allow " + op.api() + ": " + op.summary() + "?");
-        w.flush();
+        out.println("Allow " + op.api() + ": " + op.summary() + "?");
+        out.flush();
         while (true) {
             String line;
             try {
@@ -63,7 +69,10 @@ final class TerminalPrompter implements Prompter {
                 case "n", "no" -> {
                     return Answer.DENY;
                 }
-                default -> reader.getTerminal().writer().println("Please answer y, a or n.");
+                default -> {
+                    out.println("Please answer y, a or n.");
+                    out.flush();
+                }
             }
         }
     }
