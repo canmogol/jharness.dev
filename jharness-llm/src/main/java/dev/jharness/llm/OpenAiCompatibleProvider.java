@@ -29,6 +29,12 @@ public final class OpenAiCompatibleProvider extends HttpProvider {
         super(profile, http, bus, origin, env);
     }
 
+    /** @param waiter waits before a retry (spec 020); null for the real wait */
+    public OpenAiCompatibleProvider(ModelProfile profile, HttpClient http, EventBus bus, Supplier<Origin> origin,
+            Function<String, String> env, RetryWait waiter) {
+        super(profile, http, bus, origin, env, waiter);
+    }
+
     @Override
     URI endpoint() {
         return URI.create(profile.baseUrl() + "/chat/completions");

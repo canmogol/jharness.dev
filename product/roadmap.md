@@ -65,7 +65,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Offline mode: network default deny, Maven/Gradle/npm offline flags, no update checks (D-033)
 - [x] Injection, malicious-repo and sandbox-escape test suites, on JVM and native (spec 018)
 - [x] Retries of build and git runs that the macOS sandbox refuses at the proxy port (spec 019)
-- [ ] Model profiles; retries and rate-limit handling
+- [x] Model profiles; retries and rate-limit handling (spec 020)
 - [ ] `--debug`, `jharness log <session>`, local crash reports
 
 **Gate:** every runaway, out-of-memory, injection and escape test is contained on Linux and macOS.

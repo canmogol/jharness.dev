@@ -42,6 +42,7 @@ public final class EventTypes {
         HOST.put("model.thinking_delta", List.of("text"));
         HOST.put("model.completed", List.of("provider", "model", "stopReason"));
         HOST.put("model.error", List.of("provider", "message"));
+        HOST.put("model.retry", List.of("provider", "model", "attempt", "attempts", "waitMs", "reason"));
         HOST.put("turn.started", List.of("prompt"));
         HOST.put("turn.completed", List.of("steps", "stopReason"));
         HOST.put("loop.code", List.of("step", "lines"));

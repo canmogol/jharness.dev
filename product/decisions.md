@@ -3,7 +3,7 @@
 Decision log for JHarness. Each entry records what was decided, why, and what was rejected.
 Status values: **Accepted** (settled), **Proposed** (recommended, not yet confirmed), **Open** (needs an answer before the related work starts).
 
-Last updated: 2026-11-22
+Last updated: 2026-11-23
 
 ---
 
@@ -68,6 +68,7 @@ Last updated: 2026-11-22
 | D-055 | Git `fetch`, `pull`, `push` and `clone` over HTTPS only, through the proxy port in the OS sandbox; no force push; tokens per host from user settings only, scoped to that host and redacted; offline mode denies what no rule allows, runs build tools offline and refuses git network ops | Accepted |
 | D-056 | Security suites: one catalogue of attack cases (injection, malicious repo, sandbox escape, runaway) against a real session with a model that obeys the attack; shared canary, attacker and file checks; run on the JVM and in the native smoke binary on Linux and macOS; skips never count as passes | Accepted |
 | D-057 | A Maven, Gradle, npm or git network run that fails because the macOS sandbox refused its connection to the proxy port is run again, up to 3 runs in all, within the call's timeout, with a `process.retried` event | Accepted |
+| D-058 | Model requests that fail before anything reached the user are retried: 408, 409, 429, 5xx, failed connections and overloaded stream errors; `retry-after` or exponential back-off; `retries`, `retryMaxWait` and `responseTimeout` per profile; Esc ends a wait | Accepted |
 
 ---
 
@@ -828,6 +829,27 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-058 — Model retries and rate limits
+
+**Decision.**
+- Each model profile (D-032) takes `retries` (0 to 10, default 4), `retryMaxWait` (1s to 10m, default 60s) and `responseTimeout` (5s to 30m, default 120s).
+- A request is sent again only if nothing from it reached the user yet. Retried:
+  - HTTP 408, 409, 429 and 5xx (Anthropic's 529 included);
+  - failed connections, including a proxy tunnel that got a 5xx;
+  - Anthropic `overloaded_error`, `rate_limit_error` and `api_error` events, and broken streams, before any text or thinking.
+- An `x-should-retry` header overrides the status rule.
+- Never retried: other 4xx, the response timeout, a tunnel the egress proxy refused, a missing key, cancellation.
+- The wait is `retry-after-ms`, else `retry-after` (seconds or HTTP date), else 1 s doubling up to `retryMaxWait`, each cut to a random 50–100%. A server asking for more than `retryMaxWait` fails at once.
+- Each retry publishes `model.retry` and shows a line in the UI. `model.error` comes once, after the last attempt, with `(gave up after N attempts)`. Esc ends a wait at once.
+
+**Why.** Rate limits and overloads from hosted APIs, and local servers that are restarting, are passing failures that ended a whole turn. The status and header rules match the official Anthropic and OpenAI SDKs, so servers built for them behave as expected. Not resending after streaming keeps a reply from appearing twice. Not retrying the response timeout keeps a slow local model from being sent the same long prompt again; `responseTimeout` is the setting for that.
+
+**Rejected.** Retrying inside the agent loop (a failed turn would redo work and lose the reason). Retrying after text was shown. Unlimited retries or waits. Slowing down early from rate-limit budget headers (later, if needed). Falling back to another profile (a separate feature).
+
+**Source.** Roadmap item "Model profiles; retries and rate-limit handling". Recommended options accepted while the user was away, specifying 020-model-retries-and-rate-limits, 2026-11-23.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -896,6 +918,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q60 | How do git fetch, pull, push and clone reach the network, and what does offline mode do? | HTTPS only through the proxy port, tokens per host from user settings, offline denies what no rule allows and runs tools offline | Completes D-039 and D-033 without loosening Articles V and VII | D-055 |
 | Q61 | How are the injection, malicious-repo and sandbox-escape suites built and run? | One catalogue of cases against a real session with an obedient model, shared canary checks, run on the JVM and in the native smoke binary | Gives the Phase 2 gate repeatable evidence on both OSes | D-056 |
 | Q62 | What happens when the macOS sandbox refuses a build's connection to the proxy port? | The same approved run is repeated, up to 3 runs in all, within the call's timeout | Builds stop failing on a Seatbelt flake that has no known fix | D-057 |
+| Q63 | How do model calls handle rate limits, overloads and failed connections? | Retry what failed before anything reached the user, after `retry-after` or a capped back-off, with per-profile limits; Esc ends a wait | A 429 or a restarting local server no longer ends the turn | D-058 |
 
 ---
 

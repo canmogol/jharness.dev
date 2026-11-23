@@ -104,7 +104,11 @@ Model profiles go in `~/.jharness/settings.json`:
 }
 ```
 
-API keys come from the environment or `~/.jharness/secrets` (`NAME=value` lines, mode 0600). Then, in a project folder:
+API keys come from the environment or `~/.jharness/secrets` (`NAME=value` lines, mode 0600).
+
+A failed model request is sent again when nothing from it has reached you yet: rate limits (429), overloads (529 and other 5xx), and a server that can't be reached or drops the connection. JHarness waits as long as the server's `retry-after` asks, or 1 s, 2 s, 4 s and so on, and shows `▸ HTTP 429 from anthropic, retrying in 7 s (attempt 2 of 5)`. Esc stops the wait. Each profile can set `"retries"` (0 to 10, default 4), `"retryMaxWait"` (default `"60s"`; a server asking for longer fails at once) and `"responseTimeout"` (default `"120s"`; raise it for a slow local model, since a timed-out request isn't retried).
+
+Then, in a project folder:
 
 ```
 jharness                      # terminal UI; /help lists the commands

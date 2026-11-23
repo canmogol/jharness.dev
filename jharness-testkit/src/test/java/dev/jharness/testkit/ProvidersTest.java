@@ -46,7 +46,17 @@ class ProvidersTest {
         Settings s = Settings.parse("{\"models\":{\"p\":{\"provider\":\"" + provider + "\",\"baseUrl\":\"" + stub.baseUrl()
                 + (provider.equals("openai-compatible") ? "/v1" : "") + "\",\"model\":\"m-1\",\"maxTokens\":100" + extra + "}}}", "test");
         ModelProfile p = s.models().resolve("p");
-        return ModelProviders.create(p, bus, () -> Origin.main(1), env::get);
+        return ModelProviders.create(p, bus, () -> Origin.main(1), env::get, waits());
+    }
+
+    /** Retry waits, recorded instead of slept (spec 020). */
+    final List<java.time.Duration> waited = new ArrayList<>();
+
+    private dev.jharness.llm.RetryWait waits() {
+        return d -> {
+            waited.add(d);
+            return true;
+        };
     }
 
     private static ChatRequest req() {
@@ -146,8 +156,9 @@ class ProvidersTest {
         stub.enqueue(Reply.json(401, Streams.ANTHROPIC_401));
         ModelException auth = assertThrows(ModelException.class, () -> p.stream(req(), t -> {}));
         assertTrue(auth.getMessage().contains("HTTP 401") && auth.getMessage().contains("authentication_error"), auth.getMessage());
-        stub.enqueue(Reply.sse(Streams.ANTHROPIC_STREAM_ERROR));
-        assertTrue(assertThrows(ModelException.class, () -> p.stream(req(), t -> {})).getMessage().contains("Overloaded"));
+        stub.enqueue(Reply.sse(Streams.ANTHROPIC_STREAM_ERROR)).enqueue(Reply.sse(Streams.ANTHROPIC_OK));
+        assertFalse(p.stream(req(), t -> {}).text().isEmpty(), "an overloaded stream before any text is sent again");
+        assertEquals(1, waited.size());
         stub.enqueue(Reply.sse(Streams.ANTHROPIC_CUT));
         assertTrue(assertThrows(ModelException.class, () -> p.stream(req(), t -> {})).getMessage().contains("message_stop"));
     }
@@ -159,8 +170,9 @@ class ProvidersTest {
         assertTrue(stub.requests().isEmpty());
         Settings s = Settings.parse("{\"models\":{\"p\":{\"provider\":\"openai-compatible\",\"baseUrl\":\"http://127.0.0.1:1/v1\",\"model\":\"m\"}}}", "t");
         ModelException down = assertThrows(ModelException.class,
-                () -> ModelProviders.create(s.models().resolve("p"), bus, () -> Origin.main(1), k -> null).stream(req(), t -> {}));
-        assertTrue(down.getMessage().contains("cannot reach"), down.getMessage());
+                () -> ModelProviders.create(s.models().resolve("p"), bus, () -> Origin.main(1), k -> null, waits()).stream(req(), t -> {}));
+        assertTrue(down.getMessage().contains("cannot reach") && down.getMessage().contains("gave up after 5 attempts"), down.getMessage());
+        assertEquals(4, waited.size());
     }
 
     private List<String> thinkingDeltas() {

@@ -23,9 +23,18 @@ public final class AnthropicProvider extends HttpProvider {
 
     static final String VERSION = "2023-06-01";
 
+    /** Stream error types that may succeed if the request is sent again (spec 020). */
+    static final java.util.Set<String> RETRYABLE_ERRORS = java.util.Set.of("overloaded_error", "rate_limit_error", "api_error");
+
     public AnthropicProvider(ModelProfile profile, HttpClient http, EventBus bus, Supplier<Origin> origin,
             Function<String, String> env) {
         super(profile, http, bus, origin, env);
+    }
+
+    /** @param waiter waits before a retry (spec 020); null for the real wait */
+    public AnthropicProvider(ModelProfile profile, HttpClient http, EventBus bus, Supplier<Origin> origin,
+            Function<String, String> env, RetryWait waiter) {
+        super(profile, http, bus, origin, env, waiter);
     }
 
     @Override
@@ -98,7 +107,8 @@ public final class AnthropicProvider extends HttpProvider {
                     stopped[0] = true;
                     return false;
                 }
-                case "error" -> throw new ModelException("Anthropic error: " + errorMessage(j));
+                case "error" -> throw new ModelException("Anthropic error: " + errorMessage(j), null,
+                        RETRYABLE_ERRORS.contains(j.path("error").path("type").asText("")));
                 default -> {
                     // ping, content_block_start, content_block_stop
                 }

@@ -44,6 +44,14 @@ Default local models: Qwen2.5-Coder-7B-Instruct (Q8_0 or Q4_K_M); alternative De
 
 Models are chosen through named profiles in `settings.json` (D-032).
 
+Model requests are retried per profile (D-058):
+
+| Profile key | Default | Range |
+| --- | --- | --- |
+| `retries` | 4 | 0 to 10 |
+| `retryMaxWait` | 60 s | 1 s to 10 min |
+| `responseTimeout` | 120 s | 5 s to 30 min |
+
 ## Action reviewer (optional, D-031)
 
 | Back-end | Where it runs | Notes |

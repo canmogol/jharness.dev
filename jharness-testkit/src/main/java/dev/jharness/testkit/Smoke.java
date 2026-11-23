@@ -179,6 +179,17 @@ public final class Smoke {
             check("openai-compatible", a.contains("api.readFile"), a);
             String b = ModelProviders.create(ms.models().resolve("c"), bus, () -> o, Map.of("K", "key")::get).stream(req, t -> {}).text();
             check("anthropic", b.equals("Hello, world"), b);
+            // Spec 020: a rate limit is waited out and sent again, with the real wait.
+            stub.enqueue(StubModelServer.Reply.json(429, Streams.ANTHROPIC_RATE_LIMIT).with("retry-after-ms", "50"))
+                    .enqueue(StubModelServer.Reply.sse(Streams.ANTHROPIC_OK));
+            int[] retries = {0};
+            bus.subscribe(e -> {
+                if (e.type().equals("model.retry")) {
+                    retries[0]++;
+                }
+            });
+            String c = ModelProviders.create(ms.models().resolve("c"), bus, () -> o, Map.of("K", "key")::get).stream(req, t -> {}).text();
+            check("model retry after 429", c.equals("Hello, world") && retries[0] == 1, c + ", retries " + retries[0]);
         }
 
         // The egress proxy (spec 011): a model turn through it, and the JDK client's credentials on CONNECT.

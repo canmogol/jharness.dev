@@ -96,10 +96,13 @@ class ProxyWiringTest {
         try (Session session = open(home); upstream; other) {
             session.bus().subscribe(events::add);
             var client = HttpClients.create();
+            String deniedMessage = null;
             for (int port : List.of(upstream.getLocalPort(), other.getLocalPort())) {
                 HttpRequest req = HttpRequest.newBuilder(URI.create("https://127.0.0.1:" + port + "/")).timeout(Duration.ofSeconds(5)).build();
-                assertThrows(IOException.class, () -> client.send(req, HttpResponse.BodyHandlers.discarding()));
+                deniedMessage = assertThrows(IOException.class, () -> client.send(req, HttpResponse.BodyHandlers.discarding())).getMessage();
             }
+            // Model retries (spec 020) skip a refused tunnel by this message; pin it so a JDK change is noticed.
+            assertEquals("Tunnel failed, got: 403", deniedMessage);
         }
         List<Event> net = events.stream().filter(e -> e.type().startsWith("network.")).toList();
         assertTrue(net.stream().anyMatch(e -> e.type().equals("network.allowed") && e.body().get("port").asInt() == upstream.getLocalPort()),

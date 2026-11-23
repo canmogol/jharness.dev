@@ -75,6 +75,22 @@ public final class Streams {
 
             """;
 
+    /** Text first, then an overloaded error: the user already saw text, so it isn't sent again. */
+    public static final String ANTHROPIC_OVERLOADED_AFTER_TEXT = """
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hel"}}
+
+            event: error
+            data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+
+            """;
+
+    public static final String ANTHROPIC_RATE_LIMIT =
+            "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"Number of requests has exceeded your rate limit\"}}";
+
+    public static final String ANTHROPIC_OVERLOADED =
+            "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}";
+
     public static final String ANTHROPIC_401 =
             "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}";
 
