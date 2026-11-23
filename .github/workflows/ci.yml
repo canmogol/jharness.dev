@@ -62,6 +62,14 @@ jobs:
             /usr/bin/bwrap --die-with-parent --unshare-all --ro-bind / / --dev /dev --proc /proc /usr/bin/true
           fi
 
+      # Diagnostic: where npm resolves and who may write it (JHarness skips world-writable tools, spec 015).
+      - name: Show npm
+        run: |
+          echo "PATH=$PATH"
+          for p in $(which -a npm node 2>/dev/null); do
+            r=$(readlink -f "$p"); echo "$p -> $r"; ls -ld "$p" "$r" "$(dirname "$r")" "$(dirname "$p")"
+          done
+
       - name: JVM tests
         run: mvn -B -ntp install
 
