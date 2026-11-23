@@ -30,6 +30,7 @@ import dev.jharness.events.Origin;
 public final class AgentIsolate implements AutoCloseable {
 
     static final String SOURCE_NAME = "agent.js";
+    static final String HELPERS_NAME = "helpers.js";
 
     /** Wraps the host object: strings in, strings out, errors become JS errors. */
     private static final String SHIM = """
@@ -87,6 +88,8 @@ public final class AgentIsolate implements AutoCloseable {
     private final ExecutorService thread;
     private volatile boolean dead;
     private volatile Context current;
+    /** A custom agent's helpers.js, run before every block (spec 025), or null. */
+    private volatile String helpers;
 
     AgentIsolate(String agent, SandboxSettings.Profile profile, EventBus bus, Supplier<Origin> origin, Engine engine,
             boolean memoryProtection) {
@@ -101,6 +104,11 @@ public final class AgentIsolate implements AutoCloseable {
 
     public String agent() {
         return agent;
+    }
+
+    /** Defines a custom agent's helper functions before every later block (spec 025). */
+    public void useHelpers(String source) {
+        this.helpers = source;
     }
 
     public boolean memoryProtection() {
@@ -222,6 +230,15 @@ public final class AgentIsolate implements AutoCloseable {
             Value pair = ctx.eval(Source.newBuilder("js", SHIM, "jharness-api.js").buildLiteral()).execute(new HostApi(services, clock));
             ctx.getBindings("js").putMember("api", pair.getArrayElement(0));
             Value text = pair.getArrayElement(1);
+            String h = helpers;
+            if (h != null) {
+                try {
+                    ctx.eval(Source.newBuilder("js", h, HELPERS_NAME).buildLiteral());
+                } catch (PolyglotException e) {
+                    RunResult r = fromPolyglot(e, out, t0, profile.values().get("sandbox.MaxCPUTime"));
+                    return new RunResult(r.status(), null, "in the agent's helpers.js: " + r.error(), 0, r.limit(), r.output(), r.durationMs());
+                }
+            }
             Value v = ctx.eval(Source.newBuilder("js", js, SOURCE_NAME).buildLiteral());
             Value t = text.execute(v);
             return new RunResult("ok", t.isNull() ? null : t.asString(), null, 0, null, out.text(), ms(t0));

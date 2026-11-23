@@ -241,7 +241,7 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/model", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
+        assertEquals(List.of("/model", "/agent", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
                 List.copyOf(Tui.COMMANDS.keySet()));
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
         assertEquals("quit (or Ctrl-D)", Tui.COMMANDS.get("/exit"));
@@ -280,6 +280,24 @@ class TuiTest {
         sc = screen();
         assertTrue(sc.contains("vents") && sc.contains("(show the event level and the session log file)") && sc.contains("(quit (or Ctrl-D))"),
                 "both matches listed with descriptions (JLine colors the typed /e): " + sc);
+    }
+
+    /** Spec 025: /agent lists the agents; the banner names the running one. */
+    @Test
+    void agentCommandAndBanner() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws13"));
+        Path home = tmp.resolve("home13");
+        Path d = Files.createDirectories(home.resolve(".jharness/agents/reviewer"));
+        Files.writeString(d.resolve("agent.json"), "{\"description\":\"reviews\"}");
+        Tui tui = new Tui(terminal("/agent\n/exit\n"), null);
+        var reviewer = dev.jharness.agent.AgentDefinition.resolve(home, ws, false, "reviewer");
+        try (Session session = Session.open(home, ws, Settings.defaults(), Session.Access.prompter(tui.prompter()).agent(reviewer),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("· agent reviewer ·"), sc);
+        assertTrue(sc.contains("  default  the built-in agent") && sc.contains("* reviewer  (user) reviews"), sc);
     }
 
     @Test

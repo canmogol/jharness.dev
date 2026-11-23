@@ -37,6 +37,7 @@ final class Tui {
             Commands:
               /model          list model profiles
               /model NAME     switch to another profile
+              /agent          list custom agents (start one with jharness --agent NAME)
               /diff           show the last turn's file changes
               /undo           undo the last turn's file changes and remove it from the conversation
               /rewind N       undo every turn after turn N (add --force to overwrite your own edits)
@@ -201,6 +202,7 @@ final class Tui {
         showThinking = debug || session.settings().ui().thinking().equals("show");
         session.bus().subscribe(this::onEvent);
         out.println("JHarness in " + session.workspace().root() + " · model " + modelName(session)
+                + (session.agent() != null ? " · agent " + session.agent().name() : "")
                 + (session.offline() ? " · offline" : "") + " · /help for commands");
         raw.println(styler.dim("Session log: " + session.logPath()));
         out.flush();
@@ -430,6 +432,10 @@ final class Tui {
                         out.println(e.getMessage());
                     }
                 }
+            }
+            case "/agent" -> {
+                session.describeAgents().forEach(out::println);
+                out.println("Agents live in .jharness/agents/NAME/ or ~/.jharness/agents/NAME/; start one with jharness --agent NAME.");
             }
             case "/network" -> network(session, parts.length > 1 ? parts[1].strip() : "");
             case "/thinking" -> {

@@ -1,0 +1,6 @@
+{
+  "description": "Reviews the uncommitted changes and reports problems; never changes anything.",
+  "tools": ["readFile", "listFiles", "grep", "git"],
+  "plan": true,
+  "maxSteps": 30
+}

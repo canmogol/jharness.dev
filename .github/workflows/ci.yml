@@ -106,6 +106,16 @@ jobs:
           grep -q "replay/" "$tmp/list.txt"
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last | tee "$tmp/timeline.txt"
           grep -q "loop.result  step=1 status=ok" "$tmp/timeline.txt"
+          # The example custom agent (spec 025): its helpers run and its tools hold in the native binary.
+          mkdir -p "$tmp/home/.jharness/agents" && cp -R examples/agents/reviewer "$tmp/home/.jharness/agents/"
+          printf '%s\n' '{"reply":"```js\ntypeof changedFiles + \" \" + api.readFile(\"a.txt\")\n```"}' '{"reply":"```js\napi.writeFile(\"a.txt\", \"x\")\n```"}' '{"reply":"Reviewed."}' > "$tmp/agent.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/agent.jsonl" --agent reviewer -p "review" | tee "$tmp/agent.txt"
+          grep -q "Reviewed." "$tmp/agent.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json > "$tmp/agent-log.jsonl"
+          grep -q '"customAgent":"reviewer"' "$tmp/agent-log.jsonl"
+          grep -q "can't use api.writeFile" "$tmp/agent-log.jsonl"
+          grep -q '"status":"ok"' "$tmp/agent-log.jsonl"
+          test "$(cat "$tmp/ws/a.txt")" = "hello from the workspace"
 
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check

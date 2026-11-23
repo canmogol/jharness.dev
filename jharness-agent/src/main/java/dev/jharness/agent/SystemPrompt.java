@@ -24,6 +24,11 @@ public final class SystemPrompt {
      * @param userMd {@code ~/.jharness/JHARNESS.md}, or null
      */
     public static String build(String contextJson, String projectMd, String userMd) {
+        return build(contextJson, projectMd, userMd, null);
+    }
+
+    /** @param agent the custom agent (spec 025): its description, prompt, tools, plan mode and helpers go last */
+    public static String build(String contextJson, String projectMd, String userMd, AgentDefinition agent) {
         StringBuilder memory = new StringBuilder();
         if (userMd != null && !userMd.isBlank()) {
             memory.append("\n# Your user's instructions (~/.jharness/JHARNESS.md)\n\n").append(cut(userMd)).append('\n');
@@ -35,7 +40,29 @@ public final class SystemPrompt {
                 .replace("{{API}}", AgentIsolate.apiDeclaration().strip())
                 .replace("{{EXAMPLES}}", resource("examples.md").strip())
                 .replace("{{CONTEXT}}", contextJson == null ? "{}" : contextJson)
-                + memory;
+                + memory + agent(agent);
+    }
+
+    static String agent(AgentDefinition a) {
+        if (a == null) {
+            return "";
+        }
+        StringBuilder b = new StringBuilder("\n# You are the agent \"").append(a.name()).append("\"\n\n").append(a.description()).append('\n');
+        if (a.prompt() != null) {
+            b.append('\n').append(a.prompt().strip()).append('\n');
+        }
+        if (a.tools() != null) {
+            b.append("\nYou may use only these api methods: ").append(String.join(", ", new java.util.TreeSet<>(a.tools())))
+                    .append(". Calls to the others are refused.\n");
+        }
+        if (a.plan()) {
+            b.append("\nYou run in plan mode: every change (writes, commits, builds, POST requests) is refused. Investigate and report.\n");
+        }
+        if (a.helpers() != null) {
+            b.append("\nThese helper functions are defined in every block, from the agent's helpers.js:\n\n```js\n")
+                    .append(a.helpers().strip()).append("\n```\n");
+        }
+        return b.toString();
     }
 
     static String cut(String text) {
