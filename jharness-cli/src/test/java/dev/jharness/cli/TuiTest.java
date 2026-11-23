@@ -238,6 +238,50 @@ class TuiTest {
         assertTrue(sc.contains("· turn.started"), sc);
     }
 
+    /** Spec 024 AC-03: every command in the help is completed, each with its description. */
+    @Test
+    void commandsComeFromTheHelp() {
+        assertEquals(List.of("/model", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
+                List.copyOf(Tui.COMMANDS.keySet()));
+        assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
+        assertEquals("quit (or Ctrl-D)", Tui.COMMANDS.get("/exit"));
+    }
+
+    /** Spec 024 AC-01, AC-02: "/" then Tab prints the help; "/mo" then Tab completes /model; other text keeps its Tab behavior. */
+    @Test
+    void slashTabPrintsTheHelpAndCompletesCommands() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws10"));
+        Tui tui = new Tui(xterm("/\texit\r"), null, java.util.Map.of());
+        try (Session session = Session.open(tmp.resolve("home10"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertEquals(1, sc.split("Commands:", -1).length - 1, "the help once, from Tab: " + sc);
+        assertTrue(sc.contains("/network reload re-read both rules files"), sc);
+
+        screen.reset();
+        Tui tui2 = new Tui(xterm("/mo\t\r/thi\t\r/exit\r"), null, java.util.Map.of());
+        try (Session session = Session.open(tmp.resolve("home11"), ws, Settings.defaults(), Session.Access.prompter(tui2.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(), bus, turns))) {
+            tui2.run(session);
+        }
+        sc = screen();
+        assertTrue(sc.contains("No model profiles in settings.json."), "/mo + Tab ran /model: " + sc);
+        assertTrue(sc.contains("Thinking: shown"), "/thi + Tab ran /thinking: " + sc);
+        assertFalse(sc.contains("Unknown command"), sc);
+
+        screen.reset();
+        Tui tui3 = new Tui(xterm("/e\txit\r"), null, java.util.Map.of());
+        try (Session session = Session.open(tmp.resolve("home12"), ws, Settings.defaults(), Session.Access.prompter(tui3.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(), bus, turns))) {
+            tui3.run(session);
+        }
+        sc = screen();
+        assertTrue(sc.contains("vents") && sc.contains("(show the event level and the session log file)") && sc.contains("(quit (or Ctrl-D))"),
+                "both matches listed with descriptions (JLine colors the typed /e): " + sc);
+    }
+
     @Test
     void thinkingShownDimOrHidden() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws6"));

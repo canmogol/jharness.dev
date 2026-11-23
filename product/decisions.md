@@ -72,6 +72,7 @@ Last updated: 2026-11-23
 | D-059 | Debugging tools: `--debug` shows every event and the thinking and prints stack traces; `jharness log` lists and prints sessions with control characters escaped; host crashes write a local crash report (no event bodies, newest 20 kept, never sent) and exit 3; `model.response` logs status, request id and allow-listed headers | Accepted |
 | D-060 | Everything JHarness prints (TUI, `-p`, errors) escapes C0 controls except newline and tab, DEL, C1 controls and bidi controls and drops carriage returns; only its own styling reaches the terminal raw | Accepted |
 | D-061 | Typed build parameters that only skip work, pick a project profile or change parallelism: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev`; the approval shows them, "always" keys on the operation | Accepted |
+| D-062 | In the TUI, Tab on a lone `/` prints the `/help` text above the prompt; Tab after a partial `/command` completes it, listing matches with descriptions taken from the help text | Accepted |
 
 ---
 
@@ -894,6 +895,16 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** User question about `mvn clean install -DskipTests`, then a request for skip-tests and other harmless, common parameters as their own spec, 2026-11-23.
 
+## D-062 — `/` and Tab list the commands
+
+**Decision.** Tab on a prompt line holding only `/` prints the `/help` text above the prompt and keeps the `/`. Tab after a partial first word starting with `/` completes the command name; several matches are listed with their descriptions. Names and descriptions are parsed from the `/help` text. Tab elsewhere completes nothing, as before.
+
+**Why.** The user asked for `/` and Tab to show the commands. Completing names is what Tab does in every shell, and taking the list from the help text keeps one source.
+
+**Rejected.** A separate command table (two lists to keep in step). Completing arguments and paths now (a larger change with its own questions, such as file policy for path completion).
+
+**Source.** User request while 023 was merged, 2026-11-23; recommended options accepted while the user was away.
+
 ---
 
 ## Questions and answers
@@ -968,6 +979,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q64 | How does a user debug a session, audit it and report a crash? | `--debug` for live detail, `jharness log` for a readable timeline with control characters escaped, and a local crash report with no event bodies, exit 3 | Closes the last Phase 2 item and US-3.6 without telemetry | D-059 |
 | Q65 | Should live output escape control characters from model and file text? | Yes: one escaping writer for the TUI, `-p` stdout and stderr; only JHarness styling is raw | A hostile reply or file can't rewrite the terminal or an approval question | D-060 |
 | Q66 | Can the model pass build parameters such as `-DskipTests`? | Only as typed fields: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev` | Common builds work while free-form arguments stay closed | D-061 |
+| Q67 | What should `/` and Tab do in the TUI? | Print the `/help` text; Tab after a partial command completes it, listing matches with descriptions | Commands can be found without leaving the prompt | D-062 |
 
 ---
 

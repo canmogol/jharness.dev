@@ -10,7 +10,8 @@ Sets up a temporary home and workspace, then types:
   3. "/help" Enter               -> the command list
   4. "/undo" Enter               -> a.txt is back to "old"
   5. "spin" Enter, then Esc      -> the recorded reply loops forever; Esc stops it
-  6. Ctrl-D                      -> quit
+  6. "/" Tab, then Ctrl-U        -> the command list again, from Tab (spec 024)
+  7. Ctrl-D                      -> quit
 Exits 0 only if the approval was asked, the file changed, the reply was shown and JHarness exited 0.
 """
 import fcntl
@@ -67,15 +68,20 @@ def main():
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
     transcript = read_available(fd, 8.0)
     steps = [(b"n\r", 2.0), (b"change a.txt\r", 4.0), (b"y\r", 4.0), (b"/help\r", 1.0), (b"/undo\r", 1.5),
-             (b"spin\r", 2.5), (b"\x1b", 2.5), (b"\x04", 3.0)]
+             (b"spin\r", 2.5), (b"\x1b", 2.5), (b"/\t", 1.5), (b"\x15", 0.5), (b"\x04", 3.0)]
     content_after_change = None
+    help_end = 0
+    tab_help = False
     for keys, wait in steps:
         try:
             os.write(fd, keys)
         except OSError:
             break
         transcript += read_available(fd, wait)
+        if keys == b"/\t":
+            tab_help = "/model NAME" in transcript[help_end:].decode("utf-8", "replace")
         if keys == b"/help\r":
+            help_end = len(transcript)
             with open(os.path.join(ws, "a.txt")) as f:
                 content_after_change = f.read()
     _, status = os.waitpid(pid, 0)
@@ -90,6 +96,7 @@ def main():
         "step": "step 1: ok" in text,
         "reply": "Changed a.txt to new." in text,
         "help": "/model NAME" in text,
+        "tab-help": tab_help,
         "file": content_after_change == "new",
         "diff": "-old" in text and "+new" in text,
         "undo": "Restored a.txt." in text and content == "old",

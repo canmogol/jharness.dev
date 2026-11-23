@@ -69,6 +69,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] `--debug`, `jharness log <session>`, local crash reports (spec 021)
 - [x] Control characters escaped in the TUI and `-p` output (spec 022)
 - [x] Typed build parameters: skip tests, Maven profiles, threads and `install`, Gradle parallel and continue, npm omit-dev (spec 023)
+- [x] `/` and Tab list and complete the slash commands (spec 024)
 
 **Gate:** every runaway, out-of-memory, injection and escape test is contained on Linux and macOS.
 

@@ -49,9 +49,24 @@ final class Tui {
               /network reload re-read both rules files
               Shift+Enter, Alt+Enter, Ctrl-J  new line; Enter sends
               Esc             stop the running turn
-              /help           show this help
+              /help           show this help (or type / and press Tab)
               /exit           quit (or Ctrl-D)
             """;
+
+    /** Each command in {@link #HELP} and its first description line, for Tab completion (spec 024). */
+    static final java.util.SequencedMap<String, String> COMMANDS = commands();
+
+    private static java.util.SequencedMap<String, String> commands() {
+        var m = new java.util.LinkedHashMap<String, String>();
+        var p = java.util.regex.Pattern.compile("^ {2}(/[a-z]+)\\S*(?: \\S+)*?\\s{2,}(\\S.*)$");
+        for (String line : HELP.lines().toList()) {
+            var x = p.matcher(line);
+            if (x.matches()) {
+                m.putIfAbsent(x.group(1), x.group(2));
+            }
+        }
+        return java.util.Collections.unmodifiableSequencedMap(m);
+    }
 
     /** xterm {@code modifyOtherKeys} level 1, so Shift+Enter is reported (D-051); and the reset. */
     static final String MODIFY_KEYS_ON = "\u001b[>4;1m";
@@ -86,7 +101,7 @@ final class Tui {
             }
             Files.setPosixFilePermissions(historyFile, PosixFilePermissions.fromString("rw-------"));
         }
-        LineReaderBuilder b = LineReaderBuilder.builder().terminal(terminal).appName("jharness");
+        LineReaderBuilder b = LineReaderBuilder.builder().terminal(terminal).appName("jharness").completer(Tui::completeCommand);
         if (historyFile != null) {
             b.variable(LineReader.HISTORY_FILE, historyFile);
         }
@@ -97,6 +112,28 @@ final class Tui {
         if (!terminal.getType().startsWith("dumb")) {
             multiLine();
         }
+        slashTab();
+    }
+
+    /** Command names for a first word that starts with {@code /} (spec 024 AC-02); nothing otherwise. */
+    static void completeCommand(LineReader r, org.jline.reader.ParsedLine line, List<org.jline.reader.Candidate> out) {
+        if (line.wordIndex() != 0 || !line.word().startsWith("/")) {
+            return;
+        }
+        COMMANDS.forEach((name, desc) -> out.add(new org.jline.reader.Candidate(name, name, null, desc, null, null, true)));
+    }
+
+    /** Tab on a lone {@code /} prints the help above the prompt (spec 024 AC-01); otherwise it completes as usual. */
+    private void slashTab() {
+        var complete = reader.getWidgets().get(LineReader.COMPLETE_WORD);
+        reader.getWidgets().put("jharness-tab", () -> {
+            if (reader.getBuffer().toString().strip().equals("/")) {
+                reader.printAbove(HELP.stripTrailing());
+                return true;
+            }
+            return complete.apply();
+        });
+        reader.getKeyMaps().get(LineReader.MAIN).bind(new Reference("jharness-tab"), KeyMap.ctrl('I'));
     }
 
     /**
