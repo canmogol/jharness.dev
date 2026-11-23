@@ -1,6 +1,14 @@
 # Changelog
 
-<!-- last-commit: 5c37db4fd0469ae12f63ed3b6d9b32f8b841ebd5 -->
+<!-- last-commit: f065c0e0217533585c8691156195e8ee9ce77e07 -->
+
+## 2026-11-23 · 024 `/` and Tab list the commands
+
+- In the terminal UI, Tab on a line holding only `/` prints the `/help` text above the prompt and keeps the `/`.
+- Tab after part of a command completes it (`/mo` → `/model`); when several match, they are listed with their descriptions.
+- The names and descriptions come from the `/help` text, so the two can't drift apart. Tab elsewhere completes nothing, as before.
+- The pseudo-terminal check of the native binary in CI types `/` and Tab.
+- Decision: `/` and Tab list the commands (D-062).
 
 ## 2026-11-23 · 023 Build parameters
 
