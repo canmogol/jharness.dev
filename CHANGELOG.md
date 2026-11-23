@@ -1,6 +1,15 @@
 # Changelog
 
-<!-- last-commit: 22ace2b68eeb1c7048eb1699c45d17d809dc99b1 -->
+<!-- last-commit: 806f3646967dc6f8b9aaf4dbd064aa1b5aa20e36 -->
+
+## 2026-11-23 · 019 Build retry on proxy refusal
+
+- On macOS, when Seatbelt refuses a Maven, Gradle or npm run's connection to the proxy port, JHarness runs the same approved command again, up to 3 runs in all. A refusal is a line with `EPERM` or "Operation not permitted" and the proxy's exact port; any other failure, a success or a timeout is never repeated.
+- All runs share the call's timeout, and a retry starts only with at least 1 s left. Nothing is asked again.
+- git network operations use the same retry. Each retry emits a `process.retried` event (`executable`, `attempt`, `attempts`, `reason`, `remainingMs`).
+- The npm proxy checks in the tests and the native smoke binary now fail the way npm does, so they get the retry; this was the macOS smoke flake.
+- The README glossary lists the security case IDs (`INJ-NN`, `REPO-NN`, `ESC-NN`, `RUN-NN`) and the terms the docs use. The RUN-08 macOS exception is accepted for the Phase 2 gate.
+- Decision: retry runs the sandbox refused at the proxy port (D-057).
 
 ## 2026-11-22 · 018 Security test suites
 
