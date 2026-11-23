@@ -437,6 +437,7 @@ public final class HostApi {
     private String build(BuildOperations.Tool tool, String json) {
         ObjectNode a;
         ObjectNode detail;
+        String summary;
         try {
             if (s.builds() == null) {
                 throw new IllegalArgumentException(tool.api() + " is not available in this session");
@@ -444,10 +445,11 @@ public final class HostApi {
             a = args(json);
             s.builds().check(tool, a);
             detail = BuildOperations.detail(tool, a);
+            summary = BuildOperations.summary(tool, a);
         } catch (RuntimeException e) {
             return reject(tool.api(), e);
         }
-        return call(tool.api(), Operation.Kind.BUILD, detail.get("op").asText(), detail,
+        return call(tool.api(), Operation.Kind.BUILD, summary, detail,
                 () -> BuildOperations.toJson(outsideRunClock(() -> s.builds().run(tool, a))));
     }
 

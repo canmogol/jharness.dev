@@ -71,6 +71,7 @@ Last updated: 2026-11-23
 | D-058 | Model requests that fail before anything reached the user are retried: 408, 409, 429, 5xx, failed connections and overloaded stream errors; `retry-after` or exponential back-off; `retries`, `retryMaxWait` and `responseTimeout` per profile; Esc ends a wait | Accepted |
 | D-059 | Debugging tools: `--debug` shows every event and the thinking and prints stack traces; `jharness log` lists and prints sessions with control characters escaped; host crashes write a local crash report (no event bodies, newest 20 kept, never sent) and exit 3; `model.response` logs status, request id and allow-listed headers | Accepted |
 | D-060 | Everything JHarness prints (TUI, `-p`, errors) escapes C0 controls except newline and tab, DEL, C1 controls and bidi controls and drops carriage returns; only its own styling reaches the terminal raw | Accepted |
+| D-061 | Typed build parameters that only skip work, pick a project profile or change parallelism: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev`; the approval shows them, "always" keys on the operation | Accepted |
 
 ---
 
@@ -875,6 +876,24 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** Follow-up from spec 021, which escaped only `jharness log`; the user asked for it as spec 022 before the Phase 2 gate run, 2026-11-23.
 
+## D-061 — Typed build parameters
+
+**Decision.**
+- Maven gets an `install` operation (fields as `verify`). New fields:
+  - `skipTests: true` on `package`, `verify` and `install` → `-DskipTests` (refused with `tests`);
+  - `profiles` (up to 10 ids, `!` to turn one off) → `-P`;
+  - `threads` (1 to 32, or `1C` to `4C`) → `-T`.
+- Gradle: `skipTests: true` on `build` and `check` → `-x test`; `parallel: true` → `--parallel`; `continue: true` → `--continue`.
+- npm: `omitDev: true` on `ci` and `install` → `--omit=dev`.
+- Booleans must be JSON booleans and strings must match their patterns; each field becomes one fixed flag. Nothing else reaches the command line.
+- The approval question shows the parameters (`maven package · skipTests, profiles dev`); "always" still saves the operation alone.
+
+**Why.** "Build without running the tests" and "build the dev profile" are everyday requests that the typed operations couldn't express. These flags only skip work, pick a profile the trusted project already defines or change parallelism, so they can't run new code, read or write new places or reach new hosts. `install` writes only to `~/.m2/repository`, which builds already write. Keeping "always" per operation means a saved approval for `maven package` covers the same build with or without tests.
+
+**Rejected.** Free-form `-D` or Gradle `-P` properties (they configure plugins, which can run code or change paths). A general Gradle `-x TASK` (rarely needed beyond tests). `-U` and `-q` (little value). Making "always" depend on the parameters (a new prompt for every combination).
+
+**Source.** User question about `mvn clean install -DskipTests`, then a request for skip-tests and other harmless, common parameters as their own spec, 2026-11-23.
+
 ---
 
 ## Questions and answers
@@ -948,6 +967,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q63 | How do model calls handle rate limits, overloads and failed connections? | Retry what failed before anything reached the user, after `retry-after` or a capped back-off, with per-profile limits; Esc ends a wait | A 429 or a restarting local server no longer ends the turn | D-058 |
 | Q64 | How does a user debug a session, audit it and report a crash? | `--debug` for live detail, `jharness log` for a readable timeline with control characters escaped, and a local crash report with no event bodies, exit 3 | Closes the last Phase 2 item and US-3.6 without telemetry | D-059 |
 | Q65 | Should live output escape control characters from model and file text? | Yes: one escaping writer for the TUI, `-p` stdout and stderr; only JHarness styling is raw | A hostile reply or file can't rewrite the terminal or an approval question | D-060 |
+| Q66 | Can the model pass build parameters such as `-DskipTests`? | Only as typed fields: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev` | Common builds work while free-form arguments stay closed | D-061 |
 
 ---
 

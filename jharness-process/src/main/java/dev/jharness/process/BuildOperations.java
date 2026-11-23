@@ -58,20 +58,21 @@ public final class BuildOperations {
 
     private static final Map<Tool, Map<String, Set<String>>> FIELDS = Map.of(
             Tool.MAVEN, Map.of(
-                    "compile", Set.of("module"),
-                    "test", Set.of("module", "tests"),
-                    "verify", Set.of("module", "tests"),
-                    "package", Set.of("module"),
+                    "compile", Set.of("module", "profiles", "threads"),
+                    "test", Set.of("module", "tests", "profiles", "threads"),
+                    "verify", Set.of("module", "tests", "skipTests", "profiles", "threads"),
+                    "package", Set.of("module", "skipTests", "profiles", "threads"),
+                    "install", Set.of("module", "tests", "skipTests", "profiles", "threads"),
                     "clean", Set.of("module")),
             Tool.GRADLE, Map.of(
-                    "build", Set.of("project"),
-                    "test", Set.of("project", "tests"),
-                    "check", Set.of("project"),
-                    "assemble", Set.of("project"),
+                    "build", Set.of("project", "skipTests", "parallel", "continue"),
+                    "test", Set.of("project", "tests", "parallel", "continue"),
+                    "check", Set.of("project", "skipTests", "parallel", "continue"),
+                    "assemble", Set.of("project", "parallel", "continue"),
                     "clean", Set.of("project")),
             Tool.NPM, Map.of(
-                    "ci", Set.of(),
-                    "install", Set.of(),
+                    "ci", Set.of("omitDev"),
+                    "install", Set.of("omitDev"),
                     "test", Set.of(),
                     "run", Set.of("script")));
 
@@ -81,6 +82,11 @@ public final class BuildOperations {
     static final String GRADLE_PROJECT = "(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}){1,10}";
     /** npm script names. */
     static final String SCRIPT = "[A-Za-z0-9_][A-Za-z0-9_.:@/-]{0,99}";
+
+    /** Maven profiles to turn on or off (spec 023), such as {@code dev} or {@code dev,!ci}. */
+    static final String PROFILES = "!?[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}(,!?[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}){0,9}";
+    /** Maven build threads: 1 to 32, or 1C to 4C per core. */
+    static final String THREADS = "[1-9]|[12][0-9]|3[0-2]|[1-4]C";
 
     static final String BASE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 
@@ -182,9 +188,24 @@ public final class BuildOperations {
                     a.addAll(List.of("-pl", folder(module), "-am"));
                 }
                 String tests = text(req, "tests");
+                boolean skip = flag(req, "skipTests");
+                if (tests != null && skip) {
+                    throw new OperationException("\"tests\" and \"skipTests\" can't be used together");
+                }
                 if (tests != null) {
                     a.add("-Dtest=" + matching(tests, TESTS, "tests"));
                     a.add("-Dsurefire.failIfNoSpecifiedTests=false");
+                }
+                if (skip) {
+                    a.add("-DskipTests");
+                }
+                String profiles = text(req, "profiles");
+                if (profiles != null) {
+                    a.addAll(List.of("-P", matching(profiles, PROFILES, "profiles")));
+                }
+                String threads = text(req, "threads");
+                if (threads != null) {
+                    a.addAll(List.of("-T", matching(threads, THREADS, "threads (1 to 32, or 1C to 4C)")));
                 }
                 a.add(op);
             }
@@ -199,11 +220,24 @@ public final class BuildOperations {
                 if (tests != null) {
                     a.addAll(List.of("--tests", matching(tests, TESTS, "tests")));
                 }
+                if (flag(req, "skipTests")) {
+                    a.addAll(List.of("-x", "test"));
+                }
+                if (flag(req, "parallel")) {
+                    a.add("--parallel");
+                }
+                if (flag(req, "continue")) {
+                    a.add("--continue");
+                }
             }
             case NPM -> {
                 switch (op) {
-                    case "ci" -> a.addAll(List.of("ci", "--ignore-scripts"));
-                    case "install" -> a.addAll(List.of("install", "--ignore-scripts"));
+                    case "ci", "install" -> {
+                        a.addAll(List.of(op, "--ignore-scripts"));
+                        if (flag(req, "omitDev")) {
+                            a.add("--omit=dev");
+                        }
+                    }
                     case "test" -> a.add("test");
                     case "run" -> {
                         String script = text(req, "script");
@@ -418,6 +452,26 @@ public final class BuildOperations {
         return Json.object().put("tool", tool.api()).put("op", tool.api() + " " + op(tool, req));
     }
 
+    /**
+     * What the approval question shows (spec 023): the operation and the fields that change it, e.g.
+     * {@code maven package · skipTests, profiles dev}. "Always" still saves the operation alone.
+     */
+    public static String summary(Tool tool, ObjectNode req) {
+        StringBuilder b = new StringBuilder(tool.api()).append(' ').append(op(tool, req));
+        List<String> parts = new ArrayList<>();
+        for (String f : List.of("module", "project", "tests", "skipTests", "profiles", "threads", "parallel", "continue", "omitDev", "script")) {
+            JsonNode n = req.get(f);
+            if (n == null || n.isNull() || n.isBoolean() && !n.asBoolean()) {
+                continue;
+            }
+            parts.add(n.isBoolean() ? f : f + " " + n.asText());
+        }
+        if (!parts.isEmpty()) {
+            b.append(" · ").append(String.join(", ", parts));
+        }
+        return b.toString();
+    }
+
     private Set<String> scripts() {
         Path pkg = workspace.root().resolve("package.json");
         try {
@@ -449,6 +503,18 @@ public final class BuildOperations {
             throw new OperationException("\"" + field + "\" has characters JHarness doesn't pass to build tools: " + v);
         }
         return v;
+    }
+
+    /** A true/false field; missing means false (spec 023). */
+    private static boolean flag(ObjectNode req, String f) {
+        JsonNode n = req.get(f);
+        if (n == null || n.isNull()) {
+            return false;
+        }
+        if (!n.isBoolean()) {
+            throw new OperationException("\"" + f + "\" must be true or false");
+        }
+        return n.asBoolean();
     }
 
     private static String text(ObjectNode req, String f) {

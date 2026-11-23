@@ -100,19 +100,33 @@ type GitRequest = Timed & (
   | { op: "push"; remote?: string; ref?: string; setUpstream?: boolean }
   | { op: "clone"; url: string; dir?: string });
 
-/** tests: a test class or pattern such as "AppTest", "AppTest#adds" or "com.x.*Test" */
+/**
+ * tests: a test class or pattern such as "AppTest", "AppTest#adds" or "com.x.*Test".
+ * skipTests: build without running tests (-DskipTests); not with tests. profiles: "dev" or "dev,!ci" (-P).
+ * threads: 1 to 32, or "1C" to "4C" per core (-T). install puts the artifacts in ~/.m2/repository.
+ * No other options are accepted.
+ */
 type MavenRequest = Timed & (
-  | { op: "compile" | "package" | "clean"; module?: string }
-  | { op: "test" | "verify"; module?: string; tests?: string });
+  | { op: "clean"; module?: string }
+  | { op: "compile"; module?: string; profiles?: string; threads?: string }
+  | { op: "test"; module?: string; tests?: string; profiles?: string; threads?: string }
+  | { op: "package"; module?: string; skipTests?: boolean; profiles?: string; threads?: string }
+  | { op: "verify" | "install"; module?: string; tests?: string; skipTests?: boolean; profiles?: string; threads?: string });
 
-/** project: a Gradle project path such as ":app" */
+/**
+ * project: a Gradle project path such as ":app". skipTests: leave out the test task (-x test).
+ * parallel: --parallel. continue: keep going after a failed task (--continue). No other options are accepted.
+ */
 type GradleRequest = Timed & (
-  | { op: "build" | "check" | "assemble" | "clean"; project?: string }
-  | { op: "test"; project?: string; tests?: string });
+  | { op: "clean"; project?: string }
+  | { op: "assemble"; project?: string; parallel?: boolean; continue?: boolean }
+  | { op: "build" | "check"; project?: string; skipTests?: boolean; parallel?: boolean; continue?: boolean }
+  | { op: "test"; project?: string; tests?: string; parallel?: boolean; continue?: boolean });
 
-/** ci and install never run package scripts; run needs a script defined in package.json */
+/** ci and install never run package scripts; omitDev leaves out devDependencies (--omit=dev); run needs a script defined in package.json */
 type NpmRequest = Timed & (
-  | { op: "ci" | "install" | "test" }
+  | { op: "ci" | "install"; omitDev?: boolean }
+  | { op: "test" }
   | { op: "run"; script: string });
 
 /** type must start with "agent." or "custom."; at most 64 KB */
