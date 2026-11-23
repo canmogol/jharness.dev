@@ -1,6 +1,16 @@
 # Changelog
 
-<!-- last-commit: 806f3646967dc6f8b9aaf4dbd064aa1b5aa20e36 -->
+<!-- last-commit: d517de3aa39378b599272b37c501baca5ac26073 -->
+
+## 2026-11-23 · 020 Model retries and rate limits
+
+- A failed model request is sent again when nothing from it reached the user yet: HTTP 408, 409, 429 and every 5xx (529 included), a failed or dropped connection, and an Anthropic `overloaded_error`, `rate_limit_error` or `api_error` that arrives before any text or thinking. An `x-should-retry` header overrides the status rule.
+- Never retried: other 4xx, the response timeout, a tunnel the egress proxy refused, a missing API key, Esc, and any failure after text reached the user.
+- The wait is the server's `retry-after-ms` or `retry-after` (seconds or an HTTP date); without one it is 1 s, 2 s, 4 s and so on, each cut to a random 50–100%. A server asking for longer than `retryMaxWait` fails at once with the wait it asked for.
+- New profile keys: `retries` (0 to 10, default 4), `retryMaxWait` (1s to 10m, default 60s) and `responseTimeout` (5s to 30m, default 120s, the old fixed value).
+- Each retry publishes `model.retry` and shows `▸ HTTP 429 from anthropic, retrying in 7 s (attempt 2 of 5)`; each attempt has its own `model.request` with `attempt`. `model.error` comes once, at the end, with `(gave up after N attempts)`. Esc ends a wait at once.
+- The native smoke binary checks a 429 retry.
+- Decision: model retries and rate limits (D-058).
 
 ## 2026-11-23 · 019 Build retry on proxy refusal
 
