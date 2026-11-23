@@ -57,6 +57,9 @@ public final class Session implements AutoCloseable {
     private Path sessionDir;
     private Secrets secrets;
     private String profile;
+    private AgentDefinition agent;
+    private Path home;
+    private boolean trusted;
 
     private Session(EventBus bus, SessionLog log, AgentIsolate isolate, AgentLoop loop, Workspace workspace, TurnCounter turns,
             Settings settings) {
@@ -73,18 +76,23 @@ public final class Session implements AutoCloseable {
      * How the session decides permissions: the permission engine from settings with a prompter (the
      * normal case), or a fixed gate (tests).
      */
-    public record Access(PermissionGate gate, Prompter prompter, boolean trusted) {
+    public record Access(PermissionGate gate, Prompter prompter, boolean trusted, AgentDefinition agent) {
         public static Access prompter(Prompter p) {
-            return new Access(null, p, false);
+            return new Access(null, p, false, null);
         }
 
         public static Access gate(PermissionGate g) {
-            return new Access(g, null, false);
+            return new Access(g, null, false, null);
         }
 
         /** Whether the project is trusted (D-011); recorded in {@code session.started}. */
         public Access trusted(boolean t) {
-            return new Access(gate, prompter, t);
+            return new Access(gate, prompter, t, agent);
+        }
+
+        /** The custom agent to run as (spec 025), or null for the built-in one. */
+        public Access agent(AgentDefinition a) {
+            return new Access(gate, prompter, trusted, a);
         }
     }
 
@@ -115,8 +123,14 @@ public final class Session implements AutoCloseable {
         TurnCounter turns = new TurnCounter("main");
         EgressProxy proxy = startProxy(home, ws.root(), settings, access, bus, turns);
         ModelProvider provider = providers.create(bus, turns);
-        bus.publish(turns.get(), "session.started", Json.object().put("workspace", ws.root().toString())
-                .put("provider", provider.provider()).put("model", provider.model()).put("trusted", access.trusted()).put("offline", settings.offline()));
+        AgentDefinition agent = access.agent();
+        var started = Json.object().put("workspace", ws.root().toString())
+                .put("provider", provider.provider()).put("model", provider.model()).put("trusted", access.trusted()).put("offline", settings.offline())
+                .put("customAgent", agent == null ? "default" : agent.name());
+        if (agent != null) {
+            started.put("agentSource", agent.source());
+        }
+        bus.publish(turns.get(), "session.started", started);
         // <sessionDir>/tmp is the children's TMPDIR; <sessionDir>/net holds the proxy socket and Maven's settings (D-049).
         Path sessionDir = Files.createTempDirectory("jharness-");
         Path childTmp = Files.createDirectory(sessionDir.resolve("tmp"), OWNER_ONLY);
@@ -145,20 +159,31 @@ public final class Session implements AutoCloseable {
                 home, System.getenv("JAVA_HOME"), settings.offline());
         FilePolicy files = new FilePolicy(ws, settings.files().mounts(), settings.files().deny());
         Search search = Search.create(ws, runner, settings.timeouts(), files.denyList());
+        PermissionMode mode = agent != null && agent.plan() ? PermissionMode.PLAN : PermissionMode.of(settings.permissions().mode());
         PermissionGate gate = access.gate() != null ? access.gate()
-                : new PermissionEngine(PermissionMode.of(settings.permissions().mode()), ProjectRules.load(home, ws.root()),
+                : new PermissionEngine(mode, ProjectRules.load(home, ws.root()),
                         access.prompter(), bus, turns);
         Checkpoints checkpoints = new Checkpoints(Checkpoints.rootFor(home, ws.root(), bus.session()), bus, turns);
         var http = new dev.jharness.net.http.HttpOperations(bus, turns, settings.http(), settings.timeouts());
+        if (agent != null && agent.tools() != null) {
+            gate = new ToolsGate(gate, agent.name(), agent.tools());
+        }
         ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
         String system = SystemPrompt.build(ctx.ok() ? ctx.value() : null, SystemPrompt.readMemory(ws.root().resolve("JHARNESS.md")),
-                SystemPrompt.readMemory(home.resolve(".jharness").resolve("JHARNESS.md")));
-        AgentLoop loop = new AgentLoop(provider, isolate, services, bus, turns, system, settings.agent().maxSteps(),
+                SystemPrompt.readMemory(home.resolve(".jharness").resolve("JHARNESS.md")), agent);
+        if (agent != null && agent.helpers() != null) {
+            isolate.useHelpers(agent.helpers());
+        }
+        AgentLoop loop = new AgentLoop(provider, isolate, services, bus, turns, system,
+                agent != null && agent.maxSteps() != null ? agent.maxSteps() : settings.agent().maxSteps(),
                 settings.timeouts().outputChars());
         loop.useCheckpoints(checkpoints);
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
+        s.agent = agent;
+        s.home = home;
+        s.trusted = access.trusted();
         s.proxy = proxy;
         s.sessionDir = sessionDir;
         return s;
@@ -247,6 +272,16 @@ public final class Session implements AutoCloseable {
         profile = p.name();
         bus.publish(turns.get(), "session.model_changed", Json.object().put("profile", p.name())
                 .put("provider", provider.provider()).put("model", provider.model()));
+    }
+
+    /** The custom agent this session runs as, or null for the built-in one (spec 025). */
+    public AgentDefinition agent() {
+        return agent;
+    }
+
+    /** {@code /agent}: the agents this session could start with, the current one marked. */
+    public List<String> describeAgents() {
+        return AgentDefinition.describe(home, workspace.root(), trusted, agent == null ? null : agent.name());
     }
 
     public EventBus bus() {

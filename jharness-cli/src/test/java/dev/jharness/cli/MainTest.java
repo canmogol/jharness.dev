@@ -138,4 +138,20 @@ class MainTest {
         assertTrue(o.contains("Hi \\e]0;pwned\\x07\\x9b2J\\u202e."), o);
         assertFalse(o.contains("\u001b") || o.contains("\u009b") || o.contains("\u202e"), o);
     }
+
+    /** Spec 025: --agent runs as a custom agent; unknown agents and agent profiles that don't exist stop start-up. */
+    @Test
+    void agentOption() throws Exception {
+        Path d = Files.createDirectories(home.resolve(".jharness/agents/reader"));
+        Files.writeString(d.resolve("agent.json"), "{\"description\":\"only reads\",\"tools\":[\"readFile\"]}");
+        Path r = replay("```js\napi.writeFile('a.txt', 'changed')\n```", "Could not write.");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "--agent", "reader", "-p", "x"));
+        String log = sessionLog();
+        assertTrue(log.contains("\"customAgent\":\"reader\"") && log.contains("can't use api.writeFile"), log);
+        assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "--agent", "nope", "-p", "x"));
+        assertTrue(err.toString().contains("unknown agent \"nope\" (agents: reader)"), err.toString());
+        Files.writeString(d.resolve("agent.json"), "{\"description\":\"x\",\"model\":\"missing\"}");
+        assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--agent", "reader", "-p", "x"));
+        assertTrue(err.toString().contains("\"model\" names \"missing\""), err.toString());
+    }
 }

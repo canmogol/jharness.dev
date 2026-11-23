@@ -73,6 +73,7 @@ Last updated: 2026-11-23
 | D-060 | Everything JHarness prints (TUI, `-p`, errors) escapes C0 controls except newline and tab, DEL, C1 controls and bidi controls and drops carriage returns; only its own styling reaches the terminal raw | Accepted |
 | D-061 | Typed build parameters that only skip work, pick a project profile or change parallelism: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev`; the approval shows them, "always" keys on the operation | Accepted |
 | D-062 | In the TUI, Tab on a lone `/` prints the `/help` text above the prompt; Tab after a partial `/command` completes it, listing matches with descriptions taken from the help text | Accepted |
+| D-063 | Custom agents: a folder with `agent.json` (description, model, tools, maxSteps, plan), `prompt.md` and `helpers.js`; chosen with `--agent` at start; they only narrow; project agents only in trusted projects | Accepted |
 
 ---
 
@@ -905,6 +906,22 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** User request while 023 was merged, 2026-11-23; recommended options accepted while the user was away.
 
+## D-063 — Custom agents
+
+**Decision.**
+- A custom agent is a folder `NAME/` in `~/.jharness/agents/` or the project's `.jharness/agents/` (D-017). A project agent replaces a user agent of the same name.
+- `agent.json`: `description` (required), `model` (a profile), `tools` (allowed `api` methods; `readContext` always), `maxSteps` and `plan`. `prompt.md` is added to the system prompt; `helpers.js` is evaluated in each block's fresh context just before the block. Both are at most 32 KB, and links are refused.
+- `jharness --agent NAME` picks it when the session starts; `--model` still wins over its `model`. `/agent` lists the agents. There is no switching within a session.
+- An agent only narrows: methods outside `tools` are denied before the permission engine, `plan: true` is plan mode, `maxSteps` replaces the session's.
+- Project agents load only in trusted projects; user agents always load.
+- `session.started` records `customAgent` and `agentSource`. `examples/agents/reviewer/` ships as the working example.
+
+**Why.** US-4.1 asks for a repo folder that defines prompt, model, tools and optional JS. Helpers in the same isolate give an agent reusable code without new privileges. A repository's prompt and helpers can steer the model, and its model choice can send code to another server, so they need project trust like other project settings (D-011). Picking the agent at start keeps one system prompt per session.
+
+**Rejected.** Markdown front matter instead of `agent.json` (another parser; JSON matches settings). Agents that raise limits or permission modes. Running helpers in a separate context (functions couldn't be called from the block). Switching agents mid-session (the conversation was built under another prompt). Loading untrusted project agents with a warning.
+
+**Source.** Roadmap item "Custom JS agents in `.jharness/agents/`". Recommended options accepted while the user was away, specifying 025-custom-agents, 2026-11-23.
+
 ---
 
 ## Questions and answers
@@ -980,6 +997,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q65 | Should live output escape control characters from model and file text? | Yes: one escaping writer for the TUI, `-p` stdout and stderr; only JHarness styling is raw | A hostile reply or file can't rewrite the terminal or an approval question | D-060 |
 | Q66 | Can the model pass build parameters such as `-DskipTests`? | Only as typed fields: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev` | Common builds work while free-form arguments stay closed | D-061 |
 | Q67 | What should `/` and Tab do in the TUI? | Print the `/help` text; Tab after a partial command completes it, listing matches with descriptions | Commands can be found without leaving the prompt | D-062 |
+| Q68 | What is a custom agent and how is it chosen? | A folder with `agent.json`, `prompt.md` and `helpers.js`; `--agent NAME` at start; it only narrows tools, mode and steps; project agents need trust | US-4.1 without new privileges | D-063 |
 
 ---
 

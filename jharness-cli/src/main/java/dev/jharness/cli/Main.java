@@ -37,6 +37,12 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--model", paramLabel = "NAME", description = "Model profile from settings.json (default: \"model\").")
     String model;
 
+    @Option(names = "--agent", paramLabel = "NAME", description = "Run as the custom agent NAME from .jharness/agents or ~/.jharness/agents.")
+    String agentName;
+
+    /** The custom agent, resolved once the project's trust is known. */
+    private dev.jharness.agent.AgentDefinition agentDef;
+
     @Option(names = "--offline", description = "Offline mode: deny every connection no allow rule matches, run build tools offline, no git fetch, pull, push or clone.")
     boolean offline;
 
@@ -195,8 +201,12 @@ public final class Main implements Callable<Integer> {
     /** User, project and session layers; {@code --model} and {@code --offline} are the session layer (D-043). */
     private Settings.Layered layered(Path h, Path ws, boolean trusted) throws ConfigException {
         var session = dev.jharness.events.Json.object();
+        agentDef = agentName == null ? null : dev.jharness.agent.AgentDefinition.resolve(h, ws, trusted, agentName);
         if (model != null) {
             session.put("model", model);
+        } else if (agentDef != null && agentDef.model() != null) {
+            // An agent's profile is used unless --model names another (D-032).
+            session.put("model", agentDef.model());
         }
         if (offline) {
             session.put("offline", true);
@@ -225,7 +235,7 @@ public final class Main implements Callable<Integer> {
     }
 
     private int headless(Path h, Path ws, Settings.Layered settings, boolean trusted) throws ConfigException, IOException {
-        try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()).trusted(trusted))) {
+        try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()).trusted(trusted).agent(agentDef))) {
             s.bus().subscribe(e -> {
                 if (e.type().equals("loop.result")) {
                     out.println();
@@ -269,7 +279,7 @@ public final class Main implements Callable<Integer> {
                 trust.record(ws, trusted);
             }
             Settings.Layered settings = layered(h, ws, trusted);
-            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()).trusted(trusted))) {
+            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()).trusted(trusted).agent(agentDef))) {
                 if (saved.isEmpty()) {
                     s.bus().publish(dev.jharness.events.Origin.main(0), "project.trusted", dev.jharness.events.Json.object().put("trusted", trusted));
                 }
