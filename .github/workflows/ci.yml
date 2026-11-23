@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+# Maven Central sometimes answers 429; retry with a pause instead of failing the run.
+env:
+  MAVEN_ARGS: -Daether.connector.http.retryHandler.count=6 -Daether.connector.http.retryHandler.interval=10000
+
 concurrency:
   group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
@@ -62,13 +66,13 @@ jobs:
             /usr/bin/bwrap --die-with-parent --unshare-all --ro-bind / / --dev /dev --proc /proc /usr/bin/true
           fi
 
-      # Diagnostic: where npm resolves and who may write it (JHarness skips world-writable tools, spec 015).
-      - name: Show npm
+      # The hosted Linux image leaves /usr/local (node, npm) writable by everyone. JHarness refuses to
+      # run a tool anyone may swap (spec 015, AC-05), which skipped the npm cases, so make it owner-only.
+      - name: Make npm owner-writable
+        if: runner.os == 'Linux'
         run: |
-          echo "PATH=$PATH"
-          for p in $(which -a npm node 2>/dev/null); do
-            r=$(readlink -f "$p"); echo "$p -> $r"; ls -ld "$p" "$r" "$(dirname "$r")" "$(dirname "$p")"
-          done
+          sudo chmod -R o-w /usr/local/bin /usr/local/lib/node_modules
+          ls -ld /usr/local/bin "$(readlink -f "$(command -v npm)")"
 
       - name: JVM tests
         run: mvn -B -ntp install
