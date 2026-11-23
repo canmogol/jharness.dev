@@ -26,6 +26,8 @@ final class LogFormat {
             Map.entry("session.started", List.of("workspace", "provider", "model", "trusted", "offline")),
             Map.entry("session.crashed", List.of("exception", "report")),
             Map.entry("session.model_changed", List.of("profile", "provider", "model")),
+            Map.entry("subagent.started", List.of("customAgent", "maxSteps", "task")),
+            Map.entry("subagent.completed", List.of("stopReason", "steps", "durationMs", "error")),
             Map.entry("turn.started", List.of("prompt")),
             Map.entry("turn.completed", List.of("steps", "stopReason", "error")),
             Map.entry("model.request", List.of("profile", "model", "attempt", "messages")),

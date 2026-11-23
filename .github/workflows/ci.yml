@@ -116,6 +116,13 @@ jobs:
           grep -q "can't use api.writeFile" "$tmp/agent-log.jsonl"
           grep -q '"status":"ok"' "$tmp/agent-log.jsonl"
           test "$(cat "$tmp/ws/a.txt")" = "hello from the workspace"
+          # A subagent (spec 026): api.spawnAgent runs a second loop in its own isolate in the native binary.
+          printf '%s\n' '{"reply":"```js\nJSON.parse(api.spawnAgent(\"read a.txt\")).reply\n```"}' '{"reply":"```js\napi.readFile(\"a.txt\")\n```"}' '{"reply":"It says hello."}' '{"reply":"Subagent done."}' > "$tmp/sub.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/sub.jsonl" -p "delegate" | tee "$tmp/sub.txt"
+          grep -q "Subagent done." "$tmp/sub.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --type subagent. > "$tmp/sub-log.txt"
+          cat "$tmp/sub-log.txt"
+          grep -q "\[sub-1\]  subagent.completed  stopReason=done steps=1" "$tmp/sub-log.txt"
 
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check

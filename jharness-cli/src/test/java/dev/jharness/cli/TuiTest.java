@@ -141,6 +141,22 @@ class TuiTest {
         assertFalse(sc.contains("\u001b["), "no color on a dumb terminal");
     }
 
+    /** Spec 026: a subagent's start, steps and end say whose they are. */
+    @Test
+    void subagentLinesNameTheSubagent() throws Exception {
+        Tui tui = new Tui(terminal(""), null);
+        tui.onEvent(new dev.jharness.events.Event("e1", java.time.Instant.now(), "s", "sub-1", 1, "host", "subagent.started",
+                Json.object().put("task", "Find   the\nbug").put("customAgent", "reviewer").put("maxSteps", 30)));
+        tui.onEvent(new dev.jharness.events.Event("e2", java.time.Instant.now(), "s", "sub-1", 1, "host", "loop.code",
+                Json.object().put("step", 1).put("lines", 2)));
+        tui.onEvent(new dev.jharness.events.Event("e3", java.time.Instant.now(), "s", "sub-1", 1, "host", "subagent.completed",
+                Json.object().put("stopReason", "done").put("steps", 1).put("durationMs", 5)));
+        String sc = screen();
+        assertTrue(sc.contains("▸ [sub-1] started as reviewer: Find the bug"), sc);
+        assertTrue(sc.contains("▸ [sub-1] step 1: running 2 lines"), sc);
+        assertTrue(sc.contains("▸ [sub-1] done after 1 steps"), sc);
+    }
+
     /** Spec 020 AC-06. */
     @Test
     void modelRetriesShowAsSteps() throws Exception {

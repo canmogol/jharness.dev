@@ -56,6 +56,7 @@ public final class AgentIsolate implements AutoCloseable {
                 http: (q) => call('http', [s(typeof q === 'string' ? {url: q} : q)]),
                 fetch: (q) => call('fetch', [s(typeof q === 'string' ? {url: q} : q)]),
                 emit: (e) => call('emit', [s(e)]),
+                spawnAgent: (q) => call('spawnAgent', [s(typeof q === 'string' ? {task: q} : q)]),
               });
               const text = (v) => v === undefined ? null : (typeof v === 'string' ? v : JSON.stringify(v));
               return [api, text];

@@ -74,6 +74,7 @@ Last updated: 2026-11-23
 | D-061 | Typed build parameters that only skip work, pick a project profile or change parallelism: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev`; the approval shows them, "always" keys on the operation | Accepted |
 | D-062 | In the TUI, Tab on a lone `/` prints the `/help` text above the prompt; Tab after a partial `/command` completes it, listing matches with descriptions taken from the help text | Accepted |
 | D-063 | Custom agents: a folder with `agent.json` (description, model, tools, maxSteps, plan), `prompt.md` and `helpers.js`; chosen with `--agent` at start; they only narrow; project agents only in trusted projects | Accepted |
+| D-064 | `api.spawnAgent` runs a subagent: fresh conversation with the task, own isolate (`subagent` profile), the session's gate narrowed by a custom agent; depth one, 10 per turn; returns its final reply | Accepted |
 
 ---
 
@@ -922,6 +923,22 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** Roadmap item "Custom JS agents in `.jharness/agents/`". Recommended options accepted while the user was away, specifying 025-custom-agents, 2026-11-23.
 
+## D-064 — Subagents
+
+**Decision.**
+- `api.spawnAgent({task, agent, maxSteps})` (a string is the task) runs a subagent and returns `{agent, reply, stopReason, steps, error?}`.
+- A subagent is a new agent loop with a fresh conversation holding only the task, in a new isolate with the `subagent` sandbox profile. Its system prompt is the session's plus the custom agent's section and a note that it must end with a complete reply.
+- It uses the session's permission gate, so approvals, plan mode and the main agent's `tools` apply. A named custom agent narrows further with `tools`, `plan`, `maxSteps` and `helpers.js`, and its `model` is used.
+- Depth one: `spawnAgent` is refused inside a subagent. At most 10 per turn of the main agent. Steps default to 30 and never exceed the session's limit.
+- Spawning doesn't ask (`kind: agent`); the subagent's own calls do. The parent's block clock stops during the spawn; Esc stops the subagent and the turn.
+- Its events carry `sub-N` and the parent's turn, so its changes are part of that turn for `/diff` and `/undo`. `subagent.started` and `subagent.completed` frame its run.
+
+**Why.** US-4.4 and plan.md: a subagent in its own isolate that returns its result. A fresh conversation keeps the subagent focused and its context small. Sharing the gate means a subagent can never do what the main agent couldn't. Depth one and a per-turn cap bound the cost of a runaway block. Keeping the parent's turn makes undo cover all of a turn's changes.
+
+**Rejected.** Parallel or background subagents (the gate and the TUI ask one question at a time; later). Nesting. Asking before each spawn (the subagent's own changes ask). Giving the subagent the parent's conversation (large and unfocused). Its own turn numbers (undo would miss its changes).
+
+**Source.** Roadmap item "Subagents via `api.spawnAgent`". Recommended options accepted while the user was away, specifying 026-subagents, 2026-11-23.
+
 ---
 
 ## Questions and answers
@@ -998,6 +1015,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q66 | Can the model pass build parameters such as `-DskipTests`? | Only as typed fields: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev` | Common builds work while free-form arguments stay closed | D-061 |
 | Q67 | What should `/` and Tab do in the TUI? | Print the `/help` text; Tab after a partial command completes it, listing matches with descriptions | Commands can be found without leaving the prompt | D-062 |
 | Q68 | What is a custom agent and how is it chosen? | A folder with `agent.json`, `prompt.md` and `helpers.js`; `--agent NAME` at start; it only narrows tools, mode and steps; project agents need trust | US-4.1 without new privileges | D-063 |
+| Q69 | How do subagents work? | `api.spawnAgent` runs a fresh loop in its own isolate under the session's gate, narrowed by a custom agent; depth one, 10 per turn; returns the final reply | Big tasks split without a subagent ever doing more than the main agent | D-064 |
 
 ---
 
