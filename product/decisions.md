@@ -67,6 +67,7 @@ Last updated: 2026-11-22
 | D-054 | `api.http` and `api.fetch` through the egress proxy: GET and HEAD are reads, other methods ask; 10 MiB read and 200,000 characters returned by default (configurable), text only; headers and bodies logged only when debug switches are on, secrets redacted; no secrets injected; jsoup turns HTML into text; `HttpClients` moves to `jharness-net` | Accepted |
 | D-055 | Git `fetch`, `pull`, `push` and `clone` over HTTPS only, through the proxy port in the OS sandbox; no force push; tokens per host from user settings only, scoped to that host and redacted; offline mode denies what no rule allows, runs build tools offline and refuses git network ops | Accepted |
 | D-056 | Security suites: one catalogue of attack cases (injection, malicious repo, sandbox escape, runaway) against a real session with a model that obeys the attack; shared canary, attacker and file checks; run on the JVM and in the native smoke binary on Linux and macOS; skips never count as passes | Accepted |
+| D-057 | A Maven, Gradle, npm or git network run that fails because the macOS sandbox refused its connection to the proxy port is run again, up to 3 runs in all, within the call's timeout, with a `process.retried` event | Accepted |
 
 ---
 
@@ -811,6 +812,22 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-057 — Retry runs the sandbox refused at the proxy port
+
+**Decision.**
+- When a Maven, Gradle or npm run exits non-zero, didn't time out, and its output has a refusal line, JHarness runs the same argv, environment and grants again, up to 3 runs in all. A refusal line has `EPERM` or "Operation not permitted" and the proxy address with its exact port (`127.0.0.1:<port>`, `localhost:<port>` or `127.0.0.1 port <port>`).
+- git network operations (D-055) use the same retry. Their curl message (`Failed to connect to 127.0.0.1 port <port>`) still counts.
+- All runs share the call's timeout. A retry gets the time left and starts only if at least 1 s is left. The approval covers every run.
+- Each retry emits `process.retried` (`executable`, `attempt`, `attempts`, `reason: proxy-connect-refused`, `remainingMs`). The result is the last run's.
+
+**Why.** On macOS, Seatbelt now and then refuses a connect that its `localhost:<port>` rule allows. Another sandboxing project reproduced it with a minimal profile: on some macOS 14 machines, one connect in a short window about every 15 s fails, and macOS 26 didn't show it. No root cause, Apple bug or profile fix is known, and other tools use the same rule. JHarness can't retry the connection, because the tool opens it inside the sandbox, and npm doesn't retry `EPERM`. Re-running the approved command is what the README asked the user to do by hand.
+
+**Rejected.** A wider rule such as `*:<port>` (it would let builds reach that port on any host, against Article V). A Unix-socket proxy path on macOS (only curl can use it). Retrying every failed build (it would repeat real failures). Asking again before a retry (the user already approved the operation).
+
+**Source.** User, 2026-11-22: "Retry connections refused if possible; otherwise, we re-run the process." Recommended options accepted while the user was away, specifying 019-build-retry-on-proxy-refusal.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -878,6 +895,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q59 | How do agents make HTTP requests and read web pages? | `api.http` and `api.fetch` through the proxy; writes ask; text-only, capped responses; no secrets injected; jsoup for HTML | Docs and APIs are reachable without loosening Articles V and VII | D-054 |
 | Q60 | How do git fetch, pull, push and clone reach the network, and what does offline mode do? | HTTPS only through the proxy port, tokens per host from user settings, offline denies what no rule allows and runs tools offline | Completes D-039 and D-033 without loosening Articles V and VII | D-055 |
 | Q61 | How are the injection, malicious-repo and sandbox-escape suites built and run? | One catalogue of cases against a real session with an obedient model, shared canary checks, run on the JVM and in the native smoke binary | Gives the Phase 2 gate repeatable evidence on both OSes | D-056 |
+| Q62 | What happens when the macOS sandbox refuses a build's connection to the proxy port? | The same approved run is repeated, up to 3 runs in all, within the call's timeout | Builds stop failing on a Seatbelt flake that has no known fix | D-057 |
 
 ---
 

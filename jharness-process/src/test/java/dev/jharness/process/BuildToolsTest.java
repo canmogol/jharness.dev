@@ -141,11 +141,11 @@ class BuildToolsTest {
                     }
                   });
                   s.on('end', () => done(buf.includes('hello from stub') ? 'proxied ok' : 'proxied bad ' + JSON.stringify(buf)));
-                  s.on('error', (e) => done('proxied-failed ' + e.code));
+                  s.on('error', (e) => done('proxied-failed ' + e.message));
                   s.on('timeout', () => { done('proxied-failed timeout'); s.destroy(); });
                 }
                 let once = false;
-                proxied((a) => { if (once) return; once = true; console.log(a); direct((b) => console.log(b)); });
+                proxied((a) => { if (once) return; once = true; console.log(a); if (a !== 'proxied ok') process.exitCode = 1; direct((b) => console.log(b)); });
                 """;
     }
 }

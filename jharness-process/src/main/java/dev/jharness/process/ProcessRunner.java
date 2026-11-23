@@ -166,6 +166,62 @@ public final class ProcessRunner {
         return r;
     }
 
+    /** Runs of a process whose proxy connection the sandbox refused, first run included (spec 019, D-057). */
+    public static final int PROXY_ATTEMPTS = 3;
+
+    /** A retry starts only if at least this much of the call's timeout is left. */
+    static final Duration MIN_RETRY_TIME = Duration.ofSeconds(1);
+
+    /** One run of the process with the time it may take. */
+    @FunctionalInterface
+    public interface Attempt {
+        ProcessResult run(Duration timeout);
+    }
+
+    /**
+     * Runs {@code attempt} and runs it again, up to {@link #PROXY_ATTEMPTS} times in all, while it fails
+     * and {@code refused} says the sandbox refused its connection to the proxy port. Seatbelt does this
+     * now and then on macOS (spec 019). All runs share {@code timeout}; a run that timed out or succeeded
+     * is never repeated. Each retry emits {@code process.retried}.
+     */
+    public ProcessResult retryingProxyRefusals(String executable, Duration timeout,
+            java.util.function.Predicate<ProcessResult> refused, Attempt attempt) {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        ProcessResult r = attempt.run(timeout);
+        for (int n = 2; n <= PROXY_ATTEMPTS; n++) {
+            if (r.exitCode() == 0 || r.timedOut() || !refused.test(r)) {
+                break;
+            }
+            Duration left = Duration.ofNanos(deadline - System.nanoTime());
+            if (left.compareTo(MIN_RETRY_TIME) < 0) {
+                break;
+            }
+            bus.publish(origin.get(), "process.retried", Json.object().put("executable", executable).put("attempt", n)
+                    .put("attempts", PROXY_ATTEMPTS).put("reason", "proxy-connect-refused").put("remainingMs", left.toMillis()));
+            r = attempt.run(left);
+        }
+        return r;
+    }
+
+    /**
+     * Whether a build tool's output shows the sandbox refusing its connection to the proxy port: one line
+     * with {@code EPERM} or "Operation not permitted" and {@code 127.0.0.1:<port>}, {@code localhost:<port>}
+     * or {@code 127.0.0.1 port <port>}. npm prints {@code connect EPERM 127.0.0.1:<port>}; Maven and Gradle
+     * print {@code Connect to 127.0.0.1:<port> [/127.0.0.1] failed: Operation not permitted}.
+     */
+    public static boolean proxyRefused(String output, int port) {
+        java.util.regex.Pattern at = java.util.regex.Pattern.compile("(?:127\\.0\\.0\\.1|localhost)(?::| port )" + port + "(?![0-9])");
+        for (String line : output.split("\n")) {
+            if (PERMISSION.matcher(line).find() && at.matcher(line).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final java.util.regex.Pattern PERMISSION =
+            java.util.regex.Pattern.compile("EPERM|operation not permitted", java.util.regex.Pattern.CASE_INSENSITIVE);
+
     /** Argument limits (spec 015, AC-07); Linux caps one argument at 128 KiB. */
     static final int MAX_ARGS = 4096;
     static final int MAX_ARG_BYTES = 131_072;

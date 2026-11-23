@@ -29,6 +29,7 @@ public final class EventTypes {
         HOST.put("process.started", List.of("executable", "args"));
         HOST.put("process.completed", List.of("executable", "exitCode", "durationMs", "output"));
         HOST.put("process.refused", List.of("executable", "path", "reason"));
+        HOST.put("process.retried", List.of("executable", "attempt", "attempts", "reason"));
         HOST.put("http.request", List.of("method", "url"));
         HOST.put("http.response", List.of("method", "url", "status", "durationMs"));
         HOST.put("sandbox.run_started", List.of("profile"));

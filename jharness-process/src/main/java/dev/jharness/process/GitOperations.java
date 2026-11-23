@@ -461,17 +461,13 @@ public final class GitOperations {
         // Seatbelt now and then refuses the first connect to the proxy port with EPERM (about 3% of
         // runs on macOS 14). Nothing reached the proxy then, so the run is safe to repeat.
         String refused = "Failed to connect to 127.0.0.1 port " + route.port() + " ";
-        ProcessResult r = null;
-        for (int attempt = 1; attempt <= PROXY_CONNECT_ATTEMPTS; attempt++) {
-            r = runner.run(git, argv, workspace.root(), t, Map.copyOf(env), new ChildSandbox.Grants(List.of(), true), secrets);
-            if (r.exitCode() == 0 || !r.full().contains(refused) || r.timedOut()) {
-                break;
-            }
-        }
-        return r;
+        Map<String, String> fixed = Map.copyOf(env);
+        return runner.retryingProxyRefusals(git.name(), t,
+                r -> r.full().contains(refused) || ProcessRunner.proxyRefused(r.full(), route.port()),
+                left -> runner.run(git, argv, workspace.root(), left, fixed, new ChildSandbox.Grants(List.of(), true), secrets));
     }
 
-    static final int PROXY_CONNECT_ATTEMPTS = 3;
+    static final int PROXY_CONNECT_ATTEMPTS = ProcessRunner.PROXY_ATTEMPTS;
 
     /** The remote name in fetch, pull or push argv: the first argument that isn't an option, after the op. */
     private static String remoteArg(List<String> args) {
