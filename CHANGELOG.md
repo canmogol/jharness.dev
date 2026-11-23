@@ -1,6 +1,31 @@
 # Changelog
 
-<!-- last-commit: d517de3aa39378b599272b37c501baca5ac26073 -->
+<!-- last-commit: 5c37db4fd0469ae12f63ed3b6d9b32f8b841ebd5 -->
+
+## 2026-11-23 · 023 Build parameters
+
+- Builds still take no free-form arguments, but now have typed parameters that each become one fixed flag.
+- Maven: a new `install` operation; `skipTests` on `package`, `verify` and `install` (`-DskipTests`, refused together with `tests`); `profiles` such as `dev,!ci` (`-P`); `threads` from 1 to 32 or `1C` to `4C` (`-T`).
+- Gradle: `skipTests` on `build` and `check` (`-x test`), `parallel` (`--parallel`) and `continue` (`--continue`). npm: `omitDev` on `ci` and `install` (`--omit=dev`).
+- Booleans must be JSON booleans and strings must match their patterns. The approval question shows the parameters (`maven package · skipTests, profiles dev`); "always" still saves the operation alone.
+- `api.d.ts` documents every field. A real Maven `install` with `skipTests`, a profile and threads is tested in the OS sandbox.
+- Decision: typed build parameters (D-061).
+
+## 2026-11-23 · 022 Escape control characters in live output
+
+- The terminal UI prints through one escaping writer. Control characters (except newline and tab), DEL, C1 controls and bidi controls from replies, thinking, diffs, errors, approval questions, events and paths show as `\e`, `\xNN` or `\uNNNN`; carriage returns are dropped. Only JHarness's own colors reach the terminal raw.
+- `jharness -p` escapes its stdout and stderr the same way, including characters split across writes.
+- The session log keeps the exact text.
+- Decision: escape control characters in live output (D-060).
+
+## 2026-11-23 · 021 Debug mode, `jharness log` and crash reports
+
+- `--debug` shows every event and the model's thinking from the start and prints stack traces; with `-p`, every logged event also goes to stderr as a JSON line.
+- `jharness log` lists the workspace's sessions, newest first (`--all`, `--limit N`). `jharness log SESSION` (an id, a unique prefix, `last` or a `.jsonl` path) prints one event per line; `--type PREFIX`, `--full` and `--json` change the output. Control characters from logged text are escaped.
+- An internal error writes a crash report to `~/.jharness/crash/` and exits 3. The report has the version, OS, stack trace and the types of the last 30 events, but no event bodies; the home folder shows as `~`. The newest 20 are kept and nothing is sent anywhere. The crash is logged as `session.crashed`.
+- Each model response is logged as `model.response` with its status, request id and allow-listed headers (`retry-after*`, `x-should-retry`, `content-type`, rate-limit headers).
+- The CI check of the native `jharness` binary runs `jharness log`.
+- Decision: debug mode, `jharness log` and crash reports (D-059).
 
 ## 2026-11-23 · 020 Model retries and rate limits
 
