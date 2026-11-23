@@ -73,6 +73,8 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 
 **Gate:** every runaway, out-of-memory, injection and escape test is contained on Linux and macOS.
 
+**Gate passed 2026-11-23:** all 35 security cases contained on linux-amd64, linux-aarch64 and macos-aarch64, on the JVM and in the native binary; RUN-08 on macOS is the recorded exception (D-056). Run in `../docs/p2-gate.md`.
+
 ## Phase 3 — Extensibility
 
 - [ ] Custom JS agents in `.jharness/agents/`
