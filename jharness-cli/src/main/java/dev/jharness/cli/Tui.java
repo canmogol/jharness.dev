@@ -66,6 +66,7 @@ final class Tui {
     private String events = UiSettings.defaults().events();
     private boolean showThinking;
     private boolean thinkingOpen;
+    private boolean debug;
 
     Tui(Terminal terminal, Path historyFile) throws IOException {
         this(terminal, historyFile, System.getenv());
@@ -147,9 +148,14 @@ final class Tui {
         return prompter;
     }
 
+    /** {@code --debug} (spec 021 AC-01): start with every event and the thinking shown. */
+    void debug() {
+        debug = true;
+    }
+
     void run(Session session) {
-        events = session.settings().ui().events();
-        showThinking = session.settings().ui().thinking().equals("show");
+        events = debug ? "all" : session.settings().ui().events();
+        showThinking = debug || session.settings().ui().thinking().equals("show");
         session.bus().subscribe(this::onEvent);
         out.println("JHarness in " + session.workspace().root() + " · model " + modelName(session)
                 + (session.offline() ? " · offline" : "") + " · /help for commands");

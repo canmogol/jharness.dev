@@ -16,6 +16,7 @@ public final class EventTypes {
 
     static {
         HOST.put("session.started", List.of("workspace"));
+        HOST.put("session.crashed", List.of("exception", "report"));
         HOST.put("session.model_changed", List.of("profile", "provider", "model"));
         HOST.put("project.trusted", List.of("trusted"));
         HOST.put("checkpoint.saved", List.of("path"));
@@ -40,6 +41,7 @@ public final class EventTypes {
         HOST.put("model.request", List.of("provider", "model"));
         HOST.put("model.delta", List.of("text"));
         HOST.put("model.thinking_delta", List.of("text"));
+        HOST.put("model.response", List.of("provider", "model", "attempt", "status", "durationMs"));
         HOST.put("model.completed", List.of("provider", "model", "stopReason"));
         HOST.put("model.error", List.of("provider", "message"));
         HOST.put("model.retry", List.of("provider", "model", "attempt", "attempts", "waitMs", "reason"));

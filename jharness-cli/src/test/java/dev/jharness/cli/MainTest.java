@@ -116,4 +116,16 @@ class MainTest {
         assertEquals(2, run("--home", home.toString(), "-p", "x"));
         assertEquals(2, run("--no-such-option"));
     }
+
+    /** Spec 021 AC-01: with -p, --debug writes each logged event to stderr as a JSON line. */
+    @Test
+    void debugWritesEventsToStderr() throws Exception {
+        Path r = replay("```js\napi.readFile('a.txt')\n```", "The file says hello.");
+        assertEquals(0, run("--debug", "--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "read a.txt"));
+        var lines = err.toString().lines().filter(l -> l.startsWith("{")).map(dev.jharness.events.Json::parse).toList();
+        var types = lines.stream().map(n -> n.get("type").asText()).toList();
+        assertTrue(types.contains("turn.started") && types.contains("loop.result") && types.contains("turn.completed"), types.toString());
+        assertFalse(types.contains("model.delta"), "live chunks stay off");
+        assertTrue(out.toString().contains("The file says hello."));
+    }
 }

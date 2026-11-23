@@ -114,9 +114,16 @@ Then, in a project folder:
 jharness                      # terminal UI; /help lists the commands
 jharness --model claude       # another profile
 jharness -p "explain src/"    # one prompt, no UI; changes are denied
+jharness --debug              # every event and the thinking shown; stack traces on errors
+jharness log                  # this folder's sessions, newest first
+jharness log last             # the newest session as a timeline
 ```
 
 In the UI, Shift+Enter, Alt+Enter or Ctrl-J starts a new line and Enter sends. A turn runs up to 100 code steps; set `"agent": {"maxSteps": N}` (1 to 500) to change it. Every event goes to the session log printed at start (`tail -f` it); `/events all` or `"ui": {"events": "all"}` in settings also shows them inline. The log keeps each model reply, and its thinking text, whole on `model.completed`; `/thinking` or `"ui": {"thinking": "show"}` shows the thinking dim in the UI. `NO_COLOR=1` turns colors off.
+
+`jharness log SESSION` prints a session one event per line: time, turn, type and its main fields. SESSION is an id, a unique prefix, `last` or a path to a `.jsonl` log. `--type network.` (repeatable) filters by type, `--full` shows whole events, `--json` prints the raw lines and `--all` lists every project's sessions. Control characters from logged text are shown escaped (`\e`, `\n`), so a hostile file can't rewrite your terminal. Each model response is logged as `model.response` with its status, request id and rate-limit headers; no other header is logged.
+
+If JHarness itself fails, it writes a crash report to `~/.jharness/crash/`, prints its path and exits with code 3. The report has the version, OS, stack trace and the types of the last 30 events, but no event bodies, and your home folder shows as `~`. It never leaves your machine. Check it before attaching it to an issue, since exception messages can quote files. The newest 20 reports are kept.
 
 Shift+Enter works in terminals that report it (xterm's `modifyOtherKeys`, which JHarness turns on only while the prompt reads, or CSI u). Where Shift+Enter sends a plain Enter, map it to Alt+Enter (`ESC` then `CR`):
 

@@ -175,4 +175,26 @@ class ModelRetryTest {
         assertTrue(System.nanoTime() - t0 < Duration.ofSeconds(10).toNanos(), "the 30 s wait was not cut short");
         assertEquals(1, stub.requests().size());
     }
+
+    /** Spec 021 AC-02: each response is logged with its status, request id and only the allow-listed headers. */
+    @Test
+    void eachResponseIsLoggedWithAllowListedHeaders() throws Exception {
+        stub.enqueue(Reply.json(429, Streams.ANTHROPIC_RATE_LIMIT).with("retry-after", "1").with("request-id", "req_1")
+                .with("anthropic-ratelimit-requests-remaining", "0").with("set-cookie", "s=secret").with("x-api-key-echo", "sk-x"))
+                .enqueue(Reply.sse(Streams.ANTHROPIC_OK).with("x-request-id", "req_2"));
+        anthropic().stream(req(), t -> {});
+        List<Event> r = of("model.response");
+        assertEquals(2, r.size());
+        var first = r.get(0).body();
+        assertEquals(429, first.get("status").asInt());
+        assertEquals(1, first.get("attempt").asInt());
+        assertEquals("req_1", first.get("requestId").asText());
+        assertTrue(first.get("durationMs").asLong() >= 0);
+        assertEquals("1", first.get("headers").get("retry-after").asText());
+        assertEquals("0", first.get("headers").get("anthropic-ratelimit-requests-remaining").asText());
+        assertFalse(first.toString().contains("secret") || first.toString().contains("sk-x"), first.toString());
+        assertEquals(200, r.get(1).body().get("status").asInt());
+        assertEquals("req_2", r.get(1).body().get("requestId").asText());
+        assertEquals(2, r.get(1).body().get("attempt").asInt());
+    }
 }

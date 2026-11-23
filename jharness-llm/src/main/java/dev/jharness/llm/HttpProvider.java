@@ -162,6 +162,30 @@ abstract class HttpProvider implements ModelProvider {
         }
     }
 
+    /** Response headers that go on {@code model.response}: none can hold a credential (spec 021 AC-02). */
+    static boolean loggedHeader(String name) {
+        String n = name.toLowerCase(java.util.Locale.ROOT);
+        return n.equals("retry-after") || n.equals("retry-after-ms") || n.equals("x-should-retry") || n.equals("content-type")
+                || n.startsWith("anthropic-ratelimit-") || n.startsWith("x-ratelimit-");
+    }
+
+    private ObjectNode response(HttpResponse<?> resp, int attempt, long ms) {
+        ObjectNode o = Json.object().put("provider", provider()).put("model", model()).put("attempt", attempt)
+                .put("status", resp.statusCode()).put("durationMs", ms);
+        var h = resp.headers();
+        h.firstValue("request-id").or(() -> h.firstValue("x-request-id")).ifPresent(id -> o.put("requestId", id));
+        ObjectNode logged = Json.object();
+        new java.util.TreeMap<>(h.map()).forEach((k, v) -> {
+            if (loggedHeader(k) && !v.isEmpty()) {
+                logged.put(k.toLowerCase(java.util.Locale.ROOT), String.join(", ", v));
+            }
+        });
+        if (!logged.isEmpty()) {
+            o.set("headers", logged);
+        }
+        return o;
+    }
+
     /** One failed request that may be sent again; {@link #stream} decides. */
     static final class Failure extends Exception {
         final boolean retryable;
@@ -186,6 +210,7 @@ abstract class HttpProvider implements ModelProvider {
                 .header("accept", "text/event-stream")
                 .build();
         HttpResponse<InputStream> resp;
+        long sent = System.nanoTime();
         try {
             resp = http.send(r, HttpResponse.BodyHandlers.ofInputStream());
         } catch (IOException e) {
@@ -196,6 +221,7 @@ abstract class HttpProvider implements ModelProvider {
                     + (e.getMessage() == null ? "" : " " + e.getMessage());
             throw new Failure(m, e, retryableIo(e), null, "connection: " + e.getClass().getSimpleName());
         }
+        bus.publish(origin.get(), "model.response", response(resp, n, (System.nanoTime() - sent) / 1_000_000));
         if (resp.statusCode() != 200) {
             String text;
             try (InputStream in = resp.body()) {

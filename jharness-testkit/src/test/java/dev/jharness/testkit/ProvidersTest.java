@@ -87,7 +87,7 @@ class ProvidersTest {
         assertEquals("system", body.get("messages").get(0).get("role").asText());
         assertEquals("read a", body.get("messages").get(1).get("content").asText());
         assertNull(sent.header("authorization"));
-        assertEquals(List.of("model.request", "model.delta", "model.delta", "model.completed"),
+        assertEquals(List.of("model.request", "model.response", "model.delta", "model.delta", "model.completed"),
                 events.stream().map(Event::type).toList());
     }
 

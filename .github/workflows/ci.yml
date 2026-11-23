@@ -89,6 +89,11 @@ jobs:
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/replay.jsonl" -p "read a.txt" | tee "$tmp/out.txt"
           grep -q "The file says hello." "$tmp/out.txt"
           grep -q "\"type\":\"loop.result\".*\"status\":\"ok\"" "$tmp"/home/.jharness/sessions/*/*.jsonl
+          # jharness log lists the session and prints it as a timeline (spec 021).
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" | tee "$tmp/list.txt"
+          grep -q "replay/" "$tmp/list.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last | tee "$tmp/timeline.txt"
+          grep -q "loop.result  step=1 status=ok" "$tmp/timeline.txt"
 
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check
