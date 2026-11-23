@@ -69,6 +69,7 @@ Last updated: 2026-11-23
 | D-056 | Security suites: one catalogue of attack cases (injection, malicious repo, sandbox escape, runaway) against a real session with a model that obeys the attack; shared canary, attacker and file checks; run on the JVM and in the native smoke binary on Linux and macOS; skips never count as passes | Accepted |
 | D-057 | A Maven, Gradle, npm or git network run that fails because the macOS sandbox refused its connection to the proxy port is run again, up to 3 runs in all, within the call's timeout, with a `process.retried` event | Accepted |
 | D-058 | Model requests that fail before anything reached the user are retried: 408, 409, 429, 5xx, failed connections and overloaded stream errors; `retry-after` or exponential back-off; `retries`, `retryMaxWait` and `responseTimeout` per profile; Esc ends a wait | Accepted |
+| D-059 | Debugging tools: `--debug` shows every event and the thinking and prints stack traces; `jharness log` lists and prints sessions with control characters escaped; host crashes write a local crash report (no event bodies, newest 20 kept, never sent) and exit 3; `model.response` logs status, request id and allow-listed headers | Accepted |
 
 ---
 
@@ -848,6 +849,21 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** Roadmap item "Model profiles; retries and rate-limit handling". Recommended options accepted while the user was away, specifying 020-model-retries-and-rate-limits, 2026-11-23.
 
+## D-059 — Debug mode, `jharness log` and crash reports
+
+**Decision.**
+- `--debug` shows every event inline and the model's thinking from the start (as `/events all` and `/thinking`), writes every logged event to stderr as a JSON line with `-p`, and prints stack traces. It is a command-line flag only; no settings layer sets it.
+- `jharness log` lists the current workspace's sessions, newest first (`--all` for every project, `--limit N`). `jharness log SESSION` prints one event per line: local time, turn, type and the type's main fields cut at 120 characters (`--full` for whole bodies, `--type PREFIX` to filter, `--json` for the raw lines). SESSION is an id, a unique prefix, `last` or a path to a `.jsonl` file; an id is letters, digits and `-` only, so it can't reach outside the logs folder.
+- Output of `jharness log` escapes C0 and C1 controls, DEL and Unicode bidi controls, in `--json` too (as `\uNNNN`, so the JSON keeps its value).
+- An unexpected exception or error in the host writes `~/.jharness/crash/crash-<UTC time>[-<session>].txt` (folder 0700, file 0600) and exits 3; settings, usage and I/O errors keep exit 2. The report holds the version, time, OS, runtime, thread, session id and log path, the stack trace, and the time, turn and type of the session log's last 30 events. No event bodies; the home folder shows as `~`; a note says to check it before sharing. The newest 20 reports are kept. With a session open, `session.crashed` (`exception`, `report`) is logged first. An exception on another thread writes a report and a line on stderr, and the session goes on.
+- Each model response publishes `model.response` with `status`, `attempt`, `durationMs`, `requestId` (from `request-id` or `x-request-id`) and only these headers: `retry-after`, `retry-after-ms`, `x-should-retry`, `content-type`, `anthropic-ratelimit-*`, `x-ratelimit-*`.
+
+**Why.** US-3.6 asks for an audit log that `jharness log` shows; the JSONL log alone is hard to read. A crash report gives a bug report the facts without a debugger, and keeping it local follows D-033 (no telemetry). Leaving bodies out keeps prompts and file text out of something users paste into issues. Logged text is untrusted (it holds model replies, files and tool output), so printing it raw would let a hostile file rewrite the terminal. An allow list of headers can't leak a credential the way a deny list can, and request ids and rate-limit headers are what a provider asks for.
+
+**Rejected.** Uploading crash reports or any telemetry. Event bodies in reports. Logging every model response header with redaction. A `debug` settings key (a project could turn it on; the flag is enough). Keeping the session alive after a crash on the main thread (its state is unknown). Escaping the TUI's live output in this spec (a separate change).
+
+**Source.** Roadmap item "`--debug`, `jharness log <session>`, local crash reports". Recommended options accepted while the user was away, specifying 021-debug-log-and-crash-reports, 2026-11-23.
+
 ---
 
 ## Questions and answers
@@ -919,6 +935,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q61 | How are the injection, malicious-repo and sandbox-escape suites built and run? | One catalogue of cases against a real session with an obedient model, shared canary checks, run on the JVM and in the native smoke binary | Gives the Phase 2 gate repeatable evidence on both OSes | D-056 |
 | Q62 | What happens when the macOS sandbox refuses a build's connection to the proxy port? | The same approved run is repeated, up to 3 runs in all, within the call's timeout | Builds stop failing on a Seatbelt flake that has no known fix | D-057 |
 | Q63 | How do model calls handle rate limits, overloads and failed connections? | Retry what failed before anything reached the user, after `retry-after` or a capped back-off, with per-profile limits; Esc ends a wait | A 429 or a restarting local server no longer ends the turn | D-058 |
+| Q64 | How does a user debug a session, audit it and report a crash? | `--debug` for live detail, `jharness log` for a readable timeline with control characters escaped, and a local crash report with no event bodies, exit 3 | Closes the last Phase 2 item and US-3.6 without telemetry | D-059 |
 
 ---
 

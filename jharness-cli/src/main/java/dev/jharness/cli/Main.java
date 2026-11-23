@@ -20,9 +20,13 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-/** The {@code jharness} command (AC-01, AC-02). Exit codes: 0 done, 1 turn error, 2 settings or usage error. */
+/**
+ * The {@code jharness} command (AC-01, AC-02). Exit codes: 0 done, 1 turn error, 2 settings, usage or I/O
+ * error, 3 internal error with a crash report (spec 021).
+ */
 @Command(name = "jharness", mixinStandardHelpOptions = true, version = "jharness " + Main.VERSION,
-        description = "A terminal coding agent whose model acts by writing JavaScript in a sandbox.")
+        description = "A terminal coding agent whose model acts by writing JavaScript in a sandbox.",
+        subcommands = LogCommand.class)
 public final class Main implements Callable<Integer> {
 
     static final String VERSION = "0.1.0-SNAPSHOT";
@@ -40,6 +44,9 @@ public final class Main implements Callable<Integer> {
             description = "Run one prompt without the terminal UI and print the reply. Changes are denied, since no one can approve them.")
     String prompt;
 
+    @Option(names = "--debug", description = "Show every event and the model's thinking as they happen; with -p, write events to stderr. Errors print their stack trace.")
+    boolean debug;
+
     @Option(names = "--replay", hidden = true, paramLabel = "FILE", description = "Tests only: replay recorded model replies.")
     Path replay;
 
@@ -50,13 +57,83 @@ public final class Main implements Callable<Integer> {
     PrintStream err = System.err;
     /** Tests set a terminal on streams; null means the system terminal. */
     Terminal terminal;
+    /** Tests only: runs once the session is open, before the first turn. */
+    java.util.function.Consumer<Session> afterOpen;
+
+    private volatile Session current;
+    private volatile Path homeDir;
+    /** The running command, for crashes on other threads. */
+    private static volatile Main active;
+
+    /** An internal error that already has its crash report. */
+    static final class Crashed extends RuntimeException {
+        final Path report;
+        final Throwable crash;
+
+        Crashed(Throwable crash, Path report) {
+            super(crash);
+            this.crash = crash;
+            this.report = report;
+        }
+    }
 
     public static void main(String[] args) {
         if (args.length > 0 && args[0].equals(dev.jharness.process.ProxyBridge.FLAG)) {
             // Inside the Linux sandbox: forward the proxy port and run the build tool (D-049).
             System.exit(dev.jharness.process.ProxyBridge.run(java.util.Arrays.copyOfRange(args, 1, args.length)));
         }
+        Thread.setDefaultUncaughtExceptionHandler(Main::uncaughtAnywhere);
         System.exit(run(new Main(), args));
+    }
+
+    private static void uncaughtAnywhere(Thread t, Throwable e) {
+        Main m = active;
+        (m != null ? m : new Main()).uncaught(t, e);
+    }
+
+    /** An exception on a thread other than the command's (AC-07): a report and a line; the session goes on. */
+    void uncaught(Thread t, Throwable e) {
+        Path report = report(e, t, current);
+        err.println("jharness: internal error in thread " + t.getName() + " (" + CrashReport.summary(e) + ")"
+                + (report != null ? "; crash report: " + report : ""));
+        if (debug) {
+            e.printStackTrace(err);
+        }
+    }
+
+    /** Writes the report, then logs {@code session.crashed} if a session is open (AC-08, AC-09); null if it can't be written. */
+    private Path report(Throwable e, Thread t, Session s) {
+        Path h = homeDir != null ? homeDir : Path.of(System.getProperty("user.home"));
+        CrashReport.Context c = s == null ? CrashReport.Context.NONE
+                : new CrashReport.Context(s.bus().session(), s.logPath());
+        Path report = null;
+        try {
+            report = CrashReport.write(h, e, t, c, java.time.Instant.now());
+        } catch (IOException | RuntimeException x) {
+            err.println("jharness: could not write a crash report: " + x.getMessage());
+        }
+        if (s != null) {
+            try {
+                s.bus().publish(dev.jharness.events.Origin.main(0), "session.crashed", dev.jharness.events.Json.object()
+                        .put("exception", e.getClass().getName()).put("report", report == null ? "" : report.toString()));
+            } catch (RuntimeException x) {
+                // The session log may be what failed.
+            }
+        }
+        return report;
+    }
+
+    /** Runs a session's work; an unexpected exception or error becomes a crash report (AC-07). */
+    private <T> T guarded(Session s, java.util.concurrent.Callable<T> body) throws ConfigException, IOException {
+        try {
+            return body.call();
+        } catch (ConfigException | IOException | java.io.UncheckedIOException | Crashed e) {
+            throw e;
+        } catch (RuntimeException | Error e) {
+            throw new Crashed(e, report(e, Thread.currentThread(), s));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     static int run(Main m, String... args) {
@@ -69,6 +146,8 @@ public final class Main implements Callable<Integer> {
     @Override
     public Integer call() {
         Path h = home != null ? home : Path.of(System.getProperty("user.home"));
+        homeDir = h;
+        active = this;
         Path ws = (cwd != null ? cwd : Path.of("")).toAbsolutePath().normalize();
         if (!java.nio.file.Files.isDirectory(ws)) {
             err.println("jharness: " + ws + " is not a folder");
@@ -85,10 +164,29 @@ public final class Main implements Callable<Integer> {
         } catch (ConfigException e) {
             err.println("jharness: " + e.getMessage());
             return 2;
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | java.io.UncheckedIOException e) {
             err.println("jharness: " + e.getMessage());
+            if (debug) {
+                e.printStackTrace(err);
+            }
             return 2;
+        } catch (Crashed c) {
+            return crashed(c.crash, c.report);
+        } catch (RuntimeException | Error e) {
+            return crashed(e, report(e, Thread.currentThread(), null));
+        } finally {
+            current = null;
         }
+    }
+
+    private int crashed(Throwable e, Path report) {
+        err.println("jharness: internal error (" + CrashReport.summary(e) + ")" + (report != null ? "; crash report: " + report : ""));
+        if (debug) {
+            e.printStackTrace(err);
+        } else {
+            err.println("jharness: --debug prints the stack trace.");
+        }
+        return 3;
     }
 
     /** User, project and session layers; {@code --model} and {@code --offline} are the session layer (D-043). */
@@ -111,6 +209,7 @@ public final class Main implements Callable<Integer> {
         } else {
             s = Session.open(h, ws, layered.settings(), null, access);
         }
+        current = s;
         if (!layered.ignored().isEmpty()) {
             var keys = dev.jharness.events.Json.array();
             layered.ignored().forEach(keys::add);
@@ -129,9 +228,21 @@ public final class Main implements Callable<Integer> {
                     out.println();
                 }
             });
-            TurnResult r = s.loop().turn(prompt, d -> {
-                out.print(d);
-                out.flush();
+            if (debug) {
+                s.bus().subscribe(e -> {
+                    if (!dev.jharness.events.SessionLog.LIVE_ONLY.contains(e.type())) {
+                        err.println(TerminalSafe.escapeJson(e.toJsonLine()));
+                    }
+                });
+            }
+            TurnResult r = guarded(s, () -> {
+                if (afterOpen != null) {
+                    afterOpen.accept(s);
+                }
+                return s.loop().turn(prompt, d -> {
+                    out.print(d);
+                    out.flush();
+                });
             });
             out.println();
             if (r.stopReason().equals("error")) {
@@ -159,7 +270,16 @@ public final class Main implements Callable<Integer> {
                 if (saved.isEmpty()) {
                     s.bus().publish(dev.jharness.events.Origin.main(0), "project.trusted", dev.jharness.events.Json.object().put("trusted", trusted));
                 }
-                tui.run(s);
+                if (debug) {
+                    tui.debug();
+                }
+                guarded(s, () -> {
+                    if (afterOpen != null) {
+                        afterOpen.accept(s);
+                    }
+                    tui.run(s);
+                    return null;
+                });
             }
             return 0;
         } finally {

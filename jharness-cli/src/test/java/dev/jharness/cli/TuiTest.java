@@ -222,6 +222,22 @@ class TuiTest {
         assertFalse(screen().contains("\u001b[>4"), screen());
     }
 
+    /** Spec 021 AC-01: --debug starts with every event and the thinking shown. */
+    @Test
+    void debugShowsEventsAndThinking() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws9"));
+        Tui tui = new Tui(terminal("one\n/exit\n"), null);
+        tui.debug();
+        List<com.fasterxml.jackson.databind.JsonNode> lines = List.of(Json.object().put("thinking", "an idea\n").put("reply", "Answer."));
+        try (Session session = Session.open(tmp.resolve("home9"), ws, Settings.defaults(),
+                Session.Access.prompter(tui.prompter()), (bus, turns) -> new ReplayProvider(lines, bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("an idea"), sc);
+        assertTrue(sc.contains("· turn.started"), sc);
+    }
+
     @Test
     void thinkingShownDimOrHidden() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws6"));
