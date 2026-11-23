@@ -1,6 +1,22 @@
 # Changelog
 
-<!-- last-commit: f065c0e0217533585c8691156195e8ee9ce77e07 -->
+<!-- last-commit: 928352517c561f0bf9c8bb02195fc4a80f85b680 -->
+
+## 2026-11-23 · 025 Custom agents
+
+- A custom agent is a folder `NAME/` in `~/.jharness/agents/` or the project's `.jharness/agents/`; a project agent replaces a user agent of the same name.
+- `agent.json` takes `description` (required), `model`, `tools` (the `api` methods it may call), `maxSteps` and `plan`. `prompt.md` is added to the system prompt, and the functions in `helpers.js` are defined in every block, in the same isolate and limits. Both are at most 32 KB; links are refused.
+- `jharness --agent NAME` starts a session as the agent; its `model` is used unless `--model` names another. `/agent` lists the agents and the TUI's first line names the running one.
+- Agents only narrow: methods outside `tools` are denied before the permission engine, `plan: true` is plan mode, `maxSteps` replaces the session's limit. Project agents load only in trusted projects.
+- `session.started` records `customAgent` and `agentSource`.
+- `examples/agents/reviewer/` ships as a working read-only reviewer; CI runs it in the native binary.
+- Decision: custom agents (D-063).
+
+## 2026-11-23 · Phase 2 gate and Linux CI
+
+- The Phase 2 gate passed: all 35 security cases are contained on linux-amd64, linux-aarch64 and macos-aarch64, on the JVM and in the native binary, with RUN-08 on macOS as the recorded exception (`docs/p2-gate.md`).
+- CI had been red on Linux since spec 015: the hosted runner image leaves node and npm writable by everyone, so JHarness refused npm and four security cases were skipped. CI now makes those files owner-writable first; JHarness's check is unchanged.
+- CI retries Maven Central when it answers 429.
 
 ## 2026-11-23 · 024 `/` and Tab list the commands
 
