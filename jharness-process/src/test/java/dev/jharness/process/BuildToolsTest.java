@@ -70,6 +70,37 @@ class BuildToolsTest {
         assertFalse(r.full().contains(net.password()), "the proxy password must not reach the output");
     }
 
+    /** Spec 023: install with skipTests, a profile and threads, in the sandbox; the artifact lands in ~/.m2/repository. */
+    @Test
+    void mavenInstallWithParameters() throws Exception {
+        Files.writeString(root.resolve("pom.xml"), """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modelVersion>4.0.0</modelVersion>
+                  <groupId>dev.jharness.test</groupId><artifactId>build-params</artifactId><version>1</version><packaging>pom</packaging>
+                  <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.4</version></plugin></plugins></build>
+                  <profiles><profile><id>dev</id></profile></profiles>
+                </project>
+                """);
+        Path plugin = Path.of(System.getProperty("user.home"), ".m2/repository/org/apache/maven/plugins/maven-install-plugin/3.1.4");
+        // The proxy here denies Maven Central, so the plugin must already be cached (it is once JHarness itself was built).
+        assumeTrue(Files.isDirectory(plugin), "maven-install-plugin 3.1.4 is not in ~/.m2");
+        Path installed = Path.of(System.getProperty("user.home"), ".m2", "repository", "dev", "jharness", "test", "build-params");
+        try {
+            ProcessResult r = run(Tool.MAVEN, "{\"op\":\"install\",\"skipTests\":true,\"profiles\":\"dev\",\"threads\":\"2\",\"timeoutMs\":300000}");
+            assertEquals(0, r.exitCode(), r.output());
+            assertTrue(r.output().contains("BUILD SUCCESS"), r.output());
+            assertTrue(Files.isRegularFile(installed.resolve("1/build-params-1.pom")), r.output());
+        } finally {
+            if (Files.exists(installed)) {
+                try (var w = Files.walk(installed)) {
+                    w.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                }
+            }
+            installed.getParent().toFile().delete();
+        }
+    }
+
     @Test
     void npmScriptsRunAndReachTheNetworkOnlyThroughTheProxy() throws Exception {
         Files.writeString(root.resolve("probe.js"), probeScript());

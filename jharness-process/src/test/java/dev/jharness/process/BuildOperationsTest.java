@@ -88,7 +88,7 @@ class BuildOperationsTest {
 
     @Test
     void rejectsUnknownOpsFieldsAndOptions() throws Exception {
-        assertTrue(fails(Tool.MAVEN, "{\"op\":\"deploy\"}").contains("must be one of clean, compile, package, test, verify"));
+        assertTrue(fails(Tool.MAVEN, "{\"op\":\"deploy\"}").contains("must be one of clean, compile, install, package, test, verify"));
         assertTrue(fails(Tool.MAVEN, "{\"op\":\"test\",\"args\":[\"-X\"]}").contains("does not take \"args\""));
         assertTrue(fails(Tool.MAVEN, "{\"op\":\"compile\",\"tests\":\"A\"}").contains("does not take \"tests\""));
         assertTrue(fails(Tool.MAVEN, "{\"op\":\"test\",\"tests\":\"-Dexec=x\"}").contains("characters"));
@@ -182,6 +182,58 @@ class BuildOperationsTest {
         assertFalse(ops().args(Tool.MAVEN, req("{\"op\":\"test\"}")).contains("-o"));
         assertFalse(ops().args(Tool.GRADLE, req("{\"op\":\"test\"}")).contains("--offline"));
         assertNull(ops().env(Tool.NPM, ops().executable(Tool.NPM), route, tmp).get("npm_config_offline"));
+    }
+
+    /** Spec 023: typed build parameters. */
+    @Test
+    void mavenParameters() {
+        List<String> base = List.of("-B", "-ntp", "-Dstyle.color=never");
+        assertEquals(cat(base, "-DskipTests", "-P", "dev,!ci", "-T", "1C", "install"),
+                ops().args(Tool.MAVEN, req("{\"op\":\"install\",\"skipTests\":true,\"profiles\":\"dev,!ci\",\"threads\":\"1C\"}")));
+        assertEquals(cat(base, "-DskipTests", "package"), ops().args(Tool.MAVEN, req("{\"op\":\"package\",\"skipTests\":true}")));
+        assertEquals(cat(base, "package"), ops().args(Tool.MAVEN, req("{\"op\":\"package\",\"skipTests\":false}")));
+        assertEquals(cat(base, "-T", "4", "verify"), ops().args(Tool.MAVEN, req("{\"op\":\"verify\",\"threads\":\"4\"}")));
+        assertTrue(fails(Tool.MAVEN, "{\"op\":\"test\",\"skipTests\":true}").contains("does not take \"skipTests\""));
+        assertTrue(fails(Tool.MAVEN, "{\"op\":\"verify\",\"tests\":\"A\",\"skipTests\":true}").contains("can't be used together"));
+        assertTrue(fails(Tool.MAVEN, "{\"op\":\"package\",\"skipTests\":\"true\"}").contains("must be true or false"));
+        for (String bad : List.of("-Dexec.args=x", "dev ci", "dev,", "a/b", "dev;rm")) {
+            assertTrue(fails(Tool.MAVEN, "{\"op\":\"package\",\"profiles\":\"" + bad + "\"}").contains("characters"), bad);
+        }
+        for (String bad : List.of("0", "33", "5C", "1C -X", "-1")) {
+            assertTrue(fails(Tool.MAVEN, "{\"op\":\"package\",\"threads\":\"" + bad + "\"}").contains("characters"), bad);
+        }
+        assertTrue(fails(Tool.MAVEN, "{\"op\":\"clean\",\"profiles\":\"dev\"}").contains("does not take"));
+    }
+
+    @Test
+    void gradleAndNpmParameters() throws Exception {
+        List<String> base = List.of("--console=plain", "--no-daemon");
+        assertEquals(cat(base, ":app:build", "-x", "test", "--parallel", "--continue"),
+                ops().args(Tool.GRADLE, req("{\"op\":\"build\",\"project\":\":app\",\"skipTests\":true,\"parallel\":true,\"continue\":true}")));
+        assertEquals(cat(base, "check", "-x", "test"), ops().args(Tool.GRADLE, req("{\"op\":\"check\",\"skipTests\":true}")));
+        assertTrue(fails(Tool.GRADLE, "{\"op\":\"test\",\"skipTests\":true}").contains("does not take"));
+        assertTrue(fails(Tool.GRADLE, "{\"op\":\"assemble\",\"skipTests\":true}").contains("does not take"));
+        assertTrue(fails(Tool.GRADLE, "{\"op\":\"build\",\"parallel\":1}").contains("must be true or false"));
+        assertEquals(List.of("ci", "--ignore-scripts", "--omit=dev"), ops().args(Tool.NPM, req("{\"op\":\"ci\",\"omitDev\":true}")));
+        assertEquals(List.of("install", "--ignore-scripts", "--omit=dev"), ops().args(Tool.NPM, req("{\"op\":\"install\",\"omitDev\":true}")));
+        assertTrue(fails(Tool.NPM, "{\"op\":\"test\",\"omitDev\":true}").contains("does not take"));
+    }
+
+    @Test
+    void approvalSummaryShowsTheParameters() {
+        assertEquals("maven package · skipTests, profiles dev",
+                BuildOperations.summary(Tool.MAVEN, req("{\"op\":\"package\",\"skipTests\":true,\"profiles\":\"dev\"}")));
+        assertEquals("gradle build · project :app, parallel",
+                BuildOperations.summary(Tool.GRADLE, req("{\"op\":\"build\",\"project\":\":app\",\"parallel\":true,\"continue\":false}")));
+        assertEquals("npm test", BuildOperations.summary(Tool.NPM, req("{\"op\":\"test\"}")));
+        assertEquals("{\"tool\":\"maven\",\"op\":\"maven package\"}",
+                Json.write(BuildOperations.detail(Tool.MAVEN, req("{\"op\":\"package\",\"skipTests\":true}"))), "\"always\" saves the operation alone");
+    }
+
+    private static List<String> cat(List<String> a, String... b) {
+        List<String> out = new java.util.ArrayList<>(a);
+        out.addAll(List.of(b));
+        return out;
     }
 
     @Test
