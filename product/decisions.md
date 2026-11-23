@@ -70,6 +70,7 @@ Last updated: 2026-11-23
 | D-057 | A Maven, Gradle, npm or git network run that fails because the macOS sandbox refused its connection to the proxy port is run again, up to 3 runs in all, within the call's timeout, with a `process.retried` event | Accepted |
 | D-058 | Model requests that fail before anything reached the user are retried: 408, 409, 429, 5xx, failed connections and overloaded stream errors; `retry-after` or exponential back-off; `retries`, `retryMaxWait` and `responseTimeout` per profile; Esc ends a wait | Accepted |
 | D-059 | Debugging tools: `--debug` shows every event and the thinking and prints stack traces; `jharness log` lists and prints sessions with control characters escaped; host crashes write a local crash report (no event bodies, newest 20 kept, never sent) and exit 3; `model.response` logs status, request id and allow-listed headers | Accepted |
+| D-060 | Everything JHarness prints (TUI, `-p`, errors) escapes C0 controls except newline and tab, DEL, C1 controls and bidi controls and drops carriage returns; only its own styling reaches the terminal raw | Accepted |
 
 ---
 
@@ -864,6 +865,16 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Source.** Roadmap item "`--debug`, `jharness log <session>`, local crash reports". Recommended options accepted while the user was away, specifying 021-debug-log-and-crash-reports, 2026-11-23.
 
+## D-060 — Escape control characters in live output
+
+**Decision.** The TUI prints through one escaping writer; only `Styler` output (which escapes its input first) and the `modifyOtherKeys` sequences use the raw terminal writer. `jharness -p` wraps stdout and stderr the same way. C0 controls other than newline and tab, DEL, C1 controls and Unicode bidi controls show as `\e`, `\xNN` or `\uNNNN`; a carriage return is dropped. It is always on. The session log keeps the exact text.
+
+**Why.** Model replies, file contents in diffs, tool and server error messages and approval questions are untrusted text. Printed raw, they can change the terminal title, clear the screen, move the cursor to rewrite an approval question or reorder text with bidi controls. Escaping at the writer covers every print; escaping in `Styler` keeps colors working.
+
+**Rejected.** Escaping at each print site (easy to miss one). Stripping instead of showing (hides that something was there). A setting to turn it off (no case needs raw control characters in a reply).
+
+**Source.** Follow-up from spec 021, which escaped only `jharness log`; the user asked for it as spec 022 before the Phase 2 gate run, 2026-11-23.
+
 ---
 
 ## Questions and answers
@@ -936,6 +947,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q62 | What happens when the macOS sandbox refuses a build's connection to the proxy port? | The same approved run is repeated, up to 3 runs in all, within the call's timeout | Builds stop failing on a Seatbelt flake that has no known fix | D-057 |
 | Q63 | How do model calls handle rate limits, overloads and failed connections? | Retry what failed before anything reached the user, after `retry-after` or a capped back-off, with per-profile limits; Esc ends a wait | A 429 or a restarting local server no longer ends the turn | D-058 |
 | Q64 | How does a user debug a session, audit it and report a crash? | `--debug` for live detail, `jharness log` for a readable timeline with control characters escaped, and a local crash report with no event bodies, exit 3 | Closes the last Phase 2 item and US-3.6 without telemetry | D-059 |
+| Q65 | Should live output escape control characters from model and file text? | Yes: one escaping writer for the TUI, `-p` stdout and stderr; only JHarness styling is raw | A hostile reply or file can't rewrite the terminal or an approval question | D-060 |
 
 ---
 

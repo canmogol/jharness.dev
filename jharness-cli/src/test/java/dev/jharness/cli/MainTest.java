@@ -128,4 +128,14 @@ class MainTest {
         assertFalse(types.contains("model.delta"), "live chunks stay off");
         assertTrue(out.toString().contains("The file says hello."));
     }
+
+    /** Spec 022: headless output and errors are escaped too. */
+    @Test
+    void headlessOutputIsEscaped() throws Exception {
+        Path r = replay("Hi \u001b]0;pwned\u0007\u009b2J\u202e.", "```js\nthrow new Error('\\u001b[2J')\n```");
+        run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "x");
+        String o = out.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(o.contains("Hi \\e]0;pwned\\x07\\x9b2J\\u202e."), o);
+        assertFalse(o.contains("\u001b") || o.contains("\u009b") || o.contains("\u202e"), o);
+    }
 }

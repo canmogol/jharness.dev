@@ -67,6 +67,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Retries of build and git runs that the macOS sandbox refuses at the proxy port (spec 019)
 - [x] Model profiles; retries and rate-limit handling (spec 020)
 - [x] `--debug`, `jharness log <session>`, local crash reports (spec 021)
+- [x] Control characters escaped in the TUI and `-p` output (spec 022)
 
 **Gate:** every runaway, out-of-memory, injection and escape test is contained on Linux and macOS.
 
