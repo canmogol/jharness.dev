@@ -18,9 +18,15 @@ public final class ModelProviders {
     }
 
     public static ModelProvider create(ModelProfile p, EventBus bus, Supplier<Origin> origin, Function<String, String> env) {
+        return create(p, bus, origin, env, null);
+    }
+
+    /** @param waiter waits before a retry (spec 020); null for the real wait, which Esc ends */
+    public static ModelProvider create(ModelProfile p, EventBus bus, Supplier<Origin> origin, Function<String, String> env,
+            RetryWait waiter) {
         return switch (p.provider()) {
-            case ModelProfile.OPENAI_COMPATIBLE -> new OpenAiCompatibleProvider(p, HttpClients.create(), bus, origin, env);
-            case ModelProfile.ANTHROPIC -> new AnthropicProvider(p, HttpClients.create(), bus, origin, env);
+            case ModelProfile.OPENAI_COMPATIBLE -> new OpenAiCompatibleProvider(p, HttpClients.create(), bus, origin, env, waiter);
+            case ModelProfile.ANTHROPIC -> new AnthropicProvider(p, HttpClients.create(), bus, origin, env, waiter);
             default -> throw new IllegalArgumentException("unknown provider " + p.provider());
         };
     }

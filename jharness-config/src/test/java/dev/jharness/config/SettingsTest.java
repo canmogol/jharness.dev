@@ -99,6 +99,29 @@ class SettingsTest {
         bad("{\"model\":\"missing\",\"models\":{}}");
     }
 
+    /** Spec 020: retries, retryMaxWait and responseTimeout per profile. */
+    @Test
+    void profileRetrySettings() throws Exception {
+        String base = "{\"models\":{\"c\":{\"provider\":\"anthropic\",\"model\":\"m\"";
+        ModelProfile d = Settings.parse(base + "}}}", "s").models().resolve("c");
+        assertEquals(4, d.retries());
+        assertEquals(java.time.Duration.ofSeconds(60), d.retryMaxWait());
+        assertEquals(java.time.Duration.ofSeconds(120), d.responseTimeout());
+        ModelProfile c = Settings.parse(base + ",\"retries\":0,\"retryMaxWait\":\"5m\",\"responseTimeout\":\"10m\"}}}", "s")
+                .models().resolve("c");
+        assertEquals(0, c.retries());
+        assertEquals(java.time.Duration.ofMinutes(5), c.retryMaxWait());
+        assertEquals(java.time.Duration.ofMinutes(10), c.responseTimeout());
+        assertTrue(bad(base + ",\"retries\":11}}}").getMessage().contains("models.c.retries"));
+        bad(base + ",\"retries\":-1}}}");
+        bad(base + ",\"retries\":\"3\"}}}");
+        assertTrue(bad(base + ",\"retryMaxWait\":\"11m\"}}}").getMessage().contains("1s to 10m"));
+        bad(base + ",\"retryMaxWait\":\"500ms\"}}}");
+        assertTrue(bad(base + ",\"responseTimeout\":\"2s\"}}}").getMessage().contains("5s to 30m"));
+        bad(base + ",\"responseTimeout\":\"31m\"}}}");
+        bad(base + ",\"responseTimeout\":120}}}");
+    }
+
     @Test
     void resolveUnknownListsKnownNames() throws Exception {
         Settings s = Settings.parse("{\"models\":{\"a\":{\"provider\":\"anthropic\",\"model\":\"m\"},"

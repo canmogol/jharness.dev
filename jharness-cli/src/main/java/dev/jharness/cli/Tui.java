@@ -403,7 +403,8 @@ final class Tui {
         return true;
     }
 
-    private void onEvent(Event e) {
+    /** Package-private for tests. */
+    void onEvent(Event e) {
         if (e.type().equals("model.thinking_delta")) {
             if (showThinking) {
                 if (!thinkingOpen) {
@@ -449,6 +450,14 @@ final class Tui {
                 if (e.body().has("error")) {
                     int line = e.body().path("line").asInt(0);
                     out.println(styler.error("  " + (line > 0 ? "line " + line + ": " : "") + e.body().get("error").asText()));
+                }
+            }
+            case "model.retry" -> {
+                if (steps) {
+                    long s = (e.body().get("waitMs").asLong() + 999) / 1000;
+                    out.println(styler.dim("▸ " + e.body().get("reason").asText() + " from " + e.body().get("provider").asText()
+                            + ", retrying in " + s + " s (attempt " + e.body().get("attempt").asInt() + " of "
+                            + e.body().get("attempts").asInt() + ")"));
                 }
             }
             default -> {

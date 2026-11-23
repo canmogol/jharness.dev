@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 /** The {@code model} and {@code models} sections: named profiles and the default (D-032). */
 public final class ModelProfiles {
 
-    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes");
+    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes", "retries", "retryMaxWait", "responseTimeout");
 
     private final String defaultName;
     private final Map<String, ModelProfile> profiles;
@@ -122,6 +122,18 @@ public final class ModelProfiles {
             }
             maxTokens = n.get("maxTokens").asInt();
         }
+        int retries = ModelProfile.DEFAULT_RETRIES;
+        if (n.has("retries")) {
+            JsonNode r = n.get("retries");
+            if (!r.isIntegralNumber() || r.asInt() < 0 || r.asInt() > ModelProfile.MAX_RETRIES) {
+                throw new ConfigException(where + ".retries: expected a whole number from 0 to " + ModelProfile.MAX_RETRIES);
+            }
+            retries = r.asInt();
+        }
+        java.time.Duration retryMaxWait = duration(n, "retryMaxWait", where, ModelProfile.DEFAULT_RETRY_MAX_WAIT,
+                java.time.Duration.ofSeconds(1), ModelProfile.MAX_RETRY_MAX_WAIT, "1s", "10m");
+        java.time.Duration responseTimeout = duration(n, "responseTimeout", where, ModelProfile.DEFAULT_RESPONSE_TIMEOUT,
+                ModelProfile.MIN_RESPONSE_TIMEOUT, ModelProfile.MAX_RESPONSE_TIMEOUT, "5s", "30m");
         switch (provider) {
             case ModelProfile.OPENAI_COMPATIBLE -> {
                 if (baseUrl == null) {
@@ -149,7 +161,22 @@ public final class ModelProfiles {
         if (apiKeyEnv != null && !apiKeyEnv.matches("[A-Za-z_][A-Za-z0-9_]*")) {
             throw new ConfigException(where + ".apiKeyEnv must be an environment variable name, not a key");
         }
-        return new ModelProfile(name, provider, baseUrl.replaceAll("/+$", ""), model, apiKeyEnv, maxTokens, notes);
+        return new ModelProfile(name, provider, baseUrl.replaceAll("/+$", ""), model, apiKeyEnv, maxTokens, notes,
+                retries, retryMaxWait, responseTimeout);
+    }
+
+    private static java.time.Duration duration(JsonNode n, String key, String where, java.time.Duration dflt,
+            java.time.Duration min, java.time.Duration max, String minText, String maxText) throws ConfigException {
+        if (!n.has(key)) {
+            return dflt;
+        }
+        String c = n.get(key).isTextual() ? Units.duration(n.get(key).asText()) : null;
+        java.time.Duration d = c == null ? null : Units.parseDuration(c);
+        if (d == null || d.compareTo(min) < 0 || d.compareTo(max) > 0) {
+            throw new ConfigException(where + "." + key + "=" + n.get(key).asText() + ": expected a duration from " + minText
+                    + " to " + maxText + ", such as 30s or 2m");
+        }
+        return d;
     }
 
     private static String text(JsonNode n, String key, String where, boolean required) throws ConfigException {

@@ -141,6 +141,16 @@ class TuiTest {
         assertFalse(sc.contains("\u001b["), "no color on a dumb terminal");
     }
 
+    /** Spec 020 AC-06. */
+    @Test
+    void modelRetriesShowAsSteps() throws Exception {
+        Tui tui = new Tui(terminal(""), null);
+        tui.onEvent(new dev.jharness.events.Event("e1", java.time.Instant.now(), "s", "main", 1, "host", "model.retry",
+                Json.object().put("provider", "anthropic").put("model", "m").put("attempt", 2).put("attempts", 5)
+                        .put("waitMs", 6500).put("reason", "HTTP 429")));
+        assertTrue(screen().contains("▸ HTTP 429 from anthropic, retrying in 7 s (attempt 2 of 5)"), screen());
+    }
+
     @Test
     void eventLevels() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws4"));

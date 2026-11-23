@@ -23,7 +23,11 @@ public final class StubModelServer implements AutoCloseable {
 
     /** One queued response. */
     /** @param holdMs keep the connection open this long after the body, as a model that is still thinking */
-    public record Reply(int status, String contentType, String body, long holdMs) {
+    public record Reply(int status, String contentType, String body, long holdMs, Map<String, String> headers) {
+        public Reply(int status, String contentType, String body, long holdMs) {
+            this(status, contentType, body, holdMs, Map.of());
+        }
+
         public static Reply sse(String body) {
             return new Reply(200, "text/event-stream", body, 0);
         }
@@ -34,6 +38,13 @@ public final class StubModelServer implements AutoCloseable {
 
         public static Reply hanging(String body, long holdMs) {
             return new Reply(200, "text/event-stream", body, holdMs);
+        }
+
+        /** The same reply with one more response header, such as {@code retry-after}. */
+        public Reply with(String name, String value) {
+            Map<String, String> h = new java.util.LinkedHashMap<>(headers);
+            h.put(name, value);
+            return new Reply(status, contentType, body, holdMs, Map.copyOf(h));
         }
     }
 
@@ -85,6 +96,7 @@ public final class StubModelServer implements AutoCloseable {
         }
         byte[] b = r.body().getBytes(StandardCharsets.UTF_8);
         x.getResponseHeaders().set("content-type", r.contentType());
+        r.headers().forEach((k, v) -> x.getResponseHeaders().set(k, v));
         x.sendResponseHeaders(r.status(), 0);
         try (OutputStream out = x.getResponseBody()) {
             out.write(b);
