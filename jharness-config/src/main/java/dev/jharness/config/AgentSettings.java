@@ -11,10 +11,19 @@ import com.fasterxml.jackson.databind.JsonNode;
  * default 100; D-064); and {@code subagentsRunning}, the most background subagents running at once (1 to 16,
  * default 4; D-065). A subagent never runs more steps than {@code maxSteps}. {@code backgroundQuestions}
  * ({@code wait}, the default, or {@code deny}) and {@code backgroundQuestionWait} (10s to 1h, default 10m)
- * say what a background subagent's approval question does (spec 033, D-072).
+ * say what a background subagent's approval question does (spec 033, D-072). {@code autoCompact} (default true) and
+ * {@code compactAt} (0.5 to 0.95, default 0.8) say when a conversation is summarized to free its context (spec 039).
  */
 public record AgentSettings(int maxSteps, int subagentsPerTurn, int subagentMaxSteps, int subagentsRunning, String backgroundQuestions,
-        java.time.Duration backgroundQuestionWait) {
+        java.time.Duration backgroundQuestionWait, boolean autoCompact, double compactAt) {
+
+    public static final double DEFAULT_COMPACT_AT = 0.80;
+
+    /** The settings before spec 039, with compaction at its defaults. */
+    public AgentSettings(int maxSteps, int subagentsPerTurn, int subagentMaxSteps, int subagentsRunning, String backgroundQuestions,
+            java.time.Duration backgroundQuestionWait) {
+        this(maxSteps, subagentsPerTurn, subagentMaxSteps, subagentsRunning, backgroundQuestions, backgroundQuestionWait, true, DEFAULT_COMPACT_AT);
+    }
 
     public static final java.time.Duration DEFAULT_QUESTION_WAIT = java.time.Duration.ofMinutes(10);
 
@@ -40,6 +49,8 @@ public record AgentSettings(int maxSteps, int subagentsPerTurn, int subagentMaxS
         int running = d.subagentsRunning();
         String questions = d.backgroundQuestions();
         java.time.Duration wait = d.backgroundQuestionWait();
+        boolean autoCompact = d.autoCompact();
+        double compactAt = d.compactAt();
         for (Map.Entry<String, JsonNode> e : section.properties()) {
             switch (e.getKey()) {
                 case "maxSteps" -> maxSteps = number(e, source, MAX_STEPS_LIMIT);
@@ -62,11 +73,24 @@ public record AgentSettings(int maxSteps, int subagentsPerTurn, int subagentMaxS
                     }
                     wait = dd;
                 }
+                case "autoCompact" -> {
+                    if (!e.getValue().isBoolean()) {
+                        throw new ConfigException(source + ": agent.autoCompact must be true or false");
+                    }
+                    autoCompact = e.getValue().asBoolean();
+                }
+                case "compactAt" -> {
+                    JsonNode v = e.getValue();
+                    if (!v.isNumber() || v.asDouble() < 0.5 || v.asDouble() > 0.95) {
+                        throw new ConfigException(source + ": agent.compactAt=" + v.asText() + ": expected a share of the context window from 0.5 to 0.95");
+                    }
+                    compactAt = v.asDouble();
+                }
                 default -> throw new ConfigException(source + ": agent." + e.getKey()
-                        + " is not a known setting (known: backgroundQuestionWait, backgroundQuestions, maxSteps, subagentMaxSteps, subagentsPerTurn, subagentsRunning)");
+                        + " is not a known setting (known: autoCompact, backgroundQuestionWait, backgroundQuestions, compactAt, maxSteps, subagentMaxSteps, subagentsPerTurn, subagentsRunning)");
             }
         }
-        return new AgentSettings(maxSteps, perTurn, subSteps, running, questions, wait);
+        return new AgentSettings(maxSteps, perTurn, subSteps, running, questions, wait, autoCompact, compactAt);
     }
 
     private static int number(Map.Entry<String, JsonNode> e, String source, int max) throws ConfigException {

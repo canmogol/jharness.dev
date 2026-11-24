@@ -27,6 +27,7 @@ public final class ReplayProvider implements ModelProvider {
     private final Supplier<Origin> origin;
     private int next;
     private final List<ChatRequest> requests = new ArrayList<>();
+    private volatile int contextWindow;
 
     public ReplayProvider(List<JsonNode> lines, EventBus bus, Supplier<Origin> origin) {
         this.lines = List.copyOf(lines);
@@ -60,6 +61,17 @@ public final class ReplayProvider implements ModelProvider {
     @Override
     public String provider() {
         return "replay";
+    }
+
+    /** For tests and recordings (spec 039): the context window this replay claims; 0 means unknown. */
+    public ReplayProvider contextWindow(int tokens) {
+        contextWindow = tokens;
+        return this;
+    }
+
+    @Override
+    public int contextWindow() {
+        return contextWindow;
     }
 
     @Override
@@ -102,6 +114,11 @@ public final class ReplayProvider implements ModelProvider {
             }
 
             @Override
+            public int contextWindow() {
+                return shared.contextWindow();
+            }
+
+            @Override
             public void cancel() {
                 shared.cancel();
             }
@@ -138,7 +155,8 @@ public final class ReplayProvider implements ModelProvider {
             onDelta.accept(d);
             from = to;
         }
-        ChatReply reply = new ChatReply(text, thinking, "replay", 0, 0);
+        // A recording may give the token counts the real model reported (spec 039).
+        ChatReply reply = new ChatReply(text, thinking, "replay", line.path("inputTokens").asInt(0), line.path("outputTokens").asInt(0));
         bus.publish(origin.get(), "model.completed", ModelEvents.completed("replay", "replay", reply));
         return reply;
     }

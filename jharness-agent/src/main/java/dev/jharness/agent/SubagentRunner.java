@@ -349,6 +349,7 @@ final class SubagentRunner implements Subagents {
                 isolate.useHelpers(def.helpers());
             }
             AgentLoop loop = new AgentLoop(provider, isolate, services, bus, turns, system, run.maxSteps, parent.resultChars());
+            loop.useCompaction(settings.agent().autoCompact(), settings.agent().compactAt());
             if (services.hooks() instanceof AgentLoop.StopHook stop) {
                 loop.useStopHook(stop);
             }

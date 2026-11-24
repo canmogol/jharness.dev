@@ -108,6 +108,8 @@ API keys come from the environment or `~/.jharness/secrets` (`NAME=value` lines,
 
 A failed model request is sent again when nothing from it has reached you yet: rate limits (429), overloads (529 and other 5xx), and a server that can't be reached or drops the connection. JHarness waits as long as the server's `retry-after` asks, or 1 s, 2 s, 4 s and so on, and shows `▸ HTTP 429 from anthropic, retrying in 7 s (attempt 2 of 5)`. Esc stops the wait. Each profile can set `"retries"` (0 to 10, default 4), `"retryMaxWait"` (default `"60s"`; a server asking for longer fails at once) and `"responseTimeout"` (default `"120s"`; raise it for a slow local model, since a timed-out request isn't retried).
 
+Long sessions keep going when the model's context fills up. Each profile has a `"contextWindow"` in tokens (default 32,768 for `openai-compatible`, 200,000 for `anthropic`; set it to what your model and server allow). When the conversation reaches 80% of the window minus `maxTokens`, the model first writes a summary of the older messages, which then replace them, and the line `▸ context compacted: about 27,000 → 3,100 tokens` says so. `/context` shows how full it is and `/compact` compacts now. `"agent": {"compactAt": 0.7}` compacts earlier, and `"autoCompact": false` turns it off. Turns inside a summary can no longer be rewound.
+
 Then, in a project folder:
 
 ```

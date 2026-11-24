@@ -97,7 +97,8 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 
 ## Phase 4 — Context and release (v0.1)
 
-- [ ] Token counting, auto-compaction, prompt caching, `@file` mentions
+- [x] Token counting and auto-compaction (spec 039)
+- [ ] Prompt caching, `@file` mentions
 - [ ] Resume and fork sessions
 - [ ] Headless mode with text, JSON and stream-JSON output
 - [ ] Read-only web session viewer on `127.0.0.1`, reading the same event stream as headless mode; no approvals from the browser; doesn't gate v0.1 (D-053)

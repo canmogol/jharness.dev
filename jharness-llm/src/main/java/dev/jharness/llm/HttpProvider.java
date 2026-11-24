@@ -42,6 +42,16 @@ abstract class HttpProvider implements ModelProvider {
     private final RetryWait waiter;
 
     @Override
+    public int contextWindow() {
+        return profile.contextWindow();
+    }
+
+    @Override
+    public int maxTokens() {
+        return profile.maxTokens();
+    }
+
+    @Override
     public void cancel() {
         cancelled = true;
         synchronized (waitLock) {

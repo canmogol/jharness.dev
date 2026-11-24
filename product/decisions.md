@@ -87,6 +87,7 @@ Last updated: 2026-11-24
 | D-074 | Slash commands: `NAME.md` templates (`$ARGUMENTS`) and `NAME.js` commands (`run(args)` returns a prompt, `{print}` or nothing) in `~/.jharness/commands/` and trusted projects; they can't replace built-ins and also work in `-p` | Accepted |
 | D-075 | `api.todos` keeps each agent's todo list, shown in the TUI; `/plan` toggles plan mode, which notes itself in each message; the main agent's `api.proposePlan` asks the user to leave plan mode and carry out the plan | Accepted |
 | D-076 | MCP client: our own small client over stdio and streamable HTTP; servers only from the user's `mcp` settings; stdio servers in the OS sandbox through the proxy; each `tools/call` asks (`kind: mcp`, "always" per server/tool); `api.mcp({list})` and the prompt list the tools | Accepted |
+| D-077 | Token counting and compaction: each profile has a `contextWindow`; the model's own counts, else about 3.5 characters a token; at `agent.compactAt` (0.8) of the window minus the reply size, the model summarizes the older conversation; `/context` and `/compact`; turns in a summary can't be rewound | Accepted |
 
 ---
 
@@ -1213,6 +1214,28 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** Roadmap item "MCP client", D-023, US-4.5. Recommended options accepted while the user was away, specifying 037-mcp-client, 2026-11-24.
 
+## D-077 — Token counting and compaction
+
+**Decision.** Long sessions keep working when the context fills up (US-2.8).
+
+- **Window.** Each model profile has a `contextWindow` in tokens: 32,768 for `openai-compatible` and 200,000 for `anthropic` unless set. `maxTokens` must be below it.
+- **Counting.** The tokens the model reported for the last request and reply, plus an estimate of about 3.5 characters a token for messages added since. Before any count, the estimate covers the system prompt and the conversation. No tokenizer ships in the binary.
+- **When.** Before each model call, if the count reaches `agent.compactAt` (default 0.8, from 0.5 to 0.95) of the window minus the reply size, the conversation is compacted. `agent.autoCompact: false` turns this off. After a failed or unhelpful compaction the next one waits until the context has grown by a tenth of the window.
+- **How.** The same model writes the summary (up to 2,048 tokens) from a transcript of the messages; long messages are cut in the middle and the oldest are left out if the transcript doesn't fit. The conversation becomes the summary, an acknowledgement, and the current turn's messages if they are small (under a quarter of the window), or else only the turn's prompt.
+- **Undo.** `/undo` and `/rewind` still work for turns after the summary; turns inside it can't be rewound. File checkpoints are unchanged.
+- **Commands and events.** `/context` shows the count and the threshold, `/compact` compacts between turns. `context.compacted` (with the summary) and `context.compact_failed` record it, and `turn.completed` carries `contextTokens` and `contextWindow`.
+- **Subagents** compact the same way, each in its own conversation.
+
+**Why.** Small local models have 32K windows, and a few build logs fill them. A summary by the working model needs nothing new in the binary. The model's own counts are exact for what it was sent; the estimate only bridges the messages since and errs high. Keeping the current turn's recent messages keeps the agent's place in a running task.
+
+**Rejected.**
+- A bundled tokenizer (size, and one per model family).
+- Dropping old messages without a summary (loses the user's requests).
+- A separate summary model (one more profile to set up; later, if needed).
+- Rewinding into a summary (the messages are gone; the files could be restored but the conversation could not).
+
+**Source.** Roadmap item "Token counting, auto-compaction, prompt caching, `@file` mentions", split so prompt caching and `@file` mentions follow in their own spec; US-2.8. Recommended options accepted while the user was away, specifying 039-token-counting-and-compaction, 2026-11-24.
+
 ---
 
 ## Questions and answers
@@ -1303,6 +1326,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q80 | How do the todo list and plan mode work? | The agent sets its list with `api.todos([...])`; `/plan` makes the session read-only, and `api.proposePlan(text)` shows the plan and asks the user to approve it, which turns plan mode off | The user sees the agent's steps and approves a plan before anything changes | D-075 |
 | Q81 | How are MCP servers configured and called? | In `~/.jharness/settings.json` `"mcp": {"servers": {...}}` (command or url); `api.mcp({server, tool, input})` calls a tool after approval; `api.mcp({list: true})` lists them | Lets the agent use the user's other tools under the same sandbox and permissions | D-076 |
 | Q82 | How does the action reviewer ask System One? | One `noul` question per state-changing operation, with the user's request and the action as `state`; below `askBelow` asks, below `denyBelow` denies; failures ask | Maps the answer straight onto D-031's two thresholds | D-031 |
+| Q83 | How do long sessions keep working when the context fills? | Count tokens (the model's counts, else an estimate); at 80% of the window minus the reply size, the model summarizes the older conversation; `/context`, `/compact` | Works with any model and adds nothing to the binary | D-077 |
 
 ---
 

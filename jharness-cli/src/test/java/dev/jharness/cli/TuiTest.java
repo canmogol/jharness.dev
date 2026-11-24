@@ -420,10 +420,26 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/model", "/agent", "/hooks", "/commands", "/mcp", "/agents", "/follow", "/switch", "/stop", "/plan", "/todos", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
+        assertEquals(List.of("/model", "/agent", "/hooks", "/commands", "/mcp", "/agents", "/follow", "/switch", "/stop", "/plan", "/todos", "/diff", "/undo", "/rewind", "/context", "/compact", "/events", "/thinking", "/network", "/help", "/exit"),
                 List.copyOf(Tui.COMMANDS.keySet()));
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
         assertEquals("quit (or Ctrl-D)", Tui.COMMANDS.get("/exit"));
+    }
+
+    /** Spec 039 AC-02, AC-05: /context shows the count and threshold; /compact summarizes between turns. */
+    @Test
+    void contextAndCompact() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws39"));
+        Tui tui = new Tui(terminal("/context\n/compact\nhello\n/compact\n/context\n/exit\n"), null);
+        try (Session session = Session.open(tmp.resolve("home39"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi there.", "They greeted me."), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("Context: about ") && sc.contains("of 32,768 tokens") && sc.contains("compacts at about 26,214"), sc);
+        assertTrue(sc.contains("Nothing to compact yet."), sc);
+        assertTrue(sc.contains("Compacted the conversation: about "), sc);
+        assertTrue(sc.contains("Turns up to 1 are kept as a summary."), sc);
     }
 
     /** Spec 024 AC-01, AC-02: "/" then Tab prints the help; "/mo" then Tab completes /model; other text keeps its Tab behavior. */

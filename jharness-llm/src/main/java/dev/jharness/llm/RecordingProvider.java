@@ -27,6 +27,16 @@ public final class RecordingProvider implements ModelProvider {
     }
 
     @Override
+    public int contextWindow() {
+        return inner.contextWindow();
+    }
+
+    @Override
+    public int maxTokens() {
+        return inner.maxTokens();
+    }
+
+    @Override
     public String model() {
         return inner.model();
     }
