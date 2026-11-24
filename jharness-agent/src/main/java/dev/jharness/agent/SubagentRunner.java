@@ -488,7 +488,7 @@ final class SubagentRunner implements Subagents {
         }
         String name = model != null ? model : def != null && def.model() != null ? def.model() : profile;
         if (name == null) {
-            return parent.provider();
+            return parent.provider().forAgent(turns);
         }
         return ModelProviders.create(settings.models().resolve(name), bus, turns, secrets);
     }

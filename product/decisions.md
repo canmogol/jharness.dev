@@ -79,6 +79,7 @@ Last updated: 2026-11-24
 | D-066 | Build tools are JSON definition files in `~/.jharness/tools/` (seeded on first run from `examples/.jharness/tools/`) and a trusted project's `.jharness/tools/`; typed fields map to fixed arguments; git and `rg` stay in code | Accepted |
 | D-067 | `api.tool(name, request)` runs every defined tool and `api.tools()` lists them; `api.maven`, `api.gradle` and `api.npm` are removed | Accepted |
 | D-068 | git and `rg` stay in Java code, not tool definitions: per-operation approvals, use in untrusted projects, injection defences, secrets, undo and structured results need host code | Accepted |
+| D-069 | `/follow [NAME]` shows a running background subagent like the main loop (streamed reply, steps, diffs) until Esc or its end; it stays a view, and shared model clients name the subagent on its events | Accepted |
 
 ---
 
@@ -1030,6 +1031,23 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-069 — Following a subagent
+
+**Decision.**
+- `/follow NAME` (or `/follow` when one background subagent runs) shows that subagent like the main loop: its reply streams as the model writes it, its thinking shows when `/thinking` is on, and its steps, results and diffs print with `[sub-N]`.
+- It runs until Esc or until the subagent ends. Esc only stops watching; the subagent keeps running, and `/stop NAME` stops it. When it ends, JHarness prints its end line and returns to the prompt.
+- It is a view. Typing to the subagent, switching to it, or answering its questions comes later (background subagents still never ask, D-065).
+- Only running background subagents can be followed; a foreground one is already shown inside the turn. `/agents NAME` still prints past events.
+- A subagent that shares the session's model client (sessions without a model profile, such as replays) gets a view of that client that publishes its events under the subagent's name, so its text can be followed too.
+
+**Why.** The user asked to watch a running agent like the main loop, until Esc (review of spec 027). `/agents NAME` only showed the last 20 events after the fact.
+
+**Rejected.** A split screen with every agent at once (JLine has no panes; one followed agent keeps the output readable). Esc stopping the subagent (watching and stopping are separate; `/stop` exists). Typing to the subagent now (planned separately).
+
+**Source.** User request in the review of spec 027, 2026-11-24. Recommended options accepted while the user was away, specifying 030-follow-subagent, 2026-11-24.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1109,6 +1127,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q71 | Can users change, add and remove build tools without changing Java code? | Yes: tools are JSON definition files, seeded into `~/.jharness/tools/` and editable there; trusted projects can add their own | Lets a user tighten Maven or add Go without a release, under the same typed-argument and sandbox rules | D-066 |
 | Q72 | How does an agent know which tools it can run? | `api.tools()` returns each tool's operations, fields and whether it can run here; the system prompt lists them too; `api.tool(name, request)` runs one | One generic call replaces per-tool methods, so new tools need no new api | D-067 |
 | Q73 | Why aren't git and `rg` tool definitions too? | A definition only runs a program with checked arguments and returns its output; git and `rg` need host code for approvals per operation, untrusted projects, injection defences, secrets, undo and parsed results | Moving them would turn the format into a programming language, and a mistake in a file would become a security hole | D-068 |
+| Q74 | How does a user watch what a running subagent does? | `/follow sub-N` streams its reply and steps like the main loop; Esc stops watching and the subagent keeps running | `/agents sub-N` only printed past events | D-069 |
 
 ---
 

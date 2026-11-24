@@ -77,7 +77,38 @@ public final class ReplayProvider implements ModelProvider {
     }
 
     @Override
-    public synchronized ChatReply stream(ChatRequest request, Consumer<String> onDelta) throws ModelException {
+    public ChatReply stream(ChatRequest request, Consumer<String> onDelta) throws ModelException {
+        return stream(request, onDelta, origin);
+    }
+
+    /** The same recording, consumed in the same order, with another agent's events under its name (spec 030). */
+    @Override
+    public ModelProvider forAgent(Supplier<Origin> as) {
+        ReplayProvider shared = this;
+        return new ModelProvider() {
+            @Override
+            public String provider() {
+                return shared.provider();
+            }
+
+            @Override
+            public String model() {
+                return shared.model();
+            }
+
+            @Override
+            public ChatReply stream(ChatRequest request, Consumer<String> onDelta) throws ModelException {
+                return shared.stream(request, onDelta, as);
+            }
+
+            @Override
+            public void cancel() {
+                shared.cancel();
+            }
+        };
+    }
+
+    private synchronized ChatReply stream(ChatRequest request, Consumer<String> onDelta, Supplier<Origin> origin) throws ModelException {
         requests.add(request);
         bus.publish(origin.get(), "model.request", Json.object().put("provider", "replay").put("model", "replay")
                 .put("messages", request.messages().size()));

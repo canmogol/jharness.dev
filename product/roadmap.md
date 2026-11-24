@@ -80,7 +80,8 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Custom JS agents in `.jharness/agents/` (spec 025)
 - [x] Subagents via `api.spawnAgent` (spec 026)
 - [x] Background subagents, `/agents` and `/stop` (spec 027)
-- [ ] Follow a subagent live (`/follow sub-N`); later: switch to an agent, answer its questions and talk to it
+- [x] Follow a subagent live (`/follow sub-N`) (spec 030)
+- [ ] Switch to an agent, answer its questions and talk to it
 - [x] Build tools as definition files in `~/.jharness/tools/` and trusted projects; `api.tool` and `api.tools()` (spec 028)
 - [x] Prompt examples for small models, each run by a test against a test project; why git and `rg` stay in Java (spec 029)
 - [ ] JS hooks (pre-tool, post-tool, stop); no shell hooks

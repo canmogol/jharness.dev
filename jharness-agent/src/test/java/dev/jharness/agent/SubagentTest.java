@@ -83,6 +83,8 @@ class SubagentTest {
         JsonNode done = of("subagent.completed").getFirst();
         assertEquals("done", done.get("stopReason").asText());
         assertTrue(of("loop.code").stream().anyMatch(e -> e.get("agent").asText().equals("sub-1")), "the subagent's steps carry its name");
+        assertEquals(2, of("model.request").stream().filter(e -> e.get("agent").asText().equals("sub-1")).count(),
+                "a shared provider still names the subagent on its model events (spec 030)");
         assertTrue(of("sandbox.run_started").stream().anyMatch(e -> e.get("profile").asText().equals("subagent")), "the subagent sandbox profile");
         assertTrue(of("permission.decided").stream().anyMatch(e -> e.get("api").asText().equals("spawnAgent")
                 && e.get("allowed").asBoolean()), "spawning doesn't ask");

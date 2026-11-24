@@ -40,6 +40,7 @@ final class Tui {
               /agent          list custom agents (start one with jharness --agent NAME)
               /agents         list this session's subagents
               /agents NAME    show a subagent's last 20 events
+              /follow [NAME]  watch a background subagent live, like the main loop (Esc stops watching)
               /stop NAME|all  stop a running background subagent, or all of them
               /diff           show the last turn's file changes
               /undo           undo the last turn's file changes and remove it from the conversation
@@ -94,6 +95,8 @@ final class Tui {
     /** Background subagents, by name: only their start and end lines are shown (spec 027). */
     private final java.util.Set<String> background = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private Path logPath;
+    /** The background subagent {@code /follow} shows, or null (spec 030). */
+    private volatile String following;
 
     Tui(Terminal terminal, Path historyFile) throws IOException {
         this(terminal, historyFile, System.getenv());
@@ -500,6 +503,7 @@ final class Tui {
             }
             case "/agents" -> agents(session, parts.length > 1 ? parts[1].strip() : "");
             case "/stop" -> stop(session, parts.length > 1 ? parts[1].strip() : "");
+            case "/follow" -> follow(session, parts.length > 1 ? parts[1].strip() : "");
             case "/network" -> network(session, parts.length > 1 ? parts[1].strip() : "");
             case "/thinking" -> {
                 showThinking = !showThinking;
@@ -547,7 +551,7 @@ final class Tui {
                 out.printf(fmt, a.name(), a.status() + (a.background() ? "" : "*"), a.steps(), LogFormat.cut(a.customAgent(), 12),
                         LogFormat.cut(a.model(), 12), (a.durationMs() / 1000) + "s", LogFormat.cut(task, 60));
             }
-            out.println("* ran in the foreground. /agents NAME shows one's events; /stop NAME stops one.");
+            out.println("* ran in the foreground. /agents NAME shows one's events, /follow NAME watches one live, /stop NAME stops one.");
             return;
         }
         if (all.stream().noneMatch(a -> a.name().equals(name))) {
@@ -574,6 +578,70 @@ final class Tui {
         }
     }
 
+    /**
+     * {@code /follow [NAME]} (spec 030): shows a running background subagent's reply, steps and diffs as
+     * they happen, until Esc or until it ends. The subagent keeps running either way.
+     */
+    private void follow(Session session, String arg) {
+        List<String> running = session.runningSubagents();
+        String name = arg.isEmpty() && running.size() == 1 ? running.getFirst() : arg;
+        if (name.isEmpty()) {
+            out.println(running.isEmpty() ? "No background subagent is running." : "Running: " + String.join(", ", running) + ". Use /follow NAME.");
+            return;
+        }
+        if (!running.contains(name)) {
+            boolean known = session.subagents().stream().anyMatch(a -> a.name().equals(name));
+            out.println(known ? name + " isn't running; /agents " + name + " shows its events."
+                    : "No subagent " + name + " in this session." + (running.isEmpty() ? "" : " Running: " + String.join(", ", running) + "."));
+            return;
+        }
+        Session.Subagent a = session.subagents().stream().filter(x -> x.name().equals(name)).findFirst().orElseThrow();
+        String task = a.task().strip().replaceAll("\\s+", " ");
+        boolean keys = !terminal.getType().startsWith("dumb");
+        out.println("Following " + name + " (" + (task.length() > 80 ? task.substring(0, 80) + "…" : task) + ", " + a.steps() + " steps so far)."
+                + (keys ? " Esc stops following; " + name + " keeps running." : ""));
+        out.flush();
+        java.util.concurrent.CountDownLatch esc = new java.util.concurrent.CountDownLatch(1);
+        Attributes saved = null;
+        EscWatcher w = null;
+        if (keys) {
+            saved = terminal.getAttributes();
+            Attributes r = new Attributes(saved);
+            r.setLocalFlag(Attributes.LocalFlag.ICANON, false);
+            r.setLocalFlag(Attributes.LocalFlag.ECHO, false);
+            r.setControlChar(Attributes.ControlChar.VMIN, 0);
+            r.setControlChar(Attributes.ControlChar.VTIME, 1);
+            terminal.setAttributes(r);
+            w = new EscWatcher(terminal.reader(), esc::countDown);
+        }
+        styler.reset();
+        following = name;
+        boolean stopped = false;
+        try {
+            while (session.runningSubagents().contains(name)) {
+                if (esc.await(100, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                    stopped = true;
+                    break;
+                }
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        } finally {
+            synchronized (this) {
+                following = null;
+                flushPending();
+                closeThinking();
+            }
+            if (w != null) {
+                w.close();
+                terminal.setAttributes(saved);
+            }
+        }
+        out.println();
+        out.println(stopped ? "Stopped following " + name + "; it keeps running (/follow " + name + " to watch again)."
+                : name + " has ended; /agents " + name + " shows its events.");
+    }
+
     /** {@code /stop NAME} and {@code /stop all} (spec 027 AC-08). */
     private void stop(Session session, String name) {
         if (name.isEmpty()) {
@@ -590,9 +658,16 @@ final class Tui {
 
     /** Package-private for tests. Events come from any thread: background subagents run on their own (spec 027). */
     synchronized void onEvent(Event e) {
-        if (!e.agent().equals("main") && (background.contains(e.agent())
+        // The subagent being followed is shown like the main loop: its reply streams, then its steps (spec 030).
+        boolean followed = e.agent().equals(following);
+        if (!followed && !e.agent().equals("main") && (background.contains(e.agent())
                 || e.type().equals("subagent.started") && e.body().path("background").asBoolean(false))) {
             backgroundEvent(e);
+            return;
+        }
+        if (followed && e.type().equals("model.delta")) {
+            closeThinking();
+            stream(e.body().get("text").asText());
             return;
         }
         if (e.type().equals("model.thinking_delta")) {
