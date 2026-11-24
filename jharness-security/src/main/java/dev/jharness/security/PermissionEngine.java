@@ -14,7 +14,7 @@ import dev.jharness.events.Origin;
  */
 public final class PermissionEngine implements PermissionGate {
 
-    private final PermissionMode mode;
+    private volatile PermissionMode mode;
     private final ProjectRules rules;
     private final Prompter prompter;
     private final EventBus bus;
@@ -30,6 +30,11 @@ public final class PermissionEngine implements PermissionGate {
 
     public PermissionMode mode() {
         return mode;
+    }
+
+    /** {@code /plan} and an approved plan (spec 036) switch the mode during a session. */
+    public void mode(PermissionMode m) {
+        mode = m;
     }
 
     @Override

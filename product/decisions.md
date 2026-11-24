@@ -85,6 +85,7 @@ Last updated: 2026-11-24
 | D-072 | In an interactive session a background subagent's question waits (up to `agent.backgroundQuestionWait`, 10 min) with a notice; `/switch` asks it; `agent.backgroundQuestions: deny` and `-p` deny at once | Accepted |
 | D-073 | JS hooks: `NAME.js` in `~/.jharness/hooks/` and trusted projects' `.jharness/hooks/` define `preTool` (block only, fails closed), `postTool` (observe) and `stop` (go on, at most 3 times a turn); each runs in its own isolate with subagent limits, and its own api calls are gated and run no hooks | Accepted |
 | D-074 | Slash commands: `NAME.md` templates (`$ARGUMENTS`) and `NAME.js` commands (`run(args)` returns a prompt, `{print}` or nothing) in `~/.jharness/commands/` and trusted projects; they can't replace built-ins and also work in `-p` | Accepted |
+| D-075 | `api.todos` keeps each agent's todo list, shown in the TUI; `/plan` toggles plan mode, which notes itself in each message; the main agent's `api.proposePlan` asks the user to leave plan mode and carry out the plan | Accepted |
 
 ---
 
@@ -1149,6 +1150,31 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-075 — Todo list and plan mode
+
+**Decision.**
+- **Todo lists.**
+  - `api.todos(list)` sets the calling agent's list: at most 50 items, each `{text, status}` with `status` `pending`, `in_progress` or `done`; a string is a pending item. `api.todos()` reads it.
+  - Each agent, main or subagent, has its own list. Setting one never asks: it is the agent's own session state (`Operation.Kind.SESSION`).
+  - `todo.updated` records it, the TUI shows it as `✓`, `▸` and `☐` lines, and `/todos` prints it (the switched-to subagent's list after `/switch`).
+- **Plan mode.**
+  - Plan mode is the permission mode `plan` (D-041): every change is refused without asking. `/plan` turns it on, or off back to the mode before it.
+  - While it is on, the prompt shows `[plan] `, and each message to the agent starts with a note that says so and points to `api.proposePlan`.
+- **Proposing a plan.**
+  - `api.proposePlan(text)`, only for the main agent and only in plan mode, shows the plan as Markdown and asks: leave plan mode and carry out this plan?
+  - Yes turns plan mode off (back to the earlier mode) and returns `{"approved": true}`. No keeps it on and returns `false`.
+  - Without a terminal (`-p`) the answer is no.
+- **Custom agents.** A custom agent with `plan: true` is locked: `/plan` can't turn plan mode off, and `proposePlan` is refused.
+- **Events.** `plan.mode`, `plan.proposed` and `plan.decided` record the changes.
+
+**Why.** The roadmap's "todo list and plan mode": users see the agent's steps, and can have it investigate and propose before anything changes, with their approval as the switch. Reusing the permission mode keeps one definition of read-only.
+
+**Rejected.** A separate plan-mode gate (two definitions of read-only). Leaving plan mode without the user (the model can't approve its own plan). A shared todo list for all agents (subagents would overwrite the main agent's).
+
+**Source.** Roadmap item "Todo list and plan mode". Recommended options accepted while the user was away, specifying 036-todos-and-plan-mode, 2026-11-24.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1234,6 +1260,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q77 | Can a background subagent's question reach the user instead of being denied? | Yes: it waits with a notice above the prompt, `/agents` shows `waiting`, and `/switch NAME` asks it; after 10 minutes it is denied | Background work that needs one approval no longer fails, without questions popping up over the user's typing | D-072 |
 | Q78 | How do hooks work? | JS files with `preTool(call)`, `postTool(call)` and `stop(turn)`; a pre-tool hook returns `{block}` before the gate, a stop hook returns `{continue}`; hooks never approve | Team guardrails apply to every agent without a shell (D-022) | D-073 |
 | Q79 | How are slash commands defined? | A Markdown file is a prompt template; a JS file's `run(args)` builds a prompt or prints text, in its own sandbox | Repeated tasks become one command without a new release | D-074 |
+| Q80 | How do the todo list and plan mode work? | The agent sets its list with `api.todos([...])`; `/plan` makes the session read-only, and `api.proposePlan(text)` shows the plan and asks the user to approve it, which turns plan mode off | The user sees the agent's steps and approves a plan before anything changes | D-075 |
 
 ---
 

@@ -297,6 +297,29 @@ class TuiTest {
         assertTrue(sc.contains("Unknown command /nope"), sc);
     }
 
+    /** Spec 036: /plan, the [plan] prompt, a proposed plan approved by the user, and the todo list. */
+    @Test
+    void planModeAndTodos() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws36"));
+        Tui tui = new Tui(terminal("/todos\n/plan\nplan the change\ny\n/todos\n/exit\n"), null);
+        try (Session session = replaySession(tmp.resolve("home36"), ws, "{}", tui,
+                "```js\napi.todos([{text: 'read the code', status: 'done'}, {text: 'write the plan', status: 'in_progress'}, 'carry it out']);\n"
+                        + "JSON.parse(api.proposePlan('1. **Edit** a.txt\\n2. Run the tests')).approved\n```",
+                "Approved, carrying it out.")) {
+            tui.run(session);
+            assertFalse(session.planMode(), "the approved plan turned plan mode off");
+        }
+        String sc = screen();
+        assertTrue(sc.contains("No todo list yet."), sc);
+        assertTrue(sc.contains("Plan mode is on: the agent can read but not change anything"), sc);
+        assertTrue(sc.contains("[plan] > plan the change"), "the prompt says plan mode is on: " + sc);
+        assertTrue(sc.contains("▸ todos (1/3 done)") && sc.contains("✓ read the code") && sc.contains("▸ write the plan") && sc.contains("☐ carry it out"), sc);
+        assertTrue(sc.contains("▸ Plan:") && sc.contains("1. **Edit** a.txt") && sc.contains("2. Run the tests"), sc);
+        assertTrue(sc.contains("Leave plan mode and carry out this plan? [y] yes  [n] no, keep planning: y"), sc);
+        assertTrue(sc.contains("▸ plan mode off: the plan was approved"), sc);
+        assertTrue(sc.contains("Approved, carrying it out."), sc);
+    }
+
     /** Spec 020 AC-06. */
     @Test
     void modelRetriesShowAsSteps() throws Exception {
@@ -397,7 +420,7 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/model", "/agent", "/hooks", "/commands", "/agents", "/follow", "/switch", "/stop", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
+        assertEquals(List.of("/model", "/agent", "/hooks", "/commands", "/agents", "/follow", "/switch", "/stop", "/plan", "/todos", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
                 List.copyOf(Tui.COMMANDS.keySet()));
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
         assertEquals("quit (or Ctrl-D)", Tui.COMMANDS.get("/exit"));

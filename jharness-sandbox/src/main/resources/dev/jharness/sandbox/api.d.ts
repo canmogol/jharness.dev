@@ -143,6 +143,17 @@ type AgentsJson = string;
  *   — current is the session's profile */
 type ModelsJson = string;
 
+interface TodoItem {
+  text: string;
+  status?: "pending" | "in_progress" | "done";
+}
+
+/** [{"text": string, "status": "pending" | "in_progress" | "done"}] */
+type TodosJson = string;
+
+/** {"approved": boolean} */
+type PlanResultJson = string;
+
 /** type must start with "agent." or "custom."; at most 64 KB */
 interface AgentEvent {
   type: string;
@@ -197,6 +208,18 @@ declare const api: {
   agents(): AgentsJson;
   /** Stops a running background subagent. */
   stopAgent(name: string): string;
+  /**
+   * Your todo list for this task: pass the whole list to set it, or nothing to read it. Keep one item
+   * "in_progress" while you work on it and mark items "done" as you finish them; the user sees the list.
+   * At most 50 items of at most 200 characters.
+   */
+  todos(list?: TodoItem[]): TodosJson;
+  /**
+   * In plan mode (changes are refused): show the user your plan, as Markdown, and ask whether to leave
+   * plan mode and carry it out. Returns {"approved": true} once plan mode is off, else {"approved": false}:
+   * keep planning and ask what to change.
+   */
+  proposePlan(plan: string): PlanResultJson;
   /** Records an event in the session log; returns its id. */
   emit(event: AgentEvent | string): string;
 };

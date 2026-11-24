@@ -20,17 +20,24 @@ import dev.jharness.security.Workspace;
  * where no hooks run, such as inside a hook (spec 034).
  */
 public record ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search,
-        GitOperations git, Checkpoints checkpoints, BuildOperations builds, HttpOperations http, Subagents subagents, Hooks hooks) {
+        GitOperations git, Checkpoints checkpoints, BuildOperations builds, HttpOperations http, Subagents subagents, Hooks hooks,
+        Planning planning) {
+
+    /** Without the todo list and plan mode. */
+    public ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search, GitOperations git,
+            Checkpoints checkpoints, BuildOperations builds, HttpOperations http, Subagents subagents, Hooks hooks) {
+        this(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, hooks, null);
+    }
 
     /** Without hooks. */
     public ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search, GitOperations git,
             Checkpoints checkpoints, BuildOperations builds, HttpOperations http, Subagents subagents) {
-        this(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, null);
+        this(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, null, null);
     }
 
     /** The same services with these hooks (null for none). */
     public ApiServices withHooks(Hooks h) {
-        return new ApiServices(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, h);
+        return new ApiServices(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, h, planning);
     }
 
     /** Without subagents. */
