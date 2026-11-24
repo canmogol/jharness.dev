@@ -1,6 +1,14 @@
 # Changelog
 
-<!-- last-commit: 69a1c270ac765d35bc4f25adc3a492a4ada3ba03 -->
+<!-- last-commit: 25107e3605e33c3426dc8a40fc0b9dd56f1f5394 -->
+
+## 2026-11-24 · 032 Switch to a subagent
+
+- `/switch sub-2` makes the prompt talk to that subagent: it shows `sub-2> `, and each message continues the subagent's own conversation. `/switch main` goes back, and the subagent keeps its conversation.
+- While you're switched to a subagent, its approval questions are asked as in a normal turn. Other background subagents still have theirs denied.
+- Its reply and steps show as in `/follow`. Esc stops its current turn. Switching to a running subagent waits for its turn to end, asking its questions meanwhile.
+- Subagents stay open after their task, stopped ones too, so you can talk to them later. Up to 16 idle ones are kept, and quitting closes them all.
+- Decision: switching to a subagent (D-071).
 
 ## 2026-11-24 · 031 Readable session paths
 
