@@ -200,6 +200,19 @@ class SettingsTest {
         assertTrue(bad("{\"ui\":{\"thinking\":\"yes\"}}").getMessage().contains("ui.thinking"));
     }
 
+    /** Spec 042 AC-01: ui.statusLine is on with every item, off, or a list in the user's order. */
+    @Test
+    void statusLineSetting() throws Exception {
+        assertEquals(UiSettings.STATUS_ITEMS, Settings.defaults().ui().statusLine());
+        assertEquals(java.util.List.of("model", "context", "mode", "agents", "cache", "turn", "workspace"), UiSettings.STATUS_ITEMS);
+        assertEquals(java.util.List.of(), Settings.parse("{\"ui\":{\"statusLine\":false}}", "s").ui().statusLine());
+        assertEquals(UiSettings.STATUS_ITEMS, Settings.parse("{\"ui\":{\"statusLine\":true}}", "s").ui().statusLine());
+        assertEquals(java.util.List.of("turn", "model"), Settings.parse("{\"ui\":{\"statusLine\":[\"turn\",\"model\"]}}", "s").ui().statusLine());
+        assertTrue(bad("{\"ui\":{\"statusLine\":[\"clock\"]}}").getMessage().contains("ui.statusLine: expected true, false or a list of items"));
+        assertTrue(bad("{\"ui\":{\"statusLine\":\"on\"}}").getMessage().contains("ui.statusLine"));
+        assertTrue(bad("{\"ui\":{\"statusLine\":[\"turn\",\"turn\"]}}").getMessage().contains("twice"));
+    }
+
     @Test
     void permissionsAndFiles(@TempDir Path docs) throws Exception {
         assertEquals("ask", Settings.defaults().permissions().mode());

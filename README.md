@@ -127,6 +127,18 @@ jharness log last             # the newest session as a timeline
 
 In the UI, Shift+Enter, Alt+Enter or Ctrl-J starts a new line and Enter sends. Type `/` and press Tab to list the commands, or Tab after `/mo` to complete `/model`. After a command and a space, Tab lists its choices and Tab again cycles through them: `/events` levels, `/model` profiles, subagent names for `/agents`, `/follow`, `/stop` and `/switch`, turns for `/rewind`, and `/network` subcommands and the hosts in your rules. `/quit` and `/q` also leave. A turn runs up to 100 code steps; set `"agent": {"maxSteps": N}` (1 to 500) to change it. Every event goes to the session log printed at start (`tail -f` it); `/events all` or `"ui": {"events": "all"}` in settings also shows them inline. The log keeps each model reply, and its thinking text, whole on `model.completed`; `/thinking` or `"ui": {"thinking": "show"}` shows the thinking dim in the UI. `NO_COLOR=1` turns colors off.
 
+On a real terminal a status line sits under the input: `claude (claude-opus-5-5) · 41% of 200K · ask · 1 running, 1 held · cache 77K read · turn 3 · shop`. It shows the model, how full the context is, the permission mode (`[plan]` in plan mode), background subagents, the last request's cache reads, the turn and the workspace. `"ui": {"statusLine": false}` turns it off, and a list such as `["model", "context", "turn"]` picks the items and their order. It never shows on dumb terminals or in `-p`.
+
+To write your own, put `~/.jharness/statusline.js` with a `status(s)` function that returns a string:
+
+```js
+function status(s) {
+  return `${s.model} · ${s.context.percent}% · ${s.agents.running} running · ${s.line}`;
+}
+```
+
+`s` has `profile`, `provider`, `model`, `context` (`tokens`, `window`, `percent`, `estimated`, `compactAt`), `mode`, `plan`, `agents` (`running`, `held`, `names`), `cache` (`readTokens`, `writeTokens`, `inputTokens`, `readTotal`), `turn`, `busy`, `workspace`, and `line`, the default line. It runs in its own sandboxed isolate with no `api`, after the events that change the line and at most every 250 ms. If it throws, hits a limit or returns something other than a string, the default line shows instead and the TUI says why once; a run over 1 second turns it off for the session.
+
 Each project has one folder, named after its path with a short hash, in `~/.jharness/sessions/` (logs, such as `users-xyz-projects-app-2787870/s-2026-11-24T105226Z-18a9.jsonl`), `~/.jharness/projects/` (saved "always" approvals) and `~/.jharness/checkpoints/` (what `/undo` restores). Folders from older versions, named by 16 hex characters, are no longer read; delete them with `rm -rf ~/.jharness/{sessions,projects,checkpoints}/????????????????`.
 
 `jharness log SESSION` prints a session one event per line: time, turn, type and its main fields. SESSION is an id, a unique prefix, `last` or a path to a `.jsonl` log. `--type network.` (repeatable) filters by type, `--agent sub-1` (repeatable; `main` is the main agent) by agent and `--source host|guest` by who wrote the event (JHarness, or agent code through `api.emit`), `--full` shows whole events, `--json` prints the raw lines and `--all` lists every project's sessions. Control characters from logged text are shown escaped (`\e`, `\n`). The UI and `-p` do the same with replies, diffs and errors (newlines and tabs stay), so a hostile reply or file can't rewrite your terminal. Each model response is logged as `model.response` with its status, request id and rate-limit headers; no other header is logged.

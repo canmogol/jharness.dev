@@ -547,6 +547,70 @@ class TuiTest {
         assertTrue(sc.contains("Events: steps"), "the second Tab in the menu picked steps: " + sc);
     }
 
+    /** Spec 042 AC-01, AC-02: the status line shows on real terminals, follows ui.statusLine, and a script can replace it. */
+    @Test
+    void statusLineOnRealTerminalsOnly() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("shopws"));
+        Tui tui = new Tui(xterm("hello\r/exit\r"), null, java.util.Map.of());
+        try (Session session = Session.open(tmp.resolve("home-st"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi."), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("ask · turn 1 · shopws"), "the default line after a turn: " + sc);
+        assertTrue(sc.contains("\u001b[r") || sc.contains("\u001b[1;50r"), "a scroll region was set and reset: " + sc);
+
+        screen.reset();
+        Tui dumb = new Tui(terminal("hello\n/exit\n"), null);
+        try (Session session = Session.open(tmp.resolve("home-st2"), ws, Settings.defaults(), Session.Access.prompter(dumb.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi."), bus, turns))) {
+            dumb.run(session);
+        }
+        assertFalse(screen().contains("· shopws"), "never on a dumb terminal: " + screen());
+
+        screen.reset();
+        Tui off = new Tui(xterm("hello\r/exit\r"), null, java.util.Map.of());
+        try (Session session = Session.open(tmp.resolve("home-st3"), ws, Settings.parse("{\"ui\":{\"statusLine\":false}}", "t"),
+                Session.Access.prompter(off.prompter()), (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi."), bus, turns))) {
+            off.run(session);
+        }
+        assertFalse(screen().contains("· shopws"), "ui.statusLine false: " + screen());
+
+        screen.reset();
+        Path home = tmp.resolve("home-st4");
+        Files.createDirectories(home.resolve(".jharness"));
+        Path js = Files.writeString(home.resolve(".jharness/statusline.js"), "function status(s) { return 'custom turn ' + s.turn + ' in ' + s.workspace; }");
+        Files.setPosixFilePermissions(js, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        Tui scripted = new Tui(xterm("hello\r/exit\r"), null, java.util.Map.of());
+        try (Session session = Session.open(home, ws, Settings.defaults(), Session.Access.prompter(scripted.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi."), bus, turns))) {
+            scripted.run(session);
+        }
+        assertTrue(screen().contains("custom turn 0 in shopws"), "the script's line (JLine redraws only what changes after): " + screen());
+    }
+
+    /** Spec 042 AC-03: a broken script falls back to the default line, with an event and one notice. */
+    @Test
+    void aBrokenStatusScriptFallsBack() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("brokenws"));
+        Path home = tmp.resolve("home-sb");
+        Files.createDirectories(home.resolve(".jharness"));
+        Path js = Files.writeString(home.resolve(".jharness/statusline.js"), "function status(s) { return {not: 'a string'}; }");
+        Files.setPosixFilePermissions(js, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        Tui tui = new Tui(xterm("hello\r/exit\r"), null, java.util.Map.of());
+        Path log;
+        try (Session session = Session.open(home, ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi."), bus, turns))) {
+            tui.run(session);
+            log = session.logPath();
+        }
+        String sc = screen();
+        assertTrue(sc.contains("ask · turn 1 · brokenws"), sc);
+        assertEquals(1, sc.split("Status line script failed \\(type\\)", -1).length - 1, "one notice: " + sc);
+        assertTrue(dev.jharness.events.SessionLog.read(log).stream().anyMatch(e -> e.get("type").asText().equals("statusline.failed")
+                && e.get("reason").asText().equals("type")));
+    }
+
     /** Spec 024 AC-01, AC-02: "/" then Tab prints the help; "/mo" then Tab completes /model; other text keeps its Tab behavior. */
     @Test
     void slashTabPrintsTheHelpAndCompletesCommands() throws Exception {

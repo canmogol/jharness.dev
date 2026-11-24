@@ -79,6 +79,14 @@ One `noul` question per state-changing operation; the answer from 0 to 1 is the 
 | `timeoutMs` | 3000 | 500 to 60000 |
 | `onError` | `ask` | `ask` or `deny` |
 
+## Status line (D-080)
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `ui.statusLine` | `true`: model, context, mode, agents, cache, turn, workspace | `false`, or a list of those items in order |
+| Refresh | After the events that change it, at most every 250 ms | Never per streamed chunk |
+| `~/.jharness/statusline.js` | None | Subagent sandbox limits, no `api`, 1 s a run (10 s for the first), 64 KB file |
+
 ## Sandbox limits (defaults, tune in P0)
 
 Every value below can be changed in the `sandbox` section of `settings.json`, per profile (D-003). The policy, isolate mode and thread count are fixed.

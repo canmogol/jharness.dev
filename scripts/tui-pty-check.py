@@ -12,6 +12,8 @@ Sets up a temporary home and workspace, then types:
   5. "spin" Enter, then Esc      -> the recorded reply loops forever; Esc stops it
   6. "/" Tab, then Ctrl-U        -> the command list again, from Tab (spec 024)
   7. Ctrl-D                      -> quit
+A ~/.jharness/statusline.js adds " · SL" to the default status line (spec 042), which shows in a scroll region
+at the bottom and is reset when JHarness ends.
 Exits 0 only if the approval was asked, the file changed, the reply was shown and JHarness exited 0.
 """
 import fcntl
@@ -54,6 +56,11 @@ def main():
     os.makedirs(ws)
     with open(os.path.join(ws, "a.txt"), "w") as f:
         f.write("old")
+    os.makedirs(os.path.join(home, ".jharness"))
+    script = os.path.join(home, ".jharness", "statusline.js")
+    with open(script, "w") as f:
+        f.write("function status(s) { return s.line + ' · SL ' + s.mode; }\n")
+    os.chmod(script, 0o600)
     replay = os.path.join(tmp, "replay.jsonl")
     with open(replay, "w") as f:
         f.write(json.dumps({"reply": "Changing it.\n```js\napi.writeFile('a.txt', 'new')\n```"}) + "\n")
@@ -115,6 +122,8 @@ def main():
         "follow": "Following sub-1" in text and "Stopped following sub-1; it keeps running" in text and "Stopped sub-1." in text,
         "exit": os.waitstatus_to_exitcode(status) == 0,
         "trust-saved": os.path.exists(os.path.join(home, ".jharness", "trusted.json")),
+        # The scroll region leaves the bottom row (of 40) to the status line, and is reset to all 40 at the end.
+        "status-line": "\x1b[1;39r" in text and "· ws · SL ask" in text and "\x1b[1;40r" in text[-400:],
     }
     ok = all(checks.values())
     print(json.dumps({"check": "tui-pty", "status": "pass" if ok else "fail", "checks": checks}))
