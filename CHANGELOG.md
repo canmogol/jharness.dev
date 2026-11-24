@@ -1,6 +1,13 @@
 # Changelog
 
-<!-- last-commit: 46e3d5fc1621552419fe7571d21853a4e69ee12e -->
+<!-- last-commit: 69a1c270ac765d35bc4f25adc3a492a4ada3ba03 -->
+
+## 2026-11-24 · 031 Readable session paths
+
+- Each project's folder under `~/.jharness/sessions/`, `projects/` and `checkpoints/` is now its path as a readable name plus a short hash, such as `users-xyz-projects-jharness.dev-2787870`. A long path keeps its last 80 characters, which name the project.
+- Session logs are named by their UTC start time, such as `s-2026-11-24T105226Z-18a9.jsonl`, so they sort by start. `jharness log` orders sessions that started in the same second by their last write.
+- Folders from older versions are left in place and no longer read; the README has the command that deletes them. Saved "always" approvals in them no longer apply, so JHarness asks once more. Trust and confirmed project tools are unaffected.
+- Decision: readable session paths (D-070).
 
 ## 2026-11-24 · 030 Follow a subagent
 
