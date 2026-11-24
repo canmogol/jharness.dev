@@ -25,6 +25,8 @@ final class LogFormat {
     private static final Map<String, List<String>> FIELDS = Map.ofEntries(
             Map.entry("session.started", List.of("workspace", "provider", "model", "trusted", "offline")),
             Map.entry("session.crashed", List.of("exception", "report")),
+            Map.entry("session.resumed", List.of("from", "fork", "turns", "messages")),
+            Map.entry("session.state_failed", List.of("error")),
             Map.entry("session.model_changed", List.of("profile", "provider", "model")),
             Map.entry("subagent.started", List.of("customAgent", "model", "maxSteps", "background", "task")),
             Map.entry("subagent.delivered", List.of("agents")),

@@ -66,6 +66,8 @@ public final class EventTypes {
         HOST.put("command.shadowed", List.of("name", "file", "from"));
         HOST.put("statusline.ready", List.of("from", "items"));
         HOST.put("statusline.failed", List.of("reason", "error"));
+        HOST.put("session.resumed", List.of("from", "fork", "turns", "messages"));
+        HOST.put("session.state_failed", List.of("error"));
         HOST.put("command.ran", List.of("name", "from", "kind", "outcome"));
         HOST.put("hooks.loaded", List.of("hooks"));
         HOST.put("hook.ran", List.of("hook", "event", "outcome"));

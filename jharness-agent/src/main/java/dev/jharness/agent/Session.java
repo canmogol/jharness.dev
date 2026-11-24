@@ -71,6 +71,7 @@ public final class Session implements AutoCloseable {
     private boolean trusted;
     private FilePolicy files;
     private PermissionEngine engine;
+    private SessionState.Resume resumed;
     private String startMode;
 
     private Session(EventBus bus, SessionLog log, AgentIsolate isolate, AgentLoop loop, Workspace workspace, TurnCounter turns,
@@ -89,33 +90,38 @@ public final class Session implements AutoCloseable {
      * normal case), or a fixed gate (tests).
      */
     public record Access(PermissionGate gate, Prompter prompter, boolean trusted, AgentDefinition agent, boolean projectTools,
-            boolean interactive) {
+            boolean interactive, SessionState.Resume resume) {
         public static Access prompter(Prompter p) {
-            return new Access(null, p, false, null, true, false);
+            return new Access(null, p, false, null, true, false, null);
         }
 
         public static Access gate(PermissionGate g) {
-            return new Access(g, null, false, null, true, false);
+            return new Access(g, null, false, null, true, false, null);
         }
 
         /** Whether the project is trusted (D-011); recorded in {@code session.started}. */
         public Access trusted(boolean t) {
-            return new Access(gate, prompter, t, agent, projectTools, interactive);
+            return new Access(gate, prompter, t, agent, projectTools, interactive, resume);
         }
 
         /** The custom agent to run as (spec 025), or null for the built-in one. */
         public Access agent(AgentDefinition a) {
-            return new Access(gate, prompter, trusted, a, projectTools, interactive);
+            return new Access(gate, prompter, trusted, a, projectTools, interactive, resume);
         }
 
         /** Whether a trusted project's own tools count; false when the user didn't confirm their changes (D-066). */
         public Access projectTools(boolean use) {
-            return new Access(gate, prompter, trusted, agent, use, interactive);
+            return new Access(gate, prompter, trusted, agent, use, interactive, resume);
         }
 
         /** A person can switch to a subagent to answer a held question (the terminal UI, spec 033). */
         public Access interactive(boolean i) {
-            return new Access(gate, prompter, trusted, agent, projectTools, i);
+            return new Access(gate, prompter, trusted, agent, projectTools, i, resume);
+        }
+
+        /** Start from a saved session (spec 043): continue it, or fork a new one from it; null for a new session. */
+        public Access resume(SessionState.Resume r) {
+            return new Access(gate, prompter, trusted, agent, projectTools, interactive, r);
         }
     }
 
@@ -143,9 +149,16 @@ public final class Session implements AutoCloseable {
         Secrets loaded = Secrets.load(home, System::getenv);
         Map<String, String> tokens = gitTokens(settings, loaded);
         String reviewerKey = reviewerKey(settings, loaded);
-        String id = EventBus.newSessionId();
-        while (Files.exists(SessionLog.pathFor(home, ws.root(), id))) {
+        SessionState.Resume resume = access.resume();
+        String id;
+        if (resume != null && !resume.fork()) {
+            // --resume goes on in the same session: its log, its id, its checkpoint folder (spec 043).
+            id = resume.state().session();
+        } else {
             id = EventBus.newSessionId();
+            while (Files.exists(SessionLog.pathFor(home, ws.root(), id))) {
+                id = EventBus.newSessionId();
+            }
         }
         EventBus bus = new EventBus(id);
         SessionLog log = SessionLog.open(home, ws.root(), bus.session());
@@ -252,7 +265,27 @@ public final class Session implements AutoCloseable {
             return plan.isEmpty() ? done : done.isEmpty() ? plan : plan + "\n\n" + done;
         });
         subagents.holdQuestions(access.interactive());
+        if (resume != null) {
+            SessionState st = resume.state();
+            loop.restore(new AgentLoop.Snapshot(st.conversation(), st.turn(), st.compactedThrough(), st.firstPrompt()));
+            bus.publish(turns.get(), "session.resumed", Json.object().put("from", st.session()).put("fork", resume.fork())
+                    .put("turns", st.turn()).put("messages", st.conversation().size()).put("savedProfile", st.profile())
+                    .put("savedModel", st.model()));
+        }
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
+        String forkedFrom = resume == null ? null : resume.fork() ? resume.state().session() : resume.state().forkedFrom();
+        loop.useStateSink(snap -> {
+            try {
+                new SessionState(bus.session(), ws.root().toString(), s.profile, loop.provider().model(), snap.turn(), snap.conversation(),
+                        snap.compactedThrough(), forkedFrom, java.time.Instant.now().toString(), snap.firstPrompt()).save(home, ws.root());
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        if (resume != null && resume.fork()) {
+            // A fork has its own state file from the start, so it can be resumed before its first turn ends.
+            loop.saveState();
+        }
         s.agent = agent;
         s.tools = tools;
         s.hooks = hooks;
@@ -265,6 +298,7 @@ public final class Session implements AutoCloseable {
         s.trusted = access.trusted();
         s.files = files;
         s.engine = engine;
+        s.resumed = resume;
         s.startMode = mode.name().toLowerCase().replace('_', '-');
         s.proxy = proxy;
         s.sessionDir = sessionDir;
@@ -566,6 +600,11 @@ public final class Session implements AutoCloseable {
 
     public Path logPath() {
         return log.path();
+    }
+
+    /** The saved session this one resumed or forked (spec 043), or null for a new one. */
+    public SessionState.Resume resumed() {
+        return resumed;
     }
 
     /** The home folder whose {@code .jharness/} this session uses. */

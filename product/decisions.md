@@ -91,6 +91,7 @@ Last updated: 2026-11-24
 | D-078 | Prompt caching and `@file` mentions: Claude requests mark the system prompt and the last message for the 5-minute prompt cache (`promptCache`, on by default); `inputTokens` counts the whole prompt; `@path` in a user prompt attaches a file or folder under the file policy, within a size budget | Accepted |
 | D-079 | Command aliases and argument completion: `/quit` and `/q` are aliases of `/exit`, not listed; built-in names and aliases win over command files, and the clash is reported; Tab after a command lists its choices and cycles through them; command files declare `args` | Accepted |
 | D-080 | Status line, a new extension point: a line under the input on real terminals with built-in items chosen by `ui.statusLine`; `~/.jharness/statusline.js` can return the whole line from a JSON snapshot, in an isolate with no `api`; refreshed on events, throttled; failures fall back to the default line | Accepted |
+| D-081 | Resume and fork: the main conversation is saved after each turn, compaction, undo and rewind as `<session-id>.state.json` (0600, atomic) next to the log; `--resume [ID]` continues the same session and log, `--fork [ID]` starts a new session from a copy; earlier turns can't be rewound | Accepted |
 
 ---
 
@@ -1312,6 +1313,27 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** The user's request for a default and a programmable status line, 2026-11-24. Recommended options accepted while the user was away, specifying 042-status-line.
 
+## D-081 — Resume and fork sessions
+
+**Decision.** A session can be continued later, or branched, from what it last saved (US-2.7).
+
+- **What is saved.** The main agent's conversation, its last turn number, the compaction mark (D-077), the profile and model, the first prompt, the session it was forked from, and when. It is saved after each turn, `/compact`, `/undo` and `/rewind`, as `~/.jharness/sessions/<project>/<session-id>.state.json` next to the session log. The file is mode 0600 and replaced atomically, so a crash leaves the last complete turn.
+- **Why not the log.** The log keeps what happened, not what the model was sent: results are capped there and attachments aren't in `turn.started`. Rebuilding the conversation from it would be lossy, so the state is its own file.
+- **`--resume [ID]`.** Continues a saved session of the current folder: `last` or none for the newest, else an id or a unique start of one. It keeps the same session id, appends to the same log and goes on with the next turn number. `session.resumed` records it (from, fork, turns, messages, the saved profile and model).
+- **`--fork [ID]`.** The same, but in a new session id with its own log and state; the saved session is left as it was. Its state file is written at once and names `forkedFrom`.
+- **What starts fresh.** Background subagents, held questions, the todo list, plan mode and the context count (re-estimated, then counted on the next reply). The model is the one chosen now (`--model` or settings), not the saved one.
+- **Undo.** File checkpoints are indexed in memory, so turns from before the resume can't be undone: `/rewind` to an earlier turn says so, and `/undo` reaches only new turns.
+- **Where.** Only in the folder the session belongs to; both work in the UI and with `-p`.
+
+**Why.** Users come back to long tasks the next day, and re-explaining costs a turn and context. Forking lets them try another direction without losing the first. A separate state file keeps resume exact and cheap to load.
+
+**Rejected.**
+- Rebuilding from the session log (lossy, see above).
+- Restoring background subagents (their isolates and processes ended with the session).
+- Restoring file checkpoints across runs (the files may have changed since; a later spec can persist the index).
+
+**Source.** Roadmap item "Resume and fork sessions"; US-2.7. Recommended options accepted while the user was away, specifying 043-resume-and-fork-sessions, 2026-11-24.
+
 ---
 
 ## Questions and answers
@@ -1406,6 +1428,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q84 | How do prompt caching and `@file` mentions work? | Claude requests mark the system prompt and the last message for the 5-minute cache; `@path` attaches files and folders under the file policy within a size budget | Lower cost per step; files by name without a model step | D-078 |
 | Q85 | Should `/quit` and `/q` work, and can Tab complete command arguments? | Yes: aliases of `/exit`, not listed; built-ins win over command files; Tab lists and cycles each command's choices, and command files declare `args` | Fewer keystrokes; built-ins mean the same thing everywhere | D-079 |
 | Q86 | Should the TUI have a status line, and can users program it? | Yes: built-in items chosen by `ui.statusLine`; `~/.jharness/statusline.js` returns the whole line from a snapshot, sandboxed with no `api`; throttled refresh; failures fall back to the default | Key state at a glance; a new extension point that can't act | D-080 |
+| Q87 | How are sessions resumed and forked? | The conversation is saved after each turn in a state file next to the log; `--resume` continues the same session, `--fork` copies it into a new one; earlier turns can't be rewound | Exact resume without re-explaining; branching without losing work | D-081 |
 
 ---
 
