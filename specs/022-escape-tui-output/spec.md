@@ -27,6 +27,10 @@ Spec 021 escapes control characters in `jharness log`, but the terminal UI and `
 | AC-05 | Newlines, tabs and ordinary Unicode (accents, symbols, emoji) print unchanged. |
 | AC-06 | The README and D-060 say so. |
 
+## Later changes
+
+- Spec 044 (2026-11-24): picocli's own help, version and usage-error output goes to the raw streams so `jharness --help` keeps its colors; usage errors escape the typed arguments, and `NO_COLOR` turns the help colors off. Everything else is unchanged.
+
 ## Out of scope
 
 - Escaping what the user types (JLine echoes it).

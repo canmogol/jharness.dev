@@ -159,6 +159,65 @@ class MainTest {
         assertTrue(out.toString().contains("The file says hello."));
     }
 
+    private int runWith(java.util.Map<String, String> env, picocli.CommandLine.Help.Ansi ansi, String... args) {
+        Main m = new Main();
+        m.out = new PrintStream(out, true);
+        m.err = new PrintStream(err, true);
+        return Main.run(m, env, ansi, args);
+    }
+
+    /** Spec 044 AC-01: with colors on, the help has real ESC sequences, never a literal \e[. */
+    @Test
+    void helpKeepsItsColors() {
+        assertEquals(0, runWith(java.util.Map.of(), picocli.CommandLine.Help.Ansi.ON, "--help"));
+        String o = out.toString();
+        assertTrue(o.contains("\u001b[") && o.contains("--debug"), o);
+        assertFalse(o.contains("\\e["), "not escaped: " + o);
+        out.reset();
+        assertEquals(0, runWith(java.util.Map.of(), picocli.CommandLine.Help.Ansi.ON, "log", "--help"));
+        assertTrue(out.toString().contains("\u001b[") && !out.toString().contains("\\e["), "subcommands too: " + out);
+    }
+
+    /** Spec 044 AC-02: NO_COLOR, or no terminal, means no ESC at all. */
+    @Test
+    void helpHasNoColorsWithNoColorOrWithoutATerminal() {
+        assertEquals(0, runWith(java.util.Map.of("NO_COLOR", "1"), null, "--help"));
+        assertFalse(out.toString().contains("\u001b"), out.toString());
+        assertTrue(out.toString().contains("--debug"));
+        out.reset();
+        assertEquals(0, runWith(java.util.Map.of(), null, "--help"));
+        assertFalse(out.toString().contains("\u001b"), "tests don't run on a terminal: " + out);
+        out.reset();
+        assertEquals(0, runWith(java.util.Map.of("NO_COLOR", ""), picocli.CommandLine.Help.Ansi.OFF, "--version"));
+        assertFalse(out.toString().contains("\u001b"));
+        assertEquals(picocli.CommandLine.Help.Ansi.AUTO, Main.helpAnsi(java.util.Map.of("NO_COLOR", ""), null), "an empty NO_COLOR doesn't count");
+        assertEquals(picocli.CommandLine.Help.Ansi.OFF, Main.helpAnsi(java.util.Map.of("NO_COLOR", "yes"), null));
+    }
+
+    /** Spec 044 AC-03: a usage error echoes what was typed, escaped, even with colors on. */
+    @Test
+    void usageErrorsEscapeWhatWasTyped() {
+        assertEquals(2, runWith(java.util.Map.of(), picocli.CommandLine.Help.Ansi.ON, "--bad\u001b]0;pwned\u0007"));
+        String e = err.toString();
+        assertTrue(e.contains("--bad\\e]0;pwned\\x07"), e);
+        assertFalse(e.contains("\u001b]0") || e.contains("\u0007"), "no raw control characters from the arguments: " + e);
+        err.reset();
+        assertEquals(2, runWith(java.util.Map.of(), picocli.CommandLine.Help.Ansi.OFF, "--modl", "x"));
+        assertFalse(err.toString().contains("\u001b"), err.toString());
+        assertTrue(err.toString().contains("--modl"), err.toString());
+    }
+
+    /** Spec 044 AC-04: help colors don't change how replies are printed; they stay escaped. */
+    @Test
+    void repliesStayEscapedWithHelpColorsOn() throws Exception {
+        Path r = replay("Hi \u001b[31mred\u001b[0m.");
+        assertEquals(0, runWith(java.util.Map.of(), picocli.CommandLine.Help.Ansi.ON, "--home", home.toString(), "--cwd", ws.toString(),
+                "--replay", r.toString(), "-p", "x"));
+        String o = out.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(o.contains("Hi \\e[31mred\\e[0m."), o);
+        assertFalse(o.contains("\u001b"), o);
+    }
+
     /** Spec 022: headless output and errors are escaped too. */
     @Test
     void headlessOutputIsEscaped() throws Exception {
