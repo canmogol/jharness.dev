@@ -53,28 +53,21 @@
           ]
         },
         {
-          "name": "maven",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "gradle",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "npm",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
           "name": "http",
           "parameterTypes": [
             "java.lang.String"
           ]
+        },
+        {
+          "name": "tool",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "tools",
+          "parameterTypes": []
         },
         {
           "name": "fetch",

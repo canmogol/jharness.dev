@@ -13,14 +13,14 @@ import java.util.Set;
  */
 public final class Executables {
 
-    /** The tools JHarness runs (D-008, D-009, D-027). */
-    public static final Set<String> ALLOWED = Set.of("git", "rg", "mvn", "gradle", "npm");
+    /** The tools JHarness runs itself (D-008, D-027); the rest come from tool definitions (D-066). */
+    public static final Set<String> BUILT_IN = Set.of("git", "rg");
 
     private Executables() {}
 
     public static Optional<Executable> resolve(String name, String pathEnv, Path workspace) {
-        if (!ALLOWED.contains(name)) {
-            throw new IllegalArgumentException(name + " is not a tool JHarness runs (allowed: " + String.join(", ", new java.util.TreeSet<>(ALLOWED)) + ")");
+        if (!ToolDefinition.EXECUTABLE.matcher(name).matches() || ToolDefinition.REFUSED.contains(name)) {
+            throw new IllegalArgumentException(name + " is not a program JHarness runs (shells and command runners never are; constitution Article IV)");
         }
         if (pathEnv == null) {
             return Optional.empty();

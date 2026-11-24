@@ -136,6 +136,17 @@ jobs:
           cat "$tmp/bg-log.txt"
           grep -q "\[sub-1\]  subagent.started  customAgent=default model=session maxSteps=100 background=true" "$tmp/bg-log.txt"
           grep -q "\[sub-1\]  subagent.completed  stopReason=done steps=1" "$tmp/bg-log.txt"
+          # Tool definitions (spec 028): the shipped files come from the binary, and api.tools() lists them.
+          test -f "$tmp/home/.jharness/tools/maven.json"
+          "$bin" tools --home "$tmp/home" --cwd "$tmp/ws" | tee "$tmp/tools.txt"
+          grep -q "^maven  user  mvn" "$tmp/tools.txt"
+          rm "$tmp/home/.jharness/tools/npm.json"
+          "$bin" tools reset npm --home "$tmp/home" --cwd "$tmp/ws"
+          "$bin" tools check --home "$tmp/home" --cwd "$tmp/ws"
+          printf '%s\n' '{"reply":"```js\nJSON.parse(api.tools()).map(t => t.name).join(\",\")\n```"}' '{"reply":"Listed tools."}' > "$tmp/tl.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/tl.jsonl" -p "tools" | tee "$tmp/tl.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json --type api.call > "$tmp/tl-log.jsonl"
+          grep '"api":"tools"' "$tmp/tl-log.jsonl" | grep -q '"status":"ok"'
 
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check

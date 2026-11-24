@@ -84,6 +84,8 @@ public final class World implements AutoCloseable {
         this.id = id;
         String tag = id + "-" + UUID.randomUUID().toString().substring(0, 8);
         home = Files.createDirectories(tmp.resolve("home"));
+        // The shipped tool definitions, as a first start would write them (spec 028), before the snapshot.
+        dev.jharness.process.ToolDefinitions.seed(home);
         ws = Files.createDirectories(tmp.resolve("ws"));
         outside = Files.createDirectories(tmp.resolve("outside"));
         put(home.resolve(".ssh/id_rsa"), secret("ssh", "CANARY-SSH-" + tag));

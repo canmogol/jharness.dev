@@ -16,7 +16,6 @@ import dev.jharness.config.Timeouts;
 import dev.jharness.events.EventBus;
 import dev.jharness.events.Json;
 import dev.jharness.events.Origin;
-import dev.jharness.process.BuildOperations.Tool;
 import dev.jharness.security.Workspace;
 
 /**
@@ -30,7 +29,7 @@ class BuildToolsTest {
     Path root;
     TestProxy net;
     BuildOperations ops;
-    Map<Tool, Executable> tools;
+    Map<String, Executable> tools;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -39,9 +38,9 @@ class BuildToolsTest {
         net = new TestProxy(root, bus, tmp);
         assumeTrue(net.sandbox.available(), "no OS sandbox here: " + net.sandbox.reason());
         ProcessRunner runner = new ProcessRunner(bus, () -> Origin.main(1), 30_000, net.sandbox);
-        tools = BuildOperations.findOnPath(root);
-        ops = new BuildOperations(runner, new Workspace(root), Timeouts.defaults(), true, tools,
-                Path.of(System.getProperty("user.home")), System.getenv("JAVA_HOME"));
+        tools = BuildOperations.findOnPath(ToolDefinitions.defaults(), root);
+        ops = new BuildOperations(runner, new Workspace(root), Timeouts.defaults(), true, ToolDefinitions.defaults(), tools,
+                Path.of(System.getProperty("user.home")), System.getenv("JAVA_HOME"), false);
     }
 
     @AfterEach
@@ -51,8 +50,8 @@ class BuildToolsTest {
         }
     }
 
-    private ProcessResult run(Tool t, String json) {
-        assumeTrue(tools.containsKey(t), t.executable() + " is not installed");
+    private ProcessResult run(String t, String json) {
+        assumeTrue(tools.containsKey(t), t + " is not installed");
         return ops.run(t, Json.parseObject(json));
     }
 
@@ -64,7 +63,7 @@ class BuildToolsTest {
                   <groupId>t</groupId><artifactId>t</artifactId><version>1</version><packaging>pom</packaging>
                 </project>
                 """);
-        ProcessResult r = run(Tool.MAVEN, "{\"op\":\"compile\"}");
+        ProcessResult r = run("maven", "{\"op\":\"compile\"}");
         assertEquals(0, r.exitCode(), r.output());
         assertTrue(r.output().contains("BUILD SUCCESS"), r.output());
         assertFalse(r.full().contains(net.password()), "the proxy password must not reach the output");
@@ -87,7 +86,7 @@ class BuildToolsTest {
         assumeTrue(Files.isDirectory(plugin), "maven-install-plugin 3.1.4 is not in ~/.m2");
         Path installed = Path.of(System.getProperty("user.home"), ".m2", "repository", "dev", "jharness", "test", "build-params");
         try {
-            ProcessResult r = run(Tool.MAVEN, "{\"op\":\"install\",\"skipTests\":true,\"profiles\":\"dev\",\"threads\":\"2\",\"timeoutMs\":300000}");
+            ProcessResult r = run("maven", "{\"op\":\"install\",\"skipTests\":true,\"profiles\":\"dev\",\"threads\":\"2\",\"timeoutMs\":300000}");
             assertEquals(0, r.exitCode(), r.output());
             assertTrue(r.output().contains("BUILD SUCCESS"), r.output());
             assertTrue(Files.isRegularFile(installed.resolve("1/build-params-1.pom")), r.output());
@@ -107,11 +106,11 @@ class BuildToolsTest {
         Files.writeString(root.resolve("package.json"), "{\"name\":\"t\",\"version\":\"1.0.0\",\"scripts\":{"
                 + "\"test\":\"node -e \\\"console.log('ok test')\\\"\","
                 + "\"probe\":\"node probe.js 127.0.0.1:" + net.stubPort() + "\"}}");
-        ProcessResult t = run(Tool.NPM, "{\"op\":\"test\"}");
+        ProcessResult t = run("npm", "{\"op\":\"test\"}");
         assertEquals(0, t.exitCode(), t.output());
         assertTrue(t.output().contains("ok test"), t.output());
 
-        ProcessResult p = run(Tool.NPM, "{\"op\":\"run\",\"script\":\"probe\"}");
+        ProcessResult p = run("npm", "{\"op\":\"run\",\"script\":\"probe\"}");
         assertTrue(p.output().contains("proxied ok"), p.output());
         assertTrue(p.output().contains("direct-failed"), p.output());
         assertFalse(p.full().contains(net.password()), p.full());
@@ -123,7 +122,7 @@ class BuildToolsTest {
         String name = ".jharness-test-" + Long.toHexString(System.nanoTime());
         Files.writeString(root.resolve("package.json"), "{\"name\":\"t\",\"version\":\"1.0.0\",\"scripts\":{"
                 + "\"test\":\"node -e \\\"require('fs').writeFileSync(require('os').homedir()+'/" + name + "','x')\\\"\"}}");
-        ProcessResult r = run(Tool.NPM, "{\"op\":\"test\"}");
+        ProcessResult r = run("npm", "{\"op\":\"test\"}");
         assertNotEquals(0, r.exitCode(), r.output());
         assertFalse(Files.exists(home.resolve(name)));
     }
@@ -132,7 +131,7 @@ class BuildToolsTest {
     void gradleRunsInTheSandbox() throws Exception {
         Files.writeString(root.resolve("settings.gradle"), "rootProject.name = 't'\n");
         Files.writeString(root.resolve("build.gradle"), "plugins { id 'base' }\n");
-        ProcessResult r = run(Tool.GRADLE, "{\"op\":\"build\",\"timeoutMs\":300000}");
+        ProcessResult r = run("gradle", "{\"op\":\"build\",\"timeoutMs\":300000}");
         assertEquals(0, r.exitCode(), r.output());
         assertTrue(r.output().contains("BUILD SUCCESSFUL"), r.output());
     }

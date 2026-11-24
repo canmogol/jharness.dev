@@ -36,7 +36,7 @@ public record AgentDefinition(String name, String source, Path dir, String descr
 
     /** The {@code api} methods an agent may list in {@code tools}; {@code readContext} is always allowed. */
     public static final Set<String> API = Set.of("readContext", "readFile", "writeFile", "editFile", "listFiles", "grep", "git",
-            "maven", "gradle", "npm", "http", "fetch", "emit", "spawnAgent", "models", "waitAgent", "agents", "stopAgent");
+            "tool", "tools", "http", "fetch", "emit", "spawnAgent", "models", "waitAgent", "agents", "stopAgent");
 
     static final Set<String> KEYS = Set.of("description", "model", "tools", "maxSteps", "plan");
 
@@ -132,8 +132,9 @@ public record AgentDefinition(String name, String source, Path dir, String descr
             tools = new LinkedHashSet<>();
             tools.add("readContext");
             for (JsonNode x : t) {
-                if (!x.isTextual() || !API.contains(x.asText())) {
-                    throw new ConfigException(where + ": \"tools\" entry " + x + " is not an api method (" + String.join(", ", new TreeSet<>(API)) + ")");
+                if (!x.isTextual() || !API.contains(x.asText()) && !x.asText().matches("tool:[a-z][a-z0-9-]{0,31}")) {
+                    throw new ConfigException(where + ": \"tools\" entry " + x + " is not an api method (" + String.join(", ", new TreeSet<>(API))
+                            + ") or tool:NAME, such as tool:maven");
                 }
                 tools.add(x.asText());
             }

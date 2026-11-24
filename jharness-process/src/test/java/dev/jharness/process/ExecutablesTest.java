@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.nio.file.attribute.PosixFilePermissions;
 
 import org.junit.jupiter.api.Test;
@@ -15,9 +16,10 @@ class ExecutablesTest {
     Path tmp;
 
     @Test
-    void onlyKnownToolsResolve() {
-        assertThrows(IllegalArgumentException.class, () -> Executables.resolve("sh", "/bin", tmp));
-        assertThrows(IllegalArgumentException.class, () -> Executables.resolve("npx", "/usr/bin", tmp));
+    void shellsCommandRunnersAndPathsNeverResolve() {
+        for (String name : List.of("sh", "bash", "env", "sudo", "xargs", "busybox", "../git", "bin/git", "/bin/sh", "-x", "")) {
+            assertThrows(IllegalArgumentException.class, () -> Executables.resolve(name, "/bin:/usr/bin", tmp), name);
+        }
     }
 
     @Test

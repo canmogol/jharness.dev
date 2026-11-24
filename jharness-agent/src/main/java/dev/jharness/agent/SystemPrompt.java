@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import dev.jharness.sandbox.AgentIsolate;
 
@@ -61,6 +62,61 @@ public final class SystemPrompt {
         if (a.helpers() != null) {
             b.append("\nThese helper functions are defined in every block, from the agent's helpers.js:\n\n```js\n")
                     .append(a.helpers().strip()).append("\n```\n");
+        }
+        return b.toString();
+    }
+
+    /**
+     * The tools section (spec 028): each defined tool, its operations with the fields each takes, and
+     * the fields' types, from the {@code api.tools()} list.
+     */
+    public static String tools(String listJson) {
+        com.fasterxml.jackson.databind.JsonNode list = dev.jharness.events.Json.parse(listJson);
+        StringBuilder b = new StringBuilder("\n# Tools\n\nRun these with api.tool(name, {op, ...fields}); api.tools() returns the same list as JSON. "
+                + "Each run needs a trusted project and the user's approval.\n");
+        if (list.isEmpty()) {
+            return b.append("\nNo tools are defined.\n").toString();
+        }
+        for (var t : list) {
+            b.append("\n- ").append(t.path("name").asText());
+            if (!t.path("available").asBoolean()) {
+                b.append(" (not available: ").append(t.path("reason").asText()).append(')');
+            }
+            if (!t.path("description").asText().isEmpty()) {
+                b.append(": ").append(t.path("description").asText());
+            }
+            if (t.path("source").asText().equals("project")) {
+                b.append(" [defined by the project]");
+            }
+            b.append('\n');
+            var ops = t.path("operations");
+            if (ops.isObject() && !ops.isEmpty()) {
+                List<String> parts = new java.util.ArrayList<>();
+                ops.properties().forEach(e -> {
+                    List<String> fs = new java.util.ArrayList<>();
+                    e.getValue().forEach(x -> fs.add(x.asText()));
+                    parts.add(e.getKey() + (fs.isEmpty() ? "" : " (" + String.join(", ", fs) + ")"));
+                });
+                b.append("  operations: ").append(String.join("; ", parts)).append('\n');
+            }
+            var fields = t.path("fields");
+            if (fields.isObject() && !fields.isEmpty()) {
+                List<String> parts = new java.util.ArrayList<>();
+                fields.properties().forEach(e -> {
+                    var f = e.getValue();
+                    String type = f.path("type").asText();
+                    if (type.equals("enum")) {
+                        List<String> vs = new java.util.ArrayList<>();
+                        f.path("values").forEach(x -> vs.add(x.asText()));
+                        type = String.join("|", vs);
+                    } else if (type.equals("integer")) {
+                        type = "integer " + f.path("min").asLong() + ".." + f.path("max").asLong();
+                    }
+                    String d = f.path("description").asText();
+                    parts.add(e.getKey() + " (" + type + (f.path("required").asBoolean() ? ", required" : "") + ")" + (d.isEmpty() ? "" : ": " + d));
+                });
+                b.append("  fields: ").append(String.join("; ", parts)).append('\n');
+            }
         }
         return b.toString();
     }

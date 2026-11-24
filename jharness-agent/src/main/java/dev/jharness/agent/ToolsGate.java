@@ -7,7 +7,10 @@ import dev.jharness.security.Decision;
 import dev.jharness.security.Operation;
 import dev.jharness.security.PermissionGate;
 
-/** Refuses the {@code api} methods a custom agent doesn't list in {@code tools} (spec 025), before the usual gate. */
+/**
+ * Refuses the {@code api} methods a custom agent doesn't list in {@code tools} (spec 025), before the usual
+ * gate. {@code tool} allows every defined tool; {@code tool:NAME} allows one (spec 028).
+ */
 final class ToolsGate implements PermissionGate {
 
     private final PermissionGate next;
@@ -22,7 +25,9 @@ final class ToolsGate implements PermissionGate {
 
     @Override
     public Decision decide(Operation op) {
-        if (!tools.contains(op.api())) {
+        boolean allowed = tools.contains(op.api())
+                || op.api().equals("tool") && tools.contains("tool:" + op.detail().path("tool").asText());
+        if (!allowed) {
             return Decision.deny("agent " + agent + " can't use api." + op.api() + " (its tools: "
                     + String.join(", ", new TreeSet<>(tools)) + ")");
         }

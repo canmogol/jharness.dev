@@ -65,6 +65,7 @@ final class SubagentRunner implements Subagents {
     private volatile String context;
     private volatile String projectMd;
     private volatile String userMd;
+    private volatile String toolsText = "";
     private final AtomicInteger started = new AtomicInteger();
     private final Map<Integer, AtomicInteger> perTurn = new ConcurrentHashMap<>();
     private volatile ApiServices parentServices;
@@ -84,7 +85,8 @@ final class SubagentRunner implements Subagents {
     }
 
     /** Once the session's services and loop exist: the workspace context and memory go into each subagent's prompt. */
-    void bind(ApiServices services, AgentLoop loop, String context, String projectMd, String userMd) {
+    void bind(ApiServices services, AgentLoop loop, String context, String projectMd, String userMd, String toolsText) {
+        this.toolsText = toolsText;
         this.parentServices = services;
         this.parentLoop = loop;
         this.context = context;
@@ -234,7 +236,7 @@ final class SubagentRunner implements Subagents {
         }
         ApiServices services = new ApiServices(p.files(), gate, bus, turns, p.search(), p.git(), p.checkpoints(), p.builds(), p.http(), null);
         ModelProvider provider = provider(model, def, turns, parent);
-        String system = SystemPrompt.build(context, projectMd, userMd, def) + NOTE;
+        String system = SystemPrompt.build(context, projectMd, userMd, def) + toolsText + NOTE;
         Run run = new Run(name, task, def == null ? "default" : def.name(), modelName(model, def), background, steps);
         runs.add(run);
         bus.publish(turns.get(), "subagent.started", Json.object().put("task", task.length() > 2000 ? task.substring(0, 2000) + "…" : task)
