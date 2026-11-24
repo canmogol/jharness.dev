@@ -1,6 +1,16 @@
 # Changelog
 
-<!-- last-commit: 8700eb24f3d04397a6b624b206f9b07565cd128e -->
+<!-- last-commit: 6ed19f354221a0648e389ca3ced90c122af71e4b -->
+
+## 2026-11-24 · 039 Token counting and compaction
+
+- Each model profile has a `contextWindow` (default 32,768 for `openai-compatible`, 200,000 for `anthropic`); it must be larger than `maxTokens`.
+- JHarness counts the context from the tokens the model reports, plus an estimate (about 3.5 characters per token) for newer messages. No tokenizer ships in the binary.
+- With `agent.autoCompact` on (the default), the conversation is summarized by the working model before a call once it reaches `agent.compactAt` (0.80) of the window less the reply. A small current turn is kept as it is. A failed summary leaves the conversation unchanged and isn't retried on every step.
+- `/context` shows how full the context is; `/compact` summarizes now. `/undo` and `/rewind` stop at the summary.
+- Subagents compact their own conversations. `context.compacted` and `context.compact_failed` record it, and `turn.completed` carries `contextTokens`.
+- CI's native step checks that a nearly full context compacts.
+- Decision: token counting and compaction (D-077, Q83).
 
 ## 2026-11-24 · Phase 3 gate
 
@@ -15,6 +25,7 @@
 - Reads are never sent. The start-up line says when changes and their context leave your machine.
 - `reviewer.ready`, `review.verdict` and `review.failed` record it, and CI's native step checks a refusal against a fake server.
 - Decision: D-031 refined (Q82).
+
 ## 2026-11-24 · D-031 Action reviewer back-end
 
 - The optional action reviewer is now one kind of back-end: a decision model behind the System One API (`POST /v1/systemone`), such as hosted Jev or a locally running equivalent like Laya. It can still only tighten decisions.
