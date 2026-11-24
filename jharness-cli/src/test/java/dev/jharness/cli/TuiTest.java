@@ -199,6 +199,33 @@ class TuiTest {
         assertTrue(sc.matches("(?s).*sub-1 +stopped .*"), sc);
     }
 
+    /** Spec 030: /follow shows a running background subagent's reply and steps until it ends. */
+    @Test
+    void followShowsABackgroundSubagentLive() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws30"));
+        // Main starts sub-1 and waits until its first step runs, so sub-1 takes its reply (a 2 s block) before main's next.
+        Tui tui = new Tui(terminal("go\n/follow sub-9\n/follow\n/follow sub-1\n/agents\n/exit\n"), null);
+        try (Session session = replaySession(tmp.resolve("home30"), ws, "{}", tui,
+                "```js\napi.spawnAgent({task: 'count to two', background: true});\n"
+                        + "for (let i = 0; i < 200 && JSON.parse(api.agents())[0].steps < 1; i++) { api.waitAgent({agent: 'sub-1', timeoutMs: 50}); }\n'ok'\n```",
+                "```js\nconst t = Date.now(); while (Date.now() - t < 2000) {}\n'slept'\n```",
+                "Started it.",
+                "Sub says hi.\nAll done.")) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("No subagent sub-9 in this session. Running: sub-1."), sc);
+        int follow = sc.indexOf("Following sub-1 (count to two, 1 steps so far).");
+        assertTrue(follow > 0, sc);
+        String watched = sc.substring(follow);
+        assertTrue(watched.contains("▸ [sub-1] step 1: ok"), watched);
+        assertTrue(watched.contains("Sub says hi.\nAll done."), "its reply streams like the main loop's: " + watched);
+        assertTrue(watched.contains("▸ [sub-1] done after 1 steps"), watched);
+        assertTrue(watched.contains("sub-1 has ended; /agents sub-1 shows its events."), watched);
+        assertTrue(watched.contains("sub-1 isn't running; /agents sub-1 shows its events."), watched);
+        assertFalse(sc.substring(0, follow).contains("Sub says hi."), "not shown before /follow");
+    }
+
     /** Spec 020 AC-06. */
     @Test
     void modelRetriesShowAsSteps() throws Exception {
@@ -299,7 +326,7 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/model", "/agent", "/agents", "/stop", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
+        assertEquals(List.of("/model", "/agent", "/agents", "/follow", "/stop", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
                 List.copyOf(Tui.COMMANDS.keySet()));
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
         assertEquals("quit (or Ctrl-D)", Tui.COMMANDS.get("/exit"));

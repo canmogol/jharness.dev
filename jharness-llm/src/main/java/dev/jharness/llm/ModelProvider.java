@@ -20,4 +20,12 @@ public interface ModelProvider {
     /** Stops a running {@link #stream} from another thread; it then throws {@link ModelException}. */
     default void cancel() {
     }
+
+    /**
+     * This provider for another agent that shares it, publishing that agent's events under its own
+     * name (spec 030); providers built per agent return themselves.
+     */
+    default ModelProvider forAgent(java.util.function.Supplier<dev.jharness.events.Origin> origin) {
+        return this;
+    }
 }
