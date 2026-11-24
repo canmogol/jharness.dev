@@ -1,6 +1,17 @@
 # Changelog
 
-<!-- last-commit: 8db40129a32543a0d0b0d29406b2f2cbd34d3a35 -->
+<!-- last-commit: 0f472b5270ee6850e292532fc871904ae1113b07 -->
+
+## 2026-11-24 · 046 Sorted help
+
+- `/help` lists the built-in commands in alphabetical order, each with its forms right under it (`/model NAME` under `/model`), then a `Keys:` section for `@PATH`, the newline keys and Esc. Tab completion follows the same order.
+- Decision: D-062 refined (Q90).
+
+## 2026-11-24 · 045 Tools table
+
+- `jharness tools` prints a table: `NAME SOURCE EXECUTABLE STATUS OPERATIONS`, each column as wide as its longest value. `STATUS` is `ok`, `not found on PATH` or `broken`; operations are comma-separated in the last column.
+- Files that differ from the shipped default, and each broken file's error, are listed after the table. Values are escaped as before.
+- Decision: D-066 refined (Q89).
 
 ## 2026-11-24 · 044 Colored help
 
