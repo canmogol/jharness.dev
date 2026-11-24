@@ -928,7 +928,7 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ## D-062 — `/` and Tab list the commands
 
-**Decision.** Tab on a prompt line holding only `/` prints the `/help` text above the prompt and keeps the `/`. Tab after a partial first word starting with `/` completes the command name; several matches are listed with their descriptions. Names and descriptions are parsed from the `/help` text. Tab elsewhere completes nothing, as before.
+**Decision.** Tab on a prompt line holding only `/` prints the `/help` text above the prompt and keeps the `/`. Tab after a partial first word starting with `/` completes the command name; several matches are listed with their descriptions. Names and descriptions are parsed from the `/help` text. The help lists the commands in alphabetical order, each with its forms (`/model NAME` under `/model`), then a `Keys:` section for `@PATH`, the newline keys and Esc (spec 046). Tab elsewhere completes nothing, as before.
 
 **Why.** The user asked for `/` and Tab to show the commands. Completing names is what Tab does in every shell, and taking the list from the help text keeps one source.
 
@@ -1431,6 +1431,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q87 | How are sessions resumed and forked? | The conversation is saved after each turn in a state file next to the log; `--resume` continues the same session, `--fork` copies it into a new one; earlier turns can't be rewound | Exact resume without re-explaining; branching without losing work | D-081 |
 | Q88 | Should `jharness --help` keep picocli's colors? | Yes: picocli's help, version and usage errors use the raw streams, colored only on a terminal and not with `NO_COLOR`; usage errors escape the typed arguments; everything else stays escaped | The help was unreadable on a terminal | D-060 |
 | Q89 | How should `jharness tools` list the tools? | A table: `NAME SOURCE EXECUTABLE STATUS OPERATIONS`, columns as wide as their longest value, escaped values; edited and broken files noted below | The rows didn't line up and had no headers | D-066 |
+| Q90 | Should `/help` list the commands in alphabetical order? | Yes: commands A to Z with their forms; keys and `@PATH` in their own section at the end; Tab completion follows the same order | Easier to find a command | D-062 |
 
 ---
 

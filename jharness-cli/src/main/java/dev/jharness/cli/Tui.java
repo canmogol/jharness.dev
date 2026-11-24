@@ -36,38 +36,40 @@ import dev.jharness.events.Event;
 /** The terminal UI (AC-03, AC-05): line editing and history, streamed replies, code steps, slash commands. */
 final class Tui {
 
+    /** Commands in alphabetical order, each with its forms; then the keys (spec 046). */
     static final String HELP = """
             Commands:
-              /model          list model profiles
-              /model NAME     switch to another profile
               /agent          list custom agents (start one with jharness --agent NAME)
-              /hooks          list the JS hooks in ~/.jharness/hooks/ and the project's .jharness/hooks/
-              /commands       list your slash commands from ~/.jharness/commands/ and the project's .jharness/commands/
-              /mcp            list the MCP servers from your settings and their tools
               /agents         list this session's subagents
               /agents NAME    show a subagent's last 20 events
-              /follow [NAME]  watch a background subagent live, like the main loop (Esc stops watching)
-              /switch NAME    talk to a subagent: your messages and its questions go to it (/switch main goes back)
-              /stop NAME|all  stop a running background subagent, or all of them
-              /plan           turn plan mode on or off (read-only; the agent proposes a plan for you to approve)
-              /todos          show the agent's todo list
-              /diff           show the last turn's file changes
-              /undo           undo the last turn's file changes and remove it from the conversation
-              /rewind N       undo every turn after turn N (add --force to overwrite your own edits)
-              /context        show how full the model's context is
+              /commands       list your slash commands from ~/.jharness/commands/ and the project's .jharness/commands/
               /compact        summarize the conversation now to free context
+              /context        show how full the model's context is
+              /diff           show the last turn's file changes
               /events         show the event level and the session log file
               /events LEVEL   show none, steps or all events
-              /thinking       show or hide the model's thinking
+              /exit           quit (also /quit, /q, or Ctrl-D)
+              /follow [NAME]  watch a background subagent live, like the main loop (Esc stops watching)
+              /help           show this help (or type / and press Tab)
+              /hooks          list the JS hooks in ~/.jharness/hooks/ and the project's .jharness/hooks/
+              /mcp            list the MCP servers from your settings and their tools
+              /model          list model profiles
+              /model NAME     switch to another profile
               /network        list the network rules, built-in denies and this session's allows
               /network allow|deny X [--project]   add a rule (host, *.suffix, IP or CIDR, optional :port)
               /network remove X [--project]       remove the rules naming X
               /network reload re-read both rules files
+              /plan           turn plan mode on or off (read-only; the agent proposes a plan for you to approve)
+              /rewind N       undo every turn after turn N (add --force to overwrite your own edits)
+              /stop NAME|all  stop a running background subagent, or all of them
+              /switch NAME    talk to a subagent: your messages and its questions go to it (/switch main goes back)
+              /thinking       show or hide the model's thinking
+              /todos          show the agent's todo list
+              /undo           undo the last turn's file changes and remove it from the conversation
+            Keys:
               @PATH           attach a file or folder to the prompt (Tab completes the path)
               Shift+Enter, Alt+Enter, Ctrl-J  new line; Enter sends
               Esc             stop the running turn
-              /help           show this help (or type / and press Tab)
-              /exit           quit (also /quit, /q, or Ctrl-D)
             """;
 
     /** Each command in {@link #HELP} and its first description line, for Tab completion (spec 024). */

@@ -420,8 +420,11 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/model", "/agent", "/hooks", "/commands", "/mcp", "/agents", "/follow", "/switch", "/stop", "/plan", "/todos", "/diff", "/undo", "/rewind", "/context", "/compact", "/events", "/thinking", "/network", "/help", "/exit"),
-                List.copyOf(Tui.COMMANDS.keySet()));
+        assertEquals(List.of("/agent", "/agents", "/commands", "/compact", "/context", "/diff", "/events", "/exit", "/follow", "/help", "/hooks", "/mcp",
+                "/model", "/network", "/plan", "/rewind", "/stop", "/switch", "/thinking", "/todos", "/undo"), List.copyOf(Tui.COMMANDS.keySet()));
+        // Spec 046: the help lists the commands in alphabetical order, then the keys.
+        assertEquals(Tui.COMMANDS.keySet().stream().sorted().toList(), List.copyOf(Tui.COMMANDS.keySet()));
+        assertTrue(Tui.HELP.indexOf("Keys:") > Tui.HELP.indexOf("/undo") && Tui.HELP.indexOf("@PATH") > Tui.HELP.indexOf("Keys:"), Tui.HELP);
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
         assertEquals("quit (also /quit, /q, or Ctrl-D)", Tui.COMMANDS.get("/exit"));
     }
