@@ -108,21 +108,23 @@ class ToolApiTest {
 
     @Test
     void anAgentsToolsCanNameOneTool() throws Exception {
-        workspace();
+        Path ws = workspace();
+        // A second runnable tool, so the refusal can't come from a missing executable.
+        Files.writeString(ws.resolve(".jharness/tools/gitw.json"), Files.readString(ws.resolve(".jharness/tools/gitv.json")));
         Path a = Files.createDirectories(tmp.resolve("home/.jharness/agents/one"));
         Files.writeString(a.resolve("agent.json"), "{\"description\":\"one tool\",\"tools\":[\"tool:gitv\",\"tools\"]}");
         AgentDefinition one = AgentDefinition.resolve(tmp.resolve("home"), tmp.resolve("ws"), true, "one");
         session(true, one, """
                 ```js
                 const out = [];
-                for (const f of [() => api.tool('gitv', 'version'), () => api.tool('maven', 'clean')]) {
+                for (const f of [() => api.tool('gitv', 'version'), () => api.tool('gitw', 'version')]) {
                   try { f(); out.push('ran'); } catch (e) { out.push(e.message); }
                 }
                 out.join('\\n')
                 ```""", "done");
         String[] lines = resultOf(1).substring(resultOf(1).indexOf("Result: ") + 8).split("\n");
         assertFalse(lines[0].contains("can't use"), "tool:gitv allows gitv: " + lines[0]);
-        assertTrue(lines[1].contains("agent one can't use api.tool"), "maven isn't in its tools: " + lines[1]);
+        assertTrue(lines[1].contains("agent one can't use api.tool"), "gitw isn't in its tools: " + lines[1]);
         var e = assertThrows(dev.jharness.config.ConfigException.class, () -> {
             Files.writeString(a.resolve("agent.json"), "{\"description\":\"x\",\"tools\":[\"tool:Bad!\"]}");
             AgentDefinition.resolve(tmp.resolve("home"), tmp.resolve("ws"), true, "one");
