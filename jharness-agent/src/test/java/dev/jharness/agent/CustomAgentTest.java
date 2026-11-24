@@ -134,7 +134,7 @@ class CustomAgentTest {
         git(ws, "add", ".");
         git(ws, "commit", "-q", "-m", "init");
         Files.writeString(ws.resolve("App.java"), "class App { int add(int a, int b) { return a - b; } }\n");
-        Path example = Path.of("..", "examples", "agents", "reviewer").toAbsolutePath().normalize();
+        Path example = Path.of("..", "examples", ".jharness", "agents", "reviewer").toAbsolutePath().normalize();
         Path into = Files.createDirectories(ws.resolve(".jharness/agents/reviewer"));
         for (String f : List.of("agent.json", "prompt.md", "helpers.js")) {
             Files.copy(example.resolve(f), into.resolve(f));

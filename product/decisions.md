@@ -18,8 +18,8 @@ Last updated: 2026-11-24
 | D-005 | Only strings and JSON cross the isolate boundary | Accepted |
 | D-006 | Events are stringified JSON with a host-stamped envelope | Accepted |
 | D-007 | RunJS is the model's only action | Accepted |
-| D-008 | Agent code has no shell; the host runs typed git / Maven / Gradle / npm operations | Accepted |
-| D-009 | v1 build tools: git, Maven, Gradle, npm | Accepted |
+| D-008 | Agent code has no shell; the host runs typed git / Maven / Gradle / npm operations | Accepted; amended by D-066 (Maven, Gradle and npm come from tool definitions) |
+| D-009 | v1 build tools: git, Maven, Gradle, npm | Accepted; amended by D-066 (build tools are definition files) |
 | D-010 | State-changing operations ask for approval; approvals can be made permanent per project | Accepted |
 | D-011 | Project trust gates project code and project settings; trusted settings may override user rules | Accepted |
 | D-012 | Users define network allow and deny rules for domains and IPs | Accepted |
@@ -60,7 +60,7 @@ Last updated: 2026-11-24
 | D-047 | Phase 2 order: proxy and rules, then the OS sandbox, then build tools; in-house proxy in `jharness-net`; "always" network answers go to the project rules file | Accepted |
 | D-048 | Every child process runs in an OS sandbox (Seatbelt; bubblewrap on Linux): writes only to the workspace and a private temp folder, credential folders hidden, no network until spec 013; no sandbox, no process | Accepted |
 | D-049 | Build tools: typed Maven, Gradle and npm operations in trusted projects; network only to the proxy port (Seatbelt rule on macOS, an in-binary bridge over a Unix socket on Linux); writes to their caches only | Accepted |
-| D-050 | Gradle on macOS may use any loopback port, for its daemon, and so can also accept LAN connections: a recorded exception to Article V | Accepted |
+| D-050 | Gradle on macOS may use any loopback port, for its daemon, and so can also accept LAN connections: a recorded exception to Article V | Accepted; amended by D-066 (`loopback` in a user-folder definition) |
 | D-051 | Shift+Enter for a new line through xterm `modifyOtherKeys` (on only while the prompt reads); `agent.maxSteps` 100 by default, at most 500 | Accepted |
 | D-052 | Command-execution checks: executables pinned to the file they resolved to; named environment variables only; argument size caps; git never runs programs from the repo's own config (filters, signing) and ignores `core.worktree` | Accepted |
 | D-053 | A read-only web session viewer, built in Phase 4 next to headless mode but not gating v0.1, on `127.0.0.1` with a session token; no approvals from the browser yet; a companion UI with approvals and phone access comes after v0.1 | Accepted |
@@ -71,11 +71,13 @@ Last updated: 2026-11-24
 | D-058 | Model requests that fail before anything reached the user are retried: 408, 409, 429, 5xx, failed connections and overloaded stream errors; `retry-after` or exponential back-off; `retries`, `retryMaxWait` and `responseTimeout` per profile; Esc ends a wait | Accepted |
 | D-059 | Debugging tools: `--debug` shows every event and the thinking and prints stack traces; `jharness log` lists and prints sessions with control characters escaped; host crashes write a local crash report (no event bodies, newest 20 kept, never sent) and exit 3; `model.response` logs status, request id and allow-listed headers | Accepted |
 | D-060 | Everything JHarness prints (TUI, `-p`, errors) escapes C0 controls except newline and tab, DEL, C1 controls and bidi controls and drops carriage returns; only its own styling reaches the terminal raw | Accepted |
-| D-061 | Typed build parameters that only skip work, pick a project profile or change parallelism: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev`; the approval shows them, "always" keys on the operation | Accepted |
+| D-061 | Typed build parameters that only skip work, pick a project profile or change parallelism: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev`; the approval shows them, "always" keys on the operation | Accepted; amended by D-066 (the parameters live in the shipped definitions) |
 | D-062 | In the TUI, Tab on a lone `/` prints the `/help` text above the prompt; Tab after a partial `/command` completes it, listing matches with descriptions taken from the help text | Accepted |
 | D-063 | Custom agents: a folder with `agent.json` (description, model, tools, maxSteps, plan), `prompt.md` and `helpers.js`; chosen with `--agent` at start; they only narrow; project agents only in trusted projects | Accepted |
 | D-064 | `api.spawnAgent` runs a subagent: fresh conversation with the task, own isolate (`subagent` profile), the session's gate narrowed by a custom agent, optional model profile; depth one, 10 per turn and 100 steps by default (configurable); `api.models()` lists profiles; returns its final reply | Accepted |
 | D-065 | Background subagents: `spawnAgent({background: true})`, `api.waitAgent`, `api.agents`, `api.stopAgent`; at most 4 running (configurable); they never ask (questions denied as unattended); uncollected replies come with the next prompt; Esc leaves them running, closing the session stops them; `/agents`, `/stop`, `jharness log --agent/--source` | Accepted |
+| D-066 | Build tools are JSON definition files in `~/.jharness/tools/` (seeded on first run from `examples/.jharness/tools/`) and a trusted project's `.jharness/tools/`; typed fields map to fixed arguments; git and `rg` stay in code | Accepted |
+| D-067 | `api.tool(name, request)` runs every defined tool and `api.tools()` lists them; `api.maven`, `api.gradle` and `api.npm` are removed | Accepted |
 
 ---
 
@@ -962,6 +964,48 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-066 — Build tools are definition files
+
+**Decision.**
+- Maven, Gradle and npm are no longer coded in Java. Each tool is a JSON file `NAME.json`; git and `rg` stay in code.
+- **Where they live.** JHarness reads `~/.jharness/tools/` and, in a trusted project, `.jharness/tools/`. A project file with the same name replaces the user's for that project. An untrusted project's tool files are ignored.
+- **Defaults.** `examples/.jharness/tools/` in this repo holds `maven.json`, `gradle.json` and `npm.json`, which give exactly today's operations and parameters (D-061). The build embeds them. On first run, when `~/.jharness/tools/` doesn't exist, JHarness creates it and copies them in; after that it reads only the folders, so the user edits, adds or deletes files freely. Upgrades never overwrite them: `jharness tools reset [NAME]` writes the shipped default again, and `jharness tools list` marks files that differ from it.
+- **Format.**
+  - `description`, `executable` (a name looked up on `PATH`, never in the workspace), optional `wrapper` (`file`, optional `checksum` properties file that must pin `distributionSha256Sum`).
+  - `proxy`: how the tool reaches the egress proxy, one of the built-in methods `maven-settings`, `java-options`, `npm`, `env` (`HTTP_PROXY`, `HTTPS_PROXY`) or `none`. `javaHome: true` passes `JAVA_HOME`. `env` sets fixed variables. `writable` lists cache folders (`~/…`) the OS sandbox lets it write besides the workspace and its temp folder.
+  - `args` come before every operation; `offline` adds `args` or `env` in offline mode. `{proxySettings}` is Maven's generated settings file.
+  - `operations`: each is an argv template. `{field}` placeholders say which fields the operation takes; a whole-element placeholder expands to the field's `args` or to nothing; one inside an element (`{project}build`) expands to a single string.
+  - `fields`: `type` `flag` (JSON true adds its `args`), `string` (must fully match `pattern`), `enum` (`values`, each with its `args`), `integer` (`min`, `max`) or `folder` (an existing folder inside the workspace). `{}` in `args` is the value. `required`, `default`, `description`, and named host checks such as `npm-script` (the script must exist in `package.json`). `conflicts` lists fields that can't be used together.
+- **Rules every definition follows.** Loading checks the file and fails with a clear message: unknown keys, bad patterns (anchored, at most 500 characters), placeholders without fields. A value that starts with `-` is always refused. The executable may not be a shell or a command runner (`sh`, `bash`, `dash`, `zsh`, `ksh`, `csh`, `tcsh`, `fish`, `env`, `sudo`, `su`, `doas`, `xargs`, `nohup`, `nice`, `timeout`, `busybox`) or contain a path separator. Every tool needs a trusted project, asks for approval, runs in the OS sandbox and reaches the network only through the proxy.
+- **What only the user's folder may set.** `wrapper` (a workspace executable) and `loopback` (D-050). A project definition that sets either is refused.
+- **Project tools are shown.** The trust question lists the tools the project defines, each with its executable and operations and whether it replaces one of the user's, so trusting the project is a choice about them too. Each start in a trusted project prints one line naming the project's tools. When a project tool file is new or changed since the user last confirmed it, JHarness shows it and asks whether to use the project's tools this session; no means they are ignored. Confirmed versions are recorded with the trust entry (a hash per file).
+- **Approvals.** The question names the tool, where its definition came from (`user` or `project`) and the fields. "Always" saves the tool, the operation and the resolved executable, so a changed executable asks again.
+- **Layout.** `examples/.jharness/` mirrors `~/.jharness/`: `tools/` and `agents/` (the reviewer example moves from `examples/agents/`).
+
+**Why.** Users want to tighten what a build tool may do (drop `install`, remove `threads`) or add a tool such as Go without waiting for a release. Definitions keep the D-008 rule that only typed, checked values reach a command line, while moving the list of operations and fields into data. The proxy methods, the sandbox and the checks stay in code, so a definition can't weaken them. Copying the defaults into the user's folder makes them visible and editable in the place JHarness reads; trusted projects may add tools because a trusted project already runs its own build code (D-011), but the user sees every project tool when trusting it and again whenever one changes; wrappers and loopback, which reach further, stay the user's choice.
+
+**Rejected.** Keeping tools in Java (every change needs a release). Free-form argument lists or a command string in a definition (D-008). Embedded defaults that the user's files only override (the user asked for the files themselves to be the defaults). Projects only narrowing tools (the user chose to let trusted projects add them). Moving git and `rg` too (git has credentials, checkpoints and push rules; `rg` is JHarness's own search).
+
+**Source.** User request and answers, 2026-11-24: JSON definitions, `examples/.jharness/tools/` as the defaults copied to `~/.jharness/tools/`, trusted projects may add tools and must show them when trusted, the agents example moves, git and `rg` stay in code. Amends D-008, D-009, D-050 and D-061, and constitution Articles IV and V.
+
+---
+
+## D-067 — One `api.tool` for every tool
+
+**Decision.**
+- `api.tool(name, request)` runs an operation of a defined tool, such as `api.tool("maven", {op: "package", skipTests: true})`. `request` takes `op`, the operation's fields and `timeoutMs`. It returns the same JSON as builds do today (`exitCode`, `output`, …).
+- `api.tools()` returns each tool: `name`, `description`, `source` (`user` or `project`), its operations with the fields each takes (type, pattern, values, range, required, default, description), and `available` with a `reason` when it can't run here (project not trusted, executable not found, definition error).
+- `api.maven`, `api.gradle` and `api.npm` are removed. The system prompt lists the tools and their operations from the definitions, so the model sees what this session allows; `api.d.ts` declares `tool` and `tools`.
+- Custom agents' `tools` lists name `tool` and `tools`; `"tool:maven"` allows one tool only.
+
+**Why.** Per-tool methods would need a new `api` method, shim line and native metadata for every user-defined tool. One method keeps the isolate boundary fixed (Article VI) while the set of tools changes. `api.tools()` answers "what can I run" at run time, including tools added after the session started its prompt.
+
+**Rejected.** Keeping the three methods as short forms (two ways to do one thing; the user asked to remove them). Generating one method per tool (the frozen `api` would change with the user's files).
+
+**Source.** User request, 2026-11-24. Replaces the `api.maven`, `api.gradle` and `api.npm` methods of specs 013 and 023.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1038,6 +1082,8 @@ Questions raised during design, the answers given, and why each mattered.
 | Q68 | What is a custom agent and how is it chosen? | A folder with `agent.json`, `prompt.md` and `helpers.js`; `--agent NAME` at start; it only narrows tools, mode and steps; project agents need trust | US-4.1 without new privileges | D-063 |
 | Q69 | How do subagents work? | `api.spawnAgent` runs a fresh loop in its own isolate under the session's gate, narrowed by a custom agent; depth one; per-turn and step limits configurable (10 and 100 by default); an optional model profile, listed by `api.models()`; returns the final reply | Big tasks split without a subagent ever doing more than the main agent | D-064 |
 | Q70 | How does a user see, follow and stop running agents, and tell their events apart? | Background subagents with `/agents`, `/agents NAME` and `/stop NAME\|all`; every event names its agent (`main`, `sub-N`) and its source (`host` or `guest`), and `jharness log` filters by both | Parallel work stays visible and stoppable without stopping the main agent | D-065 |
+| Q71 | Can users change, add and remove build tools without changing Java code? | Yes: tools are JSON definition files, seeded into `~/.jharness/tools/` and editable there; trusted projects can add their own | Lets a user tighten Maven or add Go without a release, under the same typed-argument and sandbox rules | D-066 |
+| Q72 | How does an agent know which tools it can run? | `api.tools()` returns each tool's operations, fields and whether it can run here; the system prompt lists them too; `api.tool(name, request)` runs one | One generic call replaces per-tool methods, so new tools need no new api | D-067 |
 
 ---
 

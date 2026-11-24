@@ -1,0 +1,36 @@
+{
+  "description": "Gradle. Runs the project's own build code.",
+  "executable": "gradle",
+  "wrapper": { "file": "gradlew", "checksum": "gradle/wrapper/gradle-wrapper.properties" },
+  "proxy": "java-options",
+  "javaHome": true,
+  "loopback": "macos",
+  "writable": ["~/.gradle/caches", "~/.gradle/wrapper", "~/.gradle/native", "~/.gradle/jdks", "~/.gradle/daemon",
+    "~/.gradle/notifications", "~/.gradle/.tmp"],
+  "args": ["--console=plain", "--no-daemon"],
+  "offline": { "args": ["--offline"] },
+  "operations": {
+    "build":    { "args": ["{project}build", "{skipTests}", "{parallel}", "{continue}"] },
+    "test":     { "args": ["{project}test", "{tests}", "{parallel}", "{continue}"] },
+    "check":    { "args": ["{project}check", "{skipTests}", "{parallel}", "{continue}"] },
+    "assemble": { "args": ["{project}assemble", "{parallel}", "{continue}"] },
+    "clean":    { "args": ["{project}clean"] }
+  },
+  "fields": {
+    "project": {
+      "type": "string",
+      "pattern": "(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}){1,10}",
+      "args": ["{}:"],
+      "description": "A Gradle project path such as :app or :libs:core"
+    },
+    "tests": {
+      "type": "string",
+      "pattern": "[A-Za-z0-9_.*#$][A-Za-z0-9_.*#,+$-]{0,199}",
+      "args": ["--tests", "{}"],
+      "description": "A test filter such as AppTest or com.x.*Test"
+    },
+    "skipTests": { "type": "flag", "args": ["-x", "test"], "description": "Don't run the test task" },
+    "parallel":  { "type": "flag", "args": ["--parallel"], "description": "Build projects in parallel" },
+    "continue":  { "type": "flag", "args": ["--continue"], "description": "Keep going after a task fails" }
+  }
+}

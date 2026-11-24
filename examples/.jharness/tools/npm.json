@@ -1,0 +1,31 @@
+{
+  "description": "npm. Install scripts never run; run executes a script from package.json.",
+  "executable": "npm",
+  "proxy": "npm",
+  "env": {
+    "npm_config_update_notifier": "false",
+    "npm_config_fund": "false",
+    "npm_config_audit": "false",
+    "npm_config_color": "false",
+    "npm_config_progress": "false"
+  },
+  "writable": ["~/.npm"],
+  "offline": { "env": { "npm_config_offline": "true" } },
+  "operations": {
+    "ci":      { "args": ["ci", "--ignore-scripts", "{omitDev}"] },
+    "install": { "args": ["install", "--ignore-scripts", "{omitDev}"] },
+    "test":    { "args": ["test"] },
+    "run":     { "args": ["run", "{script}"] }
+  },
+  "fields": {
+    "omitDev": { "type": "flag", "args": ["--omit=dev"], "description": "Skip devDependencies" },
+    "script": {
+      "type": "string",
+      "pattern": "[A-Za-z0-9_][A-Za-z0-9_.:@/-]{0,99}",
+      "required": true,
+      "check": "npm-script",
+      "args": ["{}"],
+      "description": "A script name from package.json"
+    }
+  }
+}
