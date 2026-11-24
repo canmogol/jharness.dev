@@ -1,6 +1,15 @@
 # Changelog
 
-<!-- last-commit: 6ed19f354221a0648e389ca3ced90c122af71e4b -->
+<!-- last-commit: cb5755738b71e40906e4249d26f1767102b87d37 -->
+
+## 2026-11-24 · 040 Prompt caching and `@file` mentions
+
+- Claude profiles use Anthropic's prompt cache: each request marks the system prompt and the last message with a 5-minute breakpoint, so the next step reads the conversation so far from the cache. `"promptCache": false` turns it off; OpenAI-compatible profiles can't set it, since those servers cache on their own.
+- `inputTokens` counts the whole prompt, cached parts included. `model.completed` adds `cacheReadTokens` and `cacheWriteTokens`, also read from OpenAI-compatible servers that report them.
+- `@path` or `@"path with spaces"` in a prompt (TUI, `-p`, slash command templates) attaches a file's text or a folder's listing. Mentions follow the file policy: the workspace and read-only mounts, never the deny list; binary files are skipped.
+- Up to 20 mentions, 50,000 characters a file, and 200,000 a prompt but at most a quarter of the context window. A cut file says so and points to `api.readFile`.
+- `prompt.attached` records what was attached and skipped; the TUI prints `▸ attached …` and `▸ not attached: …`, and Tab completes `@` paths.
+- Decision: prompt caching and `@file` mentions (D-078, Q84).
 
 ## 2026-11-24 · 039 Token counting and compaction
 
