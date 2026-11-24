@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Test;
  * Constitution quality gate: no {@code ProcessBuilder} or {@code Runtime.exec} outside
  * {@code ProcessRunner}, and no {@code HttpClient} or socket outside {@code HttpClients} (AC-01). The
  * one exception is {@code ProxyBridge} (spec 013, D-049): it runs inside the Linux sandbox, starts the
- * argv {@code ProcessRunner} gave it and connects only to the egress proxy's Unix socket.
+ * argv {@code ProcessRunner} gave it and connects only to the egress proxy's Unix socket. The web viewer's
+ * {@code SessionViewer} may listen on the loopback address (spec 048, D-053, D-083); it opens no outbound connection.
  * Scans the main sources of every product module; test code and this testkit are not product code.
  */
 class ArchitectureTest {
@@ -36,7 +37,8 @@ class ArchitectureTest {
             new Rule("HTTP client", Pattern.compile("HttpClient\\s*\\.\\s*(newBuilder|newHttpClient)\\b"),
                     List.of("jharness-net/src/main/java/dev/jharness/net/http/HttpClients.java")),
             new Rule("socket", Pattern.compile("new\\s+(Server)?Socket\\s*\\(|(Server)?SocketChannel\\s*\\.\\s*open|new\\s+DatagramSocket|HttpServer\\s*\\.\\s*create"),
-                    List.of("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", BRIDGE)));
+                    List.of("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", BRIDGE,
+                            "jharness-web/src/main/java/dev/jharness/web/SessionViewer.java")));
 
     static Path root() {
         Path p = Path.of("").toAbsolutePath();
@@ -52,7 +54,7 @@ class ArchitectureTest {
         assertNotNull(root);
         List<String> violations = new ArrayList<>();
         int scanned = 0;
-        for (String module : List.of("jharness-events", "jharness-config", "jharness-security", "jharness-process", "jharness-net", "jharness-sandbox", "jharness-llm", "jharness-agent", "jharness-cli")) {
+        for (String module : List.of("jharness-events", "jharness-config", "jharness-security", "jharness-process", "jharness-net", "jharness-sandbox", "jharness-llm", "jharness-agent", "jharness-web", "jharness-cli")) {
             Path src = root.resolve(module).resolve("src/main/java");
             try (Stream<Path> files = Files.walk(src)) {
                 for (Path f : files.filter(x -> x.toString().endsWith(".java")).toList()) {
@@ -82,7 +84,9 @@ class ArchitectureTest {
         // Sockets are allowed only in the egress proxy (spec 011 AC-08); anywhere else is a violation.
         assertEquals("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", RULES.get(2).allowedFile());
         assertNotEquals("jharness-llm/src/main/java/dev/jharness/llm/OpenAiCompatibleProvider.java", RULES.get(2).allowedFile());
-        assertEquals(List.of("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", BRIDGE), RULES.get(2).allowedFiles());
+        assertEquals(List.of("jharness-net/src/main/java/dev/jharness/net/EgressProxy.java", BRIDGE,
+                "jharness-web/src/main/java/dev/jharness/web/SessionViewer.java"), RULES.get(2).allowedFiles(), "the viewer listens on loopback (D-083)");
+        assertTrue(RULES.get(2).pattern().matcher("HttpServer.create(addr, 0)").find());
         assertEquals(List.of(), RULES.get(1).allowedFiles().stream().filter(f -> f.equals(BRIDGE)).toList());
     }
 }

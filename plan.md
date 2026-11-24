@@ -68,7 +68,8 @@ Maven multi-module build. Dependencies flow downward.
 | `jharness-llm` | Provider interface; OpenAI-compatible and Claude providers (ModelJars after v0.1, D-035); streaming | events |
 | `jharness-agent` | Agent loop, JS block extraction, subagents, hooks, slash commands, checkpoints | sandbox, llm |
 | `jharness-mcp` | MCP client (stdio, streamable HTTP) | security |
-| `jharness-cli` | picocli entry point, JLine TUI, headless mode, native-image config | agent |
+| `jharness-web` | Read-only web session viewer: loopback HTTP server, event feed, log tail, embedded page (D-083) | events |
+| `jharness-cli` | picocli entry point, JLine TUI, headless mode, native-image config | agent, web |
 | `jharness-testkit` | Replay provider, malicious-repo fixtures, sandbox-escape suite | all |
 
 ---

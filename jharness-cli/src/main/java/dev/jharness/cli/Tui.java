@@ -66,6 +66,7 @@ final class Tui {
               /thinking       show or hide the model's thinking
               /todos          show the agent's todo list
               /undo           undo the last turn's file changes and remove it from the conversation
+              /view           show this session in the browser, read-only (prints the address)
             Keys:
               @PATH           attach a file or folder to the prompt (Tab completes the path)
               Shift+Enter, Alt+Enter, Ctrl-J  new line; Enter sends
@@ -436,6 +437,10 @@ final class Tui {
             loop(session);
         } finally {
             stopStatus();
+            if (viewer != null) {
+                viewer.close();
+                viewer = null;
+            }
         }
         try {
             reader.getHistory().save();
@@ -860,6 +865,7 @@ final class Tui {
                     out.println("Usage: /events [none|steps|all]");
                 }
             }
+            case "/view" -> view(session);
             case "/commands" -> {
                 List<String> c = session.commands(BUILT_IN).describe();
                 if (c.isEmpty()) {
@@ -908,6 +914,22 @@ final class Tui {
             }
         }
         return true;
+    }
+
+    /** The browser view of this session (spec 048), started on the first {@code /view}. */
+    private dev.jharness.web.SessionViewer viewer;
+
+    private void view(Session session) {
+        if (viewer == null) {
+            try {
+                viewer = dev.jharness.web.SessionViewer.start(LiveFeed.of(session), 0);
+            } catch (IOException | RuntimeException e) {
+                raw.println(styler.error("Can't start the viewer: " + TerminalSafe.escape(String.valueOf(e.getMessage()))));
+                return;
+            }
+        }
+        out.println("Open " + viewer.url());
+        out.println("Read-only, on this machine only; it stops when you quit.");
     }
 
     /** Undo would race a running background subagent's writes (spec 027 AC-06). */

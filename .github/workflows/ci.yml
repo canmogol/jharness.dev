@@ -194,6 +194,19 @@ jobs:
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/hj.jsonl" --output stream-json --mode accept-edits -p "write" > "$tmp/hs.jsonl"
           python3 -I -c 'import json,sys; l=[json.loads(x) for x in open(sys.argv[1])]; assert l[0]["type"]=="session.started" and l[-1]["type"]=="result" and l[-1]["filesChanged"]==["out.txt"], l[-1]' "$tmp/hs.jsonl"
           test "$(cat "$tmp/ws/out.txt")" = "x" && rm "$tmp/ws/out.txt"
+          # Web viewer (spec 048): jharness view serves the last session on 127.0.0.1 with a token; read-only.
+          "$bin" view --home "$tmp/home" --cwd "$tmp/ws" > "$tmp/view.txt" 2>&1 &
+          vw=$!
+          for i in $(seq 100); do grep -q "^Open http" "$tmp/view.txt" && break; sleep 0.1; done
+          url=$(sed -n 's/^Open \(http[^ ]*\).*/\1/p' "$tmp/view.txt")
+          base=${url%%/?t=*}; tok=${url##*t=}
+          curl -sf --noproxy '*' "$url" | grep -q 'app.js'
+          curl -s --noproxy '*' --max-time 3 "$base/events?t=$tok" > "$tmp/view-events.txt" || true
+          grep -q '^data: {.*"type":"session.started"' "$tmp/view-events.txt"
+          test "$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' "$base/")" = 403
+          test "$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' -H 'Host: evil.example' "$url")" = 403
+          test "$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' -X POST "$url")" = 405
+          kill $vw
           # Action reviewer (spec 038): a fake System One server doubts a write, so bypass mode still refuses it.
           python3 -I jharness-agent/src/test/resources/fake_systemone_server.py "$tmp/so.port" 0.05 &
           so=$!

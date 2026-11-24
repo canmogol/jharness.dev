@@ -18,6 +18,7 @@
 
   <dependencies>
     <dependency><groupId>dev.jharness</groupId><artifactId>jharness-agent</artifactId></dependency>
+    <dependency><groupId>dev.jharness</groupId><artifactId>jharness-web</artifactId></dependency>
     <dependency><groupId>info.picocli</groupId><artifactId>picocli</artifactId><version>${picocli.version}</version></dependency>
     <dependency><groupId>org.jline</groupId><artifactId>jline-reader</artifactId><version>${jline.version}</version></dependency>
     <dependency><groupId>org.jline</groupId><artifactId>jline-terminal-ffm</artifactId><version>${jline.version}</version></dependency>

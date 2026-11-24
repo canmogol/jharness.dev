@@ -87,6 +87,15 @@ One `noul` question per state-changing operation; the answer from 0 to 1 is the 
 | Refresh | After the events that change it, at most every 250 ms | Never per streamed chunk |
 | `~/.jharness/statusline.js` | None | Subagent sandbox limits, no `api`, 1 s a run (10 s for the first), 64 KB file |
 
+## Web session viewer (D-053, D-083)
+
+| Part | Choice |
+| --- | --- |
+| Server | JDK `com.sun.net.httpserver`, in `jharness-web`, bound to `127.0.0.1` |
+| Stream | Server-Sent Events of the stream-json lines (D-082) |
+| Page | Embedded `index.html`, `app.js`, `app.css`; no outside resources |
+| Access | 256-bit random token in the address; `Host` and `Origin` checks; GET only; at most 8 viewers |
+
 ## Sandbox limits (defaults, tune in P0)
 
 Every value below can be changed in the `sandbox` section of `settings.json`, per profile (D-003). The policy, isolate mode and thread count are fixed.

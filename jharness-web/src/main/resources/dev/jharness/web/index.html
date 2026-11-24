@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>JHarness session</title>
+<link rel="stylesheet" href="app.css" id="css">
+</head>
+<body>
+<header>
+  <h1 id="title">JHarness session</h1>
+  <div id="meta"></div>
+  <div class="controls">
+    <label>Agent <select id="agent"><option value="">all</option></select></label>
+    <label><input type="checkbox" id="thinking"> thinking</label>
+    <label><input type="checkbox" id="raw"> every event</label>
+    <span id="status" class="status">connecting…</span>
+  </div>
+</header>
+<main id="log"></main>
+<p class="note">Read-only: this page shows the session and can't change it.</p>
+<script src="app.js" id="js"></script>
+</body>
+</html>

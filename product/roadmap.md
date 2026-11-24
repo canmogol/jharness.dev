@@ -103,7 +103,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Status line: built-in items and `~/.jharness/statusline.js` (spec 042)
 - [x] Resume and fork sessions (spec 043)
 - [x] Headless mode with text, JSON and stream-JSON output; `--mode` (spec 047)
-- [ ] Read-only web session viewer on `127.0.0.1`, reading the same event stream as headless mode; no approvals from the browser; doesn't gate v0.1 (D-053)
+- [x] Read-only web session viewer on `127.0.0.1`, reading the same event stream as headless mode; no approvals from the browser; doesn't gate v0.1 (D-053, spec 048)
 - [ ] Usage tracking (tokens, cost)
 - [ ] Evals on real repo tasks
 - [ ] GitHub releases with checksums, Homebrew tap, install script

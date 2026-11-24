@@ -21,6 +21,7 @@
     <module>jharness-sandbox</module>
     <module>jharness-llm</module>
     <module>jharness-agent</module>
+    <module>jharness-web</module>
     <module>jharness-cli</module>
     <module>jharness-testkit</module>
   </modules>
@@ -82,6 +83,7 @@
       <dependency><groupId>dev.jharness</groupId><artifactId>jharness-sandbox</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>dev.jharness</groupId><artifactId>jharness-llm</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>dev.jharness</groupId><artifactId>jharness-agent</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>dev.jharness</groupId><artifactId>jharness-web</artifactId><version>${project.version}</version></dependency>
     </dependencies>
   </dependencyManagement>
 
