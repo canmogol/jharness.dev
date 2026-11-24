@@ -47,6 +47,21 @@ public final class AgentLoop {
     private volatile int stepsNow;
     /** Text put before the next prompt, such as finished background subagents' replies (spec 027). */
     private volatile java.util.function.Supplier<String> notes = () -> "";
+
+    /** Stop hooks (spec 034): asked when a turn would end done; a message makes the agent go on. */
+    @FunctionalInterface
+    interface StopHook {
+        /** @return a message to continue with, or null to end the turn */
+        String onStop(String agent, int turn, String reply, int steps, int continued);
+    }
+
+    /** At most this many times a turn may be continued by stop hooks. */
+    static final int MAX_CONTINUES = 3;
+    private volatile StopHook stopHook;
+
+    void useStopHook(StopHook h) {
+        stopHook = h;
+    }
     private volatile Thread turnThread;
     /** The subagent running inside this loop's current block, if any (spec 026). */
     private volatile AgentLoop child;
@@ -192,6 +207,7 @@ public final class AgentLoop {
         String before = notes.get();
         conversation.add(ChatMessage.user(before.isEmpty() ? prompt : before + "\n\n" + prompt));
         int steps = 0;
+        int continued = 0;
         stepsNow = 0;
         if (interrupted) {
             return end(new TurnResult("", "interrupted", 0, null));
@@ -215,6 +231,13 @@ public final class AgentLoop {
             conversation.add(ChatMessage.assistant(last));
             Optional<JsBlocks.Found> code = JsBlocks.find(last);
             if (code.isEmpty()) {
+                StopHook h = stopHook;
+                String more = h != null && continued < MAX_CONTINUES ? h.onStop(turns.agent(), turns.current(), last, steps, continued) : null;
+                if (more != null && !interrupted) {
+                    continued++;
+                    conversation.add(ChatMessage.user("A stop hook asks you to go on before you finish:\n" + more));
+                    continue;
+                }
                 return end(new TurnResult(last, "done", steps, null));
             }
             if (steps >= maxSteps) {

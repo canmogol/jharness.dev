@@ -147,6 +147,15 @@ jobs:
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/tl.jsonl" -p "tools" | tee "$tmp/tl.txt"
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json --type api.call > "$tmp/tl-log.jsonl"
           grep '"api":"tools"' "$tmp/tl-log.jsonl" | grep -q '"status":"ok"'
+          # JS hooks (spec 034): the shipped guard hook blocks a hand edit of a lock file in the native binary.
+          mkdir -p "$tmp/home/.jharness/hooks" && cp examples/.jharness/hooks/guard.js "$tmp/home/.jharness/hooks/"
+          printf '%s\n' '{"reply":"```js\ntry { api.writeFile(\"package-lock.json\", \"{}\"); \"written\" } catch (e) { e.message }\n```"}' '{"reply":"Hook checked."}' > "$tmp/hk.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/hk.jsonl" -p "hooks" | tee "$tmp/hk.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --type hook. > "$tmp/hk-log.txt"
+          cat "$tmp/hk-log.txt"
+          grep -q "hook.ran  hook=guard event=preTool outcome=block" "$tmp/hk-log.txt"
+          test ! -e "$tmp/ws/package-lock.json"
+          rm "$tmp/home/.jharness/hooks/guard.js"
 
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check

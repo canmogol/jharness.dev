@@ -297,7 +297,7 @@ final class SubagentRunner implements Subagents {
             gate = op -> name.equals(attended) ? next.decide(op)
                     : Unattended.run(name, holdQuestions ? this::await : null, () -> next.decide(op));
         }
-        ApiServices services = new ApiServices(p.files(), gate, bus, turns, p.search(), p.git(), p.checkpoints(), p.builds(), p.http(), null);
+        ApiServices services = new ApiServices(p.files(), gate, bus, turns, p.search(), p.git(), p.checkpoints(), p.builds(), p.http(), null, p.hooks());
         ModelProvider provider = provider(model, def, turns, parent);
         String system = SystemPrompt.build(context, projectMd, userMd, def) + toolsText + NOTE;
         Run run = new Run(name, task, def == null ? "default" : def.name(), modelName(model, def), background, steps);
@@ -346,6 +346,9 @@ final class SubagentRunner implements Subagents {
                 isolate.useHelpers(def.helpers());
             }
             AgentLoop loop = new AgentLoop(provider, isolate, services, bus, turns, system, run.maxSteps, parent.resultChars());
+            if (services.hooks() instanceof AgentLoop.StopHook stop) {
+                loop.useStopHook(stop);
+            }
             run.loop = loop;
             if (run.stopped) {
                 loop.cancel();

@@ -54,6 +54,24 @@ public final class HostApi {
 
     /** Asks the gate (not counted toward the wall clock), runs the body, emits events, wraps the result. */
     private String call(String api, Operation.Kind kind, String summary, ObjectNode detail, Body body) {
+        Hooks hooks = s.hooks();
+        String agent = s.origin().get().agent();
+        if (hooks != null) {
+            // Pre-tool hooks (spec 034) run in their own isolates, outside this run's clock, before the gate.
+            String blocked;
+            clock.pause();
+            try {
+                blocked = hooks.preTool(agent, api, kind.wire(), summary, detail);
+            } finally {
+                clock.resume();
+            }
+            if (blocked != null) {
+                s.bus().publish(s.origin().get(), "api.call", Json.object().put("api", api).put("status", "blocked").put("summary", summary)
+                        .put("error", blocked));
+                post(hooks, agent, api, kind, summary, "blocked", null, blocked);
+                return error("blocked by hook " + blocked);
+            }
+        }
         Decision d;
         clock.pause();
         try {
@@ -65,17 +83,32 @@ public final class HostApi {
                 .put("allowed", d.allowed()).put("reason", d.reason()).put("summary", summary));
         if (!d.allowed()) {
             s.bus().publish(s.origin().get(), "api.call", Json.object().put("api", api).put("status", "denied").put("summary", summary));
+            post(hooks, agent, api, kind, summary, "denied", null, d.reason());
             return error("permission denied: " + d.reason());
         }
         try {
             String v = body.run();
             s.bus().publish(s.origin().get(), "api.call", Json.object().put("api", api).put("status", "ok").put("summary", summary));
+            post(hooks, agent, api, kind, summary, "ok", v, null);
             return Json.write(Json.object().put("value", v));
         } catch (Exception e) {
             String msg = message(e);
             s.bus().publish(s.origin().get(), "api.call", Json.object().put("api", api).put("status", "error")
                     .put("summary", summary).put("error", msg));
+            post(hooks, agent, api, kind, summary, "error", null, msg);
             return error(msg);
+        }
+    }
+
+    private void post(Hooks hooks, String agent, String api, Operation.Kind kind, String summary, String status, String result, String err) {
+        if (hooks == null) {
+            return;
+        }
+        clock.pause();
+        try {
+            hooks.postTool(agent, api, kind.wire(), summary, status, result, err);
+        } finally {
+            clock.resume();
         }
     }
 

@@ -297,7 +297,7 @@ public final class Main implements Callable<Integer> {
             Tui tui = new Tui(t, h.resolve(".jharness").resolve("history"));
             var saved = trust.trusted(ws);
             Map<String, String> hashes = ToolDefinitions.projectHashes(ws);
-            boolean trusted = saved.orElseGet(() -> tui.askTrust(ws, ToolDefinitions.describeProject(h, ws)));
+            boolean trusted = saved.orElseGet(() -> tui.askTrust(ws, ToolDefinitions.describeProject(h, ws), dev.jharness.agent.Session.projectHooks(ws)));
             boolean projectTools = true;
             if (saved.isEmpty()) {
                 trust.record(ws, trusted, hashes);

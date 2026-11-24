@@ -60,6 +60,7 @@ public final class Session implements AutoCloseable {
     private String profile;
     private AgentDefinition agent;
     private ToolDefinitions tools;
+    private HookRunner hooks;
     private SubagentRunner subagents;
     private Path home;
     private boolean trusted;
@@ -200,7 +201,10 @@ public final class Session implements AutoCloseable {
             gate = new ToolsGate(gate, agent.name(), agent.tools());
         }
         SubagentRunner subagents = new SubagentRunner(home, ws.root(), access.trusted(), settings, loaded, bus, turns);
-        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http, subagents);
+        ApiServices base = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http, null);
+        HookRunner hooks = HookRunner.load(home, ws.root(), access.trusted(), settings, bus, turns, base);
+        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http, subagents,
+                hooks.any() ? hooks : null);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
         String contextJson = ctx.ok() ? ctx.value() : null;
@@ -215,12 +219,16 @@ public final class Session implements AutoCloseable {
                 agent != null && agent.maxSteps() != null ? agent.maxSteps() : settings.agent().maxSteps(),
                 settings.timeouts().outputChars());
         loop.useCheckpoints(checkpoints);
+        if (hooks.any()) {
+            loop.useStopHook(hooks);
+        }
         subagents.bind(services, loop, contextJson, projectMd, userMd, toolsText);
         loop.useNotes(subagents::drainFinished);
         subagents.holdQuestions(access.interactive());
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
         s.agent = agent;
         s.tools = tools;
+        s.hooks = hooks;
         s.subagents = subagents;
         s.home = home;
         s.trusted = access.trusted();
@@ -315,6 +323,21 @@ public final class Session implements AutoCloseable {
                 .put("provider", provider.provider()).put("model", provider.model()));
     }
 
+    /** The project's hook files, for the trust question (spec 034). */
+    public static List<String> projectHooks(Path workspace) {
+        return HookRunner.projectHooks(workspace);
+    }
+
+    /** {@code /hooks} (spec 034): each loaded hook as "name (source): functions", then the files that failed. */
+    public List<String> describeHooks() {
+        List<String> out = new java.util.ArrayList<>();
+        for (HookRunner.Hook h : hooks.hooks()) {
+            out.add(h.name() + "  " + h.source() + "  " + String.join(", ", h.functions()));
+        }
+        hooks.errors().forEach((f, e) -> out.add(f + "  broken: " + e));
+        return out;
+    }
+
     /** The session's tools (spec 028): the user's and, when used, the project's. */
     public ToolDefinitions tools() {
         return tools;
@@ -403,6 +426,9 @@ public final class Session implements AutoCloseable {
     @Override
     public void close() throws IOException {
         subagents.closeAll();
+        if (hooks != null) {
+            hooks.close();
+        }
         isolate.close();
         if (proxy != null) {
             HttpClients.stopProxy(proxy.address());
