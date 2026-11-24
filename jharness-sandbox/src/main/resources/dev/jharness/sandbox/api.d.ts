@@ -140,11 +140,19 @@ interface SpawnRequest {
   /** A model profile name from api.models(); default: the custom agent's model, else the session's. */
   model?: string;
   maxSteps?: number;
+  /** true: return {"agent", "status": "running"} at once; collect the result with api.waitAgent. */
+  background?: boolean;
 }
 
-/** {"agent": string, "reply": string, "stopReason": "done" | "max_steps" | "error" | "interrupted", "steps": number, "error"?: string}
- *   — reply is the subagent's final message, cut to the last 30,000 characters */
+/** {"agent": string, "status": Status, "reply": string, "stopReason": Status, "steps": number, "error"?: string}
+ *   — Status is "done" | "max_steps" | "error" | "interrupted" | "stopped"; reply is the subagent's final
+ *   message, cut to the last 30,000 characters. A background spawn, or a wait that timed out, returns
+ *   {"agent": string, "status": "running"}. */
 type SpawnResultJson = string;
+
+/** [{"agent": string, "task": string, "customAgent": string, "model": string, "background": boolean,
+ *    "status": "running" | Status, "steps": number, "durationMs": number}] */
+type AgentsJson = string;
 
 /** {"current": string | null, "models": [{"name": string, "provider": string, "model": string, "notes"?: string}]}
  *   — current is the session's profile */
@@ -187,11 +195,22 @@ declare const api: {
   /**
    * Runs a subagent on a task in its own sandbox and returns its final reply. It has the same api and
    * permissions as you (each change still asks), but can't start subagents itself. The user's settings
-   * limit how many one turn may start (10 by default) and its steps (100 by default). A string is the task.
+   * limit how many one turn may start (10 by default), its steps (100 by default) and how many run
+   * in the background at once (4 by default). A string is the task.
    */
   spawnAgent(request: SpawnRequest | string): SpawnResultJson;
   /** The model profiles spawnAgent can use, by name. */
   models(): ModelsJson;
+  /**
+   * Waits for a background subagent (a string is its name) and returns its result. timeoutMs defaults
+   * to 600000 (at most 3600000). Results you don't collect are given to you at the start of your next turn.
+   * Background subagents can't ask the user, so changes that need approval are denied for them.
+   */
+  waitAgent(request: { agent: string; timeoutMs?: number } | string): SpawnResultJson;
+  /** This session's subagents. */
+  agents(): AgentsJson;
+  /** Stops a running background subagent. */
+  stopAgent(name: string): string;
   /** Records an event in the session log; returns its id. */
   emit(event: AgentEvent | string): string;
 };

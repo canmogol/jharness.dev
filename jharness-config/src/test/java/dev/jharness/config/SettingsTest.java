@@ -140,10 +140,12 @@ class SettingsTest {
         assertEquals(5, Settings.parse("{\"agent\":{\"maxSteps\":5}}", "s").agent().maxSteps());
         assertEquals(10, Settings.defaults().agent().subagentsPerTurn());
         assertEquals(100, Settings.defaults().agent().subagentMaxSteps());
+        assertEquals(4, Settings.defaults().agent().subagentsRunning());
+        assertEquals(16, Settings.parse("{\"agent\":{\"subagentsRunning\":16}}", "s").agent().subagentsRunning());
         AgentSettings a = Settings.parse("{\"agent\":{\"subagentsPerTurn\":1000,\"subagentMaxSteps\":500}}", "s").agent();
         assertEquals(1000, a.subagentsPerTurn());
         assertEquals(500, a.subagentMaxSteps());
-        for (String bad : List.of("{\"subagentsPerTurn\":1001}", "{\"subagentsPerTurn\":0}", "{\"subagentMaxSteps\":501}", "{\"subagentMaxSteps\":\"5\"}")) {
+        for (String bad : List.of("{\"subagentsPerTurn\":1001}", "{\"subagentsPerTurn\":0}", "{\"subagentMaxSteps\":501}", "{\"subagentMaxSteps\":\"5\"}", "{\"subagentsRunning\":17}")) {
             ConfigException e = assertThrows(ConfigException.class, () -> Settings.parse("{\"agent\":" + bad + "}", "s"), bad);
             assertTrue(e.getMessage().contains("expected a whole number from 1 to"), e.getMessage());
         }

@@ -41,6 +41,12 @@ public final class AgentLoop {
     private final java.util.TreeMap<Integer, Integer> liveTurns = new java.util.TreeMap<>();
     private Checkpoints checkpoints;
     private volatile boolean interrupted;
+    /** Set by {@link #cancel}: every turn of this loop stops at once, even one that hasn't started (spec 027). */
+    private volatile boolean cancelled;
+    /** Steps run so far in the current turn, for {@code /agents} (spec 027). */
+    private volatile int stepsNow;
+    /** Text put before the next prompt, such as finished background subagents' replies (spec 027). */
+    private volatile java.util.function.Supplier<String> notes = () -> "";
     private volatile Thread turnThread;
     /** The subagent running inside this loop's current block, if any (spec 026). */
     private volatile AgentLoop child;
@@ -59,6 +65,20 @@ public final class AgentLoop {
         if (t != null) {
             t.interrupt();
         }
+    }
+
+    /** Stops this loop for good: the running turn, or the next one as soon as it starts (a stopped subagent). */
+    void cancel() {
+        cancelled = true;
+        interrupt();
+    }
+
+    int stepsNow() {
+        return stepsNow;
+    }
+
+    void useNotes(java.util.function.Supplier<String> n) {
+        notes = n;
     }
 
     /** Sets or clears the running subagent, which {@link #interrupt} stops too. */
@@ -151,7 +171,7 @@ public final class AgentLoop {
     /** One user turn. Never throws for model or guest problems; they end the turn with a stop reason. */
     public synchronized TurnResult turn(String prompt, Consumer<String> onDelta) {
         turns.next();
-        interrupted = false;
+        interrupted = cancelled;
         turnThread = Thread.currentThread();
         try {
             return runTurn(prompt, onDelta);
@@ -164,8 +184,13 @@ public final class AgentLoop {
     private TurnResult runTurn(String prompt, Consumer<String> onDelta) {
         bus.publish(turns.get(), "turn.started", Json.object().put("prompt", prompt));
         liveTurns.put(turns.current(), conversation.size());
-        conversation.add(ChatMessage.user(prompt));
+        String before = notes.get();
+        conversation.add(ChatMessage.user(before.isEmpty() ? prompt : before + "\n\n" + prompt));
         int steps = 0;
+        stepsNow = 0;
+        if (interrupted) {
+            return end(new TurnResult("", "interrupted", 0, null));
+        }
         String last = "";
         while (true) {
             ChatReply reply;
@@ -191,6 +216,7 @@ public final class AgentLoop {
                 return end(new TurnResult(last, "max_steps", steps, "the turn reached agent.maxSteps (" + maxSteps + ")"));
             }
             steps++;
+            stepsNow = steps;
             int ignored = code.get().ignored();
             var codeEvent = Json.object().put("step", steps).put("lines", code.get().code().split("\n", -1).length);
             if (ignored > 0) {

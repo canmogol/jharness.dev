@@ -10,4 +10,13 @@ public interface Subagents {
 
     /** The model profiles a subagent may run with, as a JSON string, for {@code api.models}. */
     String models();
+
+    /** {@code api.waitAgent} (spec 027): waits for a background subagent; {@code {agent, timeoutMs?}}. */
+    String waitAgent(ObjectNode request) throws Exception;
+
+    /** {@code api.agents}: this session's subagents as a JSON array. */
+    String agents();
+
+    /** {@code api.stopAgent}: stops a running background subagent. */
+    String stopAgent(String name) throws Exception;
 }

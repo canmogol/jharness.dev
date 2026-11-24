@@ -104,6 +104,7 @@ class TuiEscapeTest {
         tui.onEvent(event("loop.result", Json.object().put("step", 1).put("status", "error").put("error", HOSTILE)));
         tui.onEvent(event("model.retry", Json.object().put("provider", "p").put("model", "m").put("attempt", 2).put("attempts", 5)
                 .put("waitMs", 1000).put("reason", HOSTILE)));
+        tui.prompter().idle = false;
         tui.prompter().ask(new Operation("http", Operation.Kind.WRITE, "POST " + HOSTILE, Json.object().put("diff", "-" + HOSTILE)));
         String sc = screen();
         assertNoRawPayload(sc);

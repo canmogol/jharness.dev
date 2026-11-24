@@ -69,6 +69,7 @@ public final class PermissionEngine implements PermissionGate {
                 yield Decision.allow("approved by the user for this project");
             }
             case DENY -> Decision.deny("denied by the user: " + op.summary());
+            case UNATTENDED -> Decision.deny(Unattended.REASON + ": " + op.summary());
         };
     }
 }

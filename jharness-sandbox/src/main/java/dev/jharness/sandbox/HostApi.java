@@ -545,6 +545,64 @@ public final class HostApi {
         return call("models", Operation.Kind.READ, "list model profiles", Json.object(), () -> s.subagents().models());
     }
 
+    /** {@code api.waitAgent} (spec 027): waits, outside the run clock, for a background subagent. */
+    @HostAccess.Export
+    public String waitAgent(String json) {
+        ObjectNode a;
+        try {
+            if (s.subagents() == null) {
+                throw new IllegalArgumentException("waitAgent is not available here (a subagent can't start other agents)");
+            }
+            a = json != null && !json.startsWith("{") ? Json.object().put("agent", json) : args(json);
+        } catch (RuntimeException e) {
+            return reject("waitAgent", e);
+        }
+        String name = a.path("agent").asText("?");
+        return call("waitAgent", Operation.Kind.READ, "wait for " + name, Json.object().put("agent", name), () -> agentCall(() -> s.subagents().waitAgent(a)));
+    }
+
+    /** {@code api.agents} (spec 027): this session's subagents. */
+    @HostAccess.Export
+    public String agents() {
+        if (s.subagents() == null) {
+            return reject("agents", new IllegalArgumentException("agents is not available here (a subagent can't start other agents)"));
+        }
+        return call("agents", Operation.Kind.READ, "list subagents", Json.object(), () -> s.subagents().agents());
+    }
+
+    /** {@code api.stopAgent} (spec 027): stops a running background subagent. */
+    @HostAccess.Export
+    public String stopAgent(String name) {
+        if (s.subagents() == null) {
+            return reject("stopAgent", new IllegalArgumentException("stopAgent is not available here (a subagent can't start other agents)"));
+        }
+        if (name == null || name.isBlank()) {
+            return reject("stopAgent", new IllegalArgumentException("stopAgent needs a subagent name, such as sub-1"));
+        }
+        return call("stopAgent", Operation.Kind.AGENT, "stop " + name, Json.object().put("agent", name), () -> agentCall(() -> s.subagents().stopAgent(name)));
+    }
+
+    private interface AgentCall {
+        String run() throws Exception;
+    }
+
+    /** Runs a subagent call outside the run clock, passing its own exceptions through. */
+    private String agentCall(AgentCall c) throws Exception {
+        try {
+            return outsideRunClock(() -> {
+                try {
+                    return c.run();
+                } catch (RuntimeException e) {
+                    throw e;
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+        } catch (IllegalStateException e) {
+            throw e.getCause() instanceof Exception x ? x : e;
+        }
+    }
+
     @HostAccess.Export
     public String emit(String json) {
         return call("emit", Operation.Kind.EMIT, "emit event", Json.object(),

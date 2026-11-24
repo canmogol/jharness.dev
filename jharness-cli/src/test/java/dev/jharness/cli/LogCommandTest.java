@@ -167,6 +167,24 @@ class LogCommandTest {
         assertEquals(hostile, Json.parse(out().strip()).get("text").asText(), "--json stays valid JSON with the same text");
     }
 
+    /** Spec 027 AC-09. */
+    @Test
+    void filtersByAgentAndSource() throws Exception {
+        String sub = event("2026-11-23T10:00:01Z", 1, "loop.code", "{\"step\":1,\"lines\":3}").replace("\"agent\":\"main\"", "\"agent\":\"sub-1\"");
+        String guest = event("2026-11-23T10:00:02Z", 1, "agent.note", "{\"msg\":\"from js\"}").replace("\"source\":\"host\"", "\"source\":\"guest\"");
+        handLog("s-4-aaaaaaaaaaaa", event("2026-11-23T10:00:00Z", 1, "turn.started", "{\"prompt\":\"go\"}"), sub, guest);
+        assertEquals(0, log("s-4-aaaaaaaaaaaa", "--agent", "sub-1"));
+        assertTrue(out().contains("[sub-1]  loop.code") && !out().contains("turn.started") && !out().contains("agent.note"), out());
+        assertEquals(0, log("s-4-aaaaaaaaaaaa", "--agent", "main", "--agent", "sub-1"));
+        assertTrue(out().contains("loop.code") && out().contains("turn.started"), out());
+        assertEquals(0, log("s-4-aaaaaaaaaaaa", "--source", "guest"));
+        assertTrue(out().contains("agent.note") && !out().contains("loop.code") && !out().contains("turn.started"), out());
+        assertEquals(0, log("s-4-aaaaaaaaaaaa", "--source", "host", "--agent", "main"));
+        assertTrue(out().contains("turn.started") && !out().contains("loop.code") && !out().contains("agent.note"), out());
+        assertEquals(2, log("s-4-aaaaaaaaaaaa", "--source", "model"));
+        assertTrue(err.toString().contains("--source must be host or guest"), err.toString());
+    }
+
     @Test
     void badArgumentsAndLines() throws Exception {
         handLog("s-3-aaaaaaaaaaaa", event("2026-11-23T10:00:00Z", 0, "session.started", "{\"workspace\":\"w\"}"), "{not json",
