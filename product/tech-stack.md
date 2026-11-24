@@ -54,13 +54,12 @@ Model requests are retried per profile (D-058):
 
 ## Action reviewer (optional, D-031)
 
-| Back-end | Where it runs | Notes |
-| --- | --- | --- |
-| Kev | User-run local server (Python; CUDA, ROCm or MLX) | Apache-2.0; 0.8B practical next to a 7B coding model on 16 GB |
-| Jev | Hosted (TypeSafe API) | Action and context leave the machine |
-| Own model | Any model profile | No extra process |
+A decision model behind the System One API (`POST /v1/systemone`), with one HTTP client:
 
-Kev and Jev share the System One API, so JHarness has one HTTP client for both.
+| Example | Where it runs | Notes |
+| --- | --- | --- |
+| Jev | Hosted | Action and context leave the machine |
+| Laya | User-run, on this machine or the LAN | A locally running equivalent; works offline |
 
 ## Sandbox limits (defaults, tune in P0)
 

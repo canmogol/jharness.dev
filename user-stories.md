@@ -57,7 +57,7 @@ Last updated: 2026-11-18
 | US-3.5 | As a security-minded user, I want build tools to run in an OS sandbox, so a malicious build script can't reach outside the project. | Maven, Gradle and npm write only to the workspace and caches; network through rules | MVP | P2 |
 | US-3.6 | As a security-minded user, I want a log of everything the agent did, so I can audit a session. | Every action is an event in the session log; `jharness log <session>` shows it | MVP | P1–P2 |
 | US-3.7 | As a developer, I want the agent to read reference folders without changing them, so it can use docs and other repos safely. | Mounted folders are read-only | MVP | P1 |
-| US-3.8 | As a security-minded user, I want an optional reviewer model to flag actions that don't fit my task, so off-task or injected actions get stopped for my review. | Kev, Jev or own model; can only turn allow into ask or deny; falls back to asking when unavailable | MVP | P3 |
+| US-3.8 | As a security-minded user, I want an optional reviewer model to flag actions that don't fit my task, so off-task or injected actions get stopped for my review. | A System One decision model (Jev, or a local one such as Laya); can only turn allow into ask or deny; falls back to asking when unavailable | MVP | P3 |
 
 ## Epic 4 — Teams and extensions
 
