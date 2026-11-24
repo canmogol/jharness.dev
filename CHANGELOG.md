@@ -1,6 +1,16 @@
 # Changelog
 
-<!-- last-commit: fa5a1399892753462ed79bfdef1585301740bd24 -->
+<!-- last-commit: 32e6708ec3548789c83e81e64347a63d5d975088 -->
+
+## 2026-11-24 · 043 Resume and fork sessions
+
+- After each turn, `/compact`, `/undo` and `/rewind`, the main conversation is saved to `<session-id>.state.json` next to the session log (mode 0600, written atomically).
+- `jharness --resume [ID]` continues this folder's last session, or the one with that id or id prefix, in the same session and log; the model gets the earlier turns back. `session.resumed` records it.
+- `jharness --fork [ID]` starts a new session from a copy and leaves the saved one as it was.
+- Both work in the UI and with `-p`. The UI says which session it continues and shows its last reply.
+- Turns from before the resume can't be undone; background subagents, the todo list and plan mode start fresh.
+- CI's native step resumes and forks a headless session.
+- Decision: resume and fork sessions (D-081, Q87).
 
 ## 2026-11-24 · 042 Status line
 
