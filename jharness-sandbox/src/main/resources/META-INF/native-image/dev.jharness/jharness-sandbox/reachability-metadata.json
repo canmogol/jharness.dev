@@ -91,6 +91,22 @@
         {
           "name": "models",
           "parameterTypes": []
+        },
+        {
+          "name": "waitAgent",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "agents",
+          "parameterTypes": []
+        },
+        {
+          "name": "stopAgent",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         }
       ]
     }

@@ -90,6 +90,8 @@ class TuiTest {
         Operation op = new Operation("git", Operation.Kind.GIT_WRITE, "git commit", Json.object());
         Tui tui = new Tui(terminal("a\nn\nYES\n"), null);
         TerminalPrompter p = tui.prompter();
+        assertEquals(Prompter.Answer.UNATTENDED, p.ask(op), "no turn runs, so no one is asked (spec 027)");
+        p.idle = false;
         assertEquals(Prompter.Answer.ALWAYS, p.ask(op));
         assertEquals(Prompter.Answer.DENY, p.ask(op));
         assertEquals(Prompter.Answer.ONCE, p.ask(op));
@@ -155,6 +157,46 @@ class TuiTest {
         assertTrue(sc.contains("▸ [sub-1] started as reviewer: Find the bug"), sc);
         assertTrue(sc.contains("▸ [sub-1] step 1: running 2 lines"), sc);
         assertTrue(sc.contains("▸ [sub-1] done after 1 steps"), sc);
+    }
+
+    /** Spec 027 AC-07: a background subagent shows only its start and end. */
+    @Test
+    void backgroundSubagentsShowOnlyStartAndEnd() throws Exception {
+        Tui tui = new Tui(terminal(""), null);
+        tui.onEvent(new dev.jharness.events.Event("e1", java.time.Instant.now(), "s", "sub-2", 1, "host", "subagent.started",
+                Json.object().put("task", "Scan").put("customAgent", "default").put("maxSteps", 30).put("background", true)));
+        tui.onEvent(new dev.jharness.events.Event("e2", java.time.Instant.now(), "s", "sub-2", 1, "host", "loop.code",
+                Json.object().put("step", 1).put("lines", 2)));
+        tui.onEvent(new dev.jharness.events.Event("e3", java.time.Instant.now(), "s", "sub-2", 1, "host", "subagent.completed",
+                Json.object().put("stopReason", "stopped").put("steps", 1).put("durationMs", 5)));
+        String sc = screen();
+        assertTrue(sc.contains("▸ [sub-2] started in the background: Scan"), sc);
+        assertFalse(sc.contains("running 2 lines"), sc);
+        assertTrue(sc.contains("▸ [sub-2] stopped after 1 steps (/agents sub-2 shows its events)"), sc);
+    }
+
+    /** Spec 027 AC-06, AC-08: /agents, /agents NAME, /stop, and /undo waiting for a running background subagent. */
+    @Test
+    void agentsAndStopCommands() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws27"));
+        // Main spawns a background subagent and waits 5 s, so the subagent takes its reply (an endless loop) first.
+        Tui tui = new Tui(terminal("go\n/agents\n/agents sub-1\n/agents sub-9\n/undo\n/stop sub-9\n/stop all\n/stop all\n/agents\n/exit\n"), null);
+        try (Session session = replaySession(tmp.resolve("home27"), ws, "{}", tui,
+                "```js\napi.spawnAgent({task: 'spin   forever', background: true}); JSON.parse(api.waitAgent({agent: 'sub-1', timeoutMs: 5000})).status\n```",
+                "```js\nwhile (true) {}\n```", "Started it.")) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("▸ [sub-1] started in the background: spin forever"), sc);
+        assertTrue(sc.matches("(?s).*NAME +STATUS +STEPS +AGENT +MODEL +TIME +TASK.*"), sc);
+        assertTrue(sc.matches("(?s).*sub-1 +running +[01] +default +session .*spin forever.*"), sc);
+        assertTrue(sc.contains("events of sub-1 (jharness log --agent sub-1 shows all):") && sc.contains("[sub-1]  subagent.started"), sc);
+        assertTrue(sc.contains("No subagent sub-9 in this session. Subagents: sub-1."), sc);
+        assertTrue(sc.contains("/undo waits for the background subagents to end: sub-1 still running. Stop them with /stop all."), sc);
+        assertTrue(sc.contains("sub-9 isn't running. Running: sub-1"), sc);
+        assertTrue(sc.contains("Stopped sub-1."), sc);
+        assertTrue(sc.contains("No subagents are running."), sc);
+        assertTrue(sc.matches("(?s).*sub-1 +stopped .*"), sc);
     }
 
     /** Spec 020 AC-06. */
@@ -257,7 +299,7 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/model", "/agent", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
+        assertEquals(List.of("/model", "/agent", "/agents", "/stop", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
                 List.copyOf(Tui.COMMANDS.keySet()));
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
         assertEquals("quit (or Ctrl-D)", Tui.COMMANDS.get("/exit"));
@@ -373,6 +415,7 @@ class TuiTest {
         Operation op = new Operation("network", Operation.Kind.NETWORK, "connect api.example.com:443",
                 Json.object().put("host", "api.example.com").put("port", 443));
         Tui tui = new Tui(terminal("a\n"), null);
+        tui.prompter().idle = false;
         assertEquals(Prompter.Answer.ALWAYS, tui.prompter().ask(op));
         assertTrue(screen().contains("Allow network: connect api.example.com:443?"), screen());
     }

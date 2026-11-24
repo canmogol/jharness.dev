@@ -165,7 +165,7 @@ public final class Session implements AutoCloseable {
         PermissionMode mode = agent != null && agent.plan() ? PermissionMode.PLAN : PermissionMode.of(settings.permissions().mode());
         PermissionGate gate = access.gate() != null ? access.gate()
                 : new PermissionEngine(mode, ProjectRules.load(home, ws.root()),
-                        access.prompter(), bus, turns);
+                        dev.jharness.security.Unattended.guard(access.prompter()), bus, turns);
         Checkpoints checkpoints = new Checkpoints(Checkpoints.rootFor(home, ws.root(), bus.session()), bus, turns);
         var http = new dev.jharness.net.http.HttpOperations(bus, turns, settings.http(), settings.timeouts());
         if (agent != null && agent.tools() != null) {
@@ -187,6 +187,7 @@ public final class Session implements AutoCloseable {
                 settings.timeouts().outputChars());
         loop.useCheckpoints(checkpoints);
         subagents.bind(services, loop, contextJson, projectMd, userMd);
+        loop.useNotes(subagents::drainFinished);
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
         s.agent = agent;
         s.subagents = subagents;
@@ -293,6 +294,36 @@ public final class Session implements AutoCloseable {
         return AgentDefinition.describe(home, workspace.root(), trusted, agent == null ? null : agent.name());
     }
 
+    /** Tests: the session's subagent runner. */
+    SubagentRunner runner() {
+        return subagents;
+    }
+
+    /** {@code /agents}: this session's subagents, oldest first (spec 027). */
+    public List<Subagent> subagents() {
+        return subagents.list().stream().map(i -> new Subagent(i.name(), i.task(), i.customAgent(), i.model(), i.background(), i.status(),
+                i.steps(), i.durationMs())).toList();
+    }
+
+    /** One subagent for {@code /agents}; {@code status} is {@code running} or how it ended. */
+    public record Subagent(String name, String task, String customAgent, String model, boolean background, String status, int steps,
+            long durationMs) {}
+
+    /** The background subagents still running; {@code /undo} and {@code /rewind} wait for them (spec 027). */
+    public List<String> runningSubagents() {
+        return subagents.running();
+    }
+
+    /** {@code /stop NAME}; false if no running subagent has that name. */
+    public boolean stopSubagent(String name) {
+        return subagents.stop(name);
+    }
+
+    /** {@code /stop all}: the names of the subagents it stopped. */
+    public List<String> stopSubagents() {
+        return subagents.stopAll();
+    }
+
     public EventBus bus() {
         return bus;
     }
@@ -315,6 +346,7 @@ public final class Session implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        subagents.stopAll();
         isolate.close();
         if (proxy != null) {
             HttpClients.stopProxy(proxy.address());

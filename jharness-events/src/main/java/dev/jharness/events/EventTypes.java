@@ -45,8 +45,9 @@ public final class EventTypes {
         HOST.put("model.completed", List.of("provider", "model", "stopReason"));
         HOST.put("model.error", List.of("provider", "message"));
         HOST.put("model.retry", List.of("provider", "model", "attempt", "attempts", "waitMs", "reason"));
-        HOST.put("subagent.started", List.of("task", "customAgent", "maxSteps"));
+        HOST.put("subagent.started", List.of("task", "customAgent", "maxSteps", "background"));
         HOST.put("subagent.completed", List.of("stopReason", "steps", "durationMs"));
+        HOST.put("subagent.delivered", List.of("agents"));
         HOST.put("turn.started", List.of("prompt"));
         HOST.put("turn.completed", List.of("steps", "stopReason"));
         HOST.put("loop.code", List.of("step", "lines"));

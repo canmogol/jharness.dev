@@ -48,6 +48,12 @@ final class LogCommand implements Callable<Integer> {
     @Option(names = "--type", paramLabel = "PREFIX", description = "Show only event types starting with PREFIX (repeatable), e.g. network. or model.error.")
     List<String> types = new ArrayList<>();
 
+    @Option(names = "--agent", paramLabel = "NAME", description = "Show only this agent's events (repeatable): main, or a subagent such as sub-1.")
+    List<String> agents = new ArrayList<>();
+
+    @Option(names = "--source", paramLabel = "SOURCE", description = "Show only events JHarness wrote (host) or the agent's code sent with api.emit (guest).")
+    String source;
+
     @Option(names = "--full", description = "Show whole event bodies instead of the main fields.")
     boolean full;
 
@@ -69,6 +75,10 @@ final class LogCommand implements Callable<Integer> {
         ZoneId z = zone != null ? zone : ZoneId.systemDefault();
         if (limit < 1) {
             err.println("jharness log: --limit must be at least 1");
+            return 2;
+        }
+        if (source != null && !source.equals("host") && !source.equals("guest")) {
+            err.println("jharness log: --source must be host or guest");
             return 2;
         }
         try {
@@ -171,6 +181,12 @@ final class LogCommand implements Callable<Integer> {
             }
             String type = l.event().path("type").asText();
             if (!types.isEmpty() && types.stream().noneMatch(type::startsWith)) {
+                continue;
+            }
+            if (!agents.isEmpty() && !agents.contains(l.event().path("agent").asText("main"))) {
+                continue;
+            }
+            if (source != null && !source.equals(l.event().path("source").asText())) {
                 continue;
             }
             out.println(json ? TerminalSafe.escapeJson(Json.write(l.event())) : f.line(l.event()));

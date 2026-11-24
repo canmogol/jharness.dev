@@ -18,6 +18,8 @@ final class TerminalPrompter implements Prompter {
     volatile EscWatcher watcher;
     /** The path whose diff the last question showed, so the TUI doesn't print it twice. */
     volatile String shownPath;
+    /** True while no turn runs: no one is waiting for a question then, so it is answered UNATTENDED (spec 027). */
+    volatile boolean idle = true;
 
     TerminalPrompter(LineReader reader, Styler styler, java.io.PrintWriter out, java.io.PrintWriter raw) {
         this.reader = reader;
@@ -26,8 +28,12 @@ final class TerminalPrompter implements Prompter {
         this.raw = raw;
     }
 
+    /** One question at a time: a turn's own questions and the proxy's can come from different threads. */
     @Override
-    public Answer ask(Operation op) {
+    public synchronized Answer ask(Operation op) {
+        if (idle) {
+            return Answer.UNATTENDED;
+        }
         EscWatcher w = watcher;
         if (w != null) {
             w.pause();

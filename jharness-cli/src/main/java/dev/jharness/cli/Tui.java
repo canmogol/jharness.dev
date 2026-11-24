@@ -38,6 +38,9 @@ final class Tui {
               /model          list model profiles
               /model NAME     switch to another profile
               /agent          list custom agents (start one with jharness --agent NAME)
+              /agents         list this session's subagents
+              /agents NAME    show a subagent's last 20 events
+              /stop NAME|all  stop a running background subagent, or all of them
               /diff           show the last turn's file changes
               /undo           undo the last turn's file changes and remove it from the conversation
               /rewind N       undo every turn after turn N (add --force to overwrite your own edits)
@@ -88,6 +91,9 @@ final class Tui {
     private boolean showThinking;
     private boolean thinkingOpen;
     private boolean debug;
+    /** Background subagents, by name: only their start and end lines are shown (spec 027). */
+    private final java.util.Set<String> background = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private Path logPath;
 
     Tui(Terminal terminal, Path historyFile) throws IOException {
         this(terminal, historyFile, System.getenv());
@@ -201,6 +207,7 @@ final class Tui {
         events = debug ? "all" : session.settings().ui().events();
         showThinking = debug || session.settings().ui().thinking().equals("show");
         session.bus().subscribe(this::onEvent);
+        logPath = session.logPath();
         out.println("JHarness in " + session.workspace().root() + " · model " + modelName(session)
                 + (session.agent() != null ? " · agent " + session.agent().name() : "")
                 + (session.offline() ? " · offline" : "") + " · /help for commands");
@@ -274,9 +281,11 @@ final class Tui {
             prompter().watcher = w;
         }
         styler.reset();
+        prompter().idle = false;
         try {
             return session.loop().turn(text, this::stream);
         } finally {
+            prompter().idle = true;
             flushPending();
             if (w != null) {
                 prompter().watcher = null;
@@ -406,9 +415,16 @@ final class Tui {
                 String d = session.loop().lastTurnDiff();
                 out.print(d.isEmpty() ? "No file changes in the last turn.\n" : d);
             }
-            case "/undo" -> out.println(session.loop().undo(line.contains("--force")).message());
+            case "/undo" -> {
+                if (!busy(session, "/undo")) {
+                    out.println(session.loop().undo(line.contains("--force")).message());
+                }
+            }
             case "/rewind" -> {
                 String[] a = line.split("\\s+");
+                if (busy(session, "/rewind")) {
+                    break;
+                }
                 if (a.length < 2 || !a[1].matches("[0-9]+")) {
                     out.println("Usage: /rewind N [--force]. Turns: " + session.loop().turns());
                 } else {
@@ -437,6 +453,8 @@ final class Tui {
                 session.describeAgents().forEach(out::println);
                 out.println("Agents live in .jharness/agents/NAME/ or ~/.jharness/agents/NAME/; start one with jharness --agent NAME.");
             }
+            case "/agents" -> agents(session, parts.length > 1 ? parts[1].strip() : "");
+            case "/stop" -> stop(session, parts.length > 1 ? parts[1].strip() : "");
             case "/network" -> network(session, parts.length > 1 ? parts[1].strip() : "");
             case "/thinking" -> {
                 showThinking = !showThinking;
@@ -458,8 +476,80 @@ final class Tui {
         return true;
     }
 
-    /** Package-private for tests. */
-    void onEvent(Event e) {
+    /** Undo would race a running background subagent's writes (spec 027 AC-06). */
+    private boolean busy(Session session, String what) {
+        List<String> running = session.runningSubagents();
+        if (running.isEmpty()) {
+            return false;
+        }
+        out.println(what + " waits for the background subagents to end: " + String.join(", ", running)
+                + " still running. Stop them with /stop all.");
+        return true;
+    }
+
+    /** {@code /agents} and {@code /agents NAME} (spec 027 AC-08). */
+    private void agents(Session session, String name) {
+        List<Session.Subagent> all = session.subagents();
+        if (name.isEmpty()) {
+            if (all.isEmpty()) {
+                out.println("No subagents in this session.");
+                return;
+            }
+            String fmt = "%-8s  %-11s  %5s  %-12s  %-12s  %6s  %s%n";
+            out.printf(fmt, "NAME", "STATUS", "STEPS", "AGENT", "MODEL", "TIME", "TASK");
+            for (Session.Subagent a : all) {
+                String task = a.task().strip().replaceAll("\\s+", " ");
+                out.printf(fmt, a.name(), a.status() + (a.background() ? "" : "*"), a.steps(), LogFormat.cut(a.customAgent(), 12),
+                        LogFormat.cut(a.model(), 12), (a.durationMs() / 1000) + "s", LogFormat.cut(task, 60));
+            }
+            out.println("* ran in the foreground. /agents NAME shows one's events; /stop NAME stops one.");
+            return;
+        }
+        if (all.stream().noneMatch(a -> a.name().equals(name))) {
+            out.println("No subagent " + name + " in this session." + (all.isEmpty() ? "" : " Subagents: "
+                    + String.join(", ", all.stream().map(Session.Subagent::name).toList()) + "."));
+            return;
+        }
+        List<com.fasterxml.jackson.databind.JsonNode> mine = new java.util.ArrayList<>();
+        try {
+            for (LogCommand.Line l : LogCommand.read(logPath)) {
+                if (l.event() != null && l.event().path("agent").asText().equals(name)) {
+                    mine.add(l.event());
+                }
+            }
+        } catch (IOException ex) {
+            raw.println(styler.error("cannot read " + logPath + ": " + ex.getMessage()));
+            return;
+        }
+        LogFormat f = new LogFormat(java.time.ZoneId.systemDefault(), false);
+        int from = Math.max(0, mine.size() - 20);
+        out.println("Last " + (mine.size() - from) + " of " + mine.size() + " events of " + name + " (jharness log --agent " + name + " shows all):");
+        for (var ev : mine.subList(from, mine.size())) {
+            out.println(f.line(ev));
+        }
+    }
+
+    /** {@code /stop NAME} and {@code /stop all} (spec 027 AC-08). */
+    private void stop(Session session, String name) {
+        if (name.isEmpty()) {
+            out.println("Usage: /stop NAME|all. Running: " + (session.runningSubagents().isEmpty() ? "none" : String.join(", ", session.runningSubagents())));
+        } else if (name.equals("all")) {
+            List<String> stopped = session.stopSubagents();
+            out.println(stopped.isEmpty() ? "No subagents are running." : "Stopped " + String.join(", ", stopped) + ".");
+        } else if (session.stopSubagent(name)) {
+            out.println("Stopped " + name + ".");
+        } else {
+            out.println(name + " isn't running. Running: " + (session.runningSubagents().isEmpty() ? "none" : String.join(", ", session.runningSubagents())));
+        }
+    }
+
+    /** Package-private for tests. Events come from any thread: background subagents run on their own (spec 027). */
+    synchronized void onEvent(Event e) {
+        if (!e.agent().equals("main") && (background.contains(e.agent())
+                || e.type().equals("subagent.started") && e.body().path("background").asBoolean(false))) {
+            backgroundEvent(e);
+            return;
+        }
         if (e.type().equals("model.thinking_delta")) {
             if (showThinking) {
                 if (!thinkingOpen) {
@@ -541,6 +631,36 @@ final class Tui {
             raw.println(styler.dim("· " + e.type() + " " + e.body()));
         }
         out.flush();
+    }
+
+    /** A background subagent's start and end, above the prompt if the user is typing; its other events stay in the log. */
+    private void backgroundEvent(Event e) {
+        String who = "[" + e.agent() + "] ";
+        String text = switch (e.type()) {
+            case "subagent.started" -> {
+                background.add(e.agent());
+                String task = e.body().get("task").asText().strip().replaceAll("\\s+", " ");
+                String agent = e.body().get("customAgent").asText();
+                yield styler.step("▸ " + who + "started in the background" + (agent.equals("default") ? "" : " as " + agent) + ": "
+                        + (task.length() > 100 ? task.substring(0, 100) + "…" : task));
+            }
+            case "subagent.completed" -> {
+                String stop = e.body().get("stopReason").asText();
+                String t = "▸ " + who + stop + " after " + e.body().get("steps").asInt() + " steps (/agents " + e.agent() + " shows its events)";
+                yield stop.equals("done") ? styler.step(t) : styler.error(t);
+            }
+            default -> events.equals("all") ? styler.dim("· " + who + e.type() + " " + e.body()) : null;
+        };
+        if (text == null || events.equals("none") && !e.type().equals("subagent.completed")) {
+            return;
+        }
+        flushPending();
+        if (reader.isReading()) {
+            reader.printAbove(text);
+        } else {
+            raw.println(text);
+            out.flush();
+        }
     }
 
     Terminal terminal() {

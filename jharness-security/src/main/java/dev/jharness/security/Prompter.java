@@ -7,7 +7,8 @@ package dev.jharness.security;
 @FunctionalInterface
 public interface Prompter {
 
-    enum Answer { ONCE, ALWAYS, DENY }
+    /** {@code UNATTENDED}: no one can answer now, such as for a background subagent (spec 027); treated as no. */
+    enum Answer { ONCE, ALWAYS, DENY, UNATTENDED }
 
     Answer ask(Operation op);
 

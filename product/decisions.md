@@ -75,6 +75,7 @@ Last updated: 2026-11-24
 | D-062 | In the TUI, Tab on a lone `/` prints the `/help` text above the prompt; Tab after a partial `/command` completes it, listing matches with descriptions taken from the help text | Accepted |
 | D-063 | Custom agents: a folder with `agent.json` (description, model, tools, maxSteps, plan), `prompt.md` and `helpers.js`; chosen with `--agent` at start; they only narrow; project agents only in trusted projects | Accepted |
 | D-064 | `api.spawnAgent` runs a subagent: fresh conversation with the task, own isolate (`subagent` profile), the session's gate narrowed by a custom agent, optional model profile; depth one, 10 per turn and 100 steps by default (configurable); `api.models()` lists profiles; returns its final reply | Accepted |
+| D-065 | Background subagents: `spawnAgent({background: true})`, `api.waitAgent`, `api.agents`, `api.stopAgent`; at most 4 running (configurable); they never ask (questions denied as unattended); uncollected replies come with the next prompt; Esc leaves them running, closing the session stops them; `/agents`, `/stop`, `jharness log --agent/--source` | Accepted |
 
 ---
 
@@ -936,9 +937,28 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Why.** US-4.4 and plan.md: a subagent in its own isolate that returns its result. A fresh conversation keeps the subagent focused and its context small. Sharing the gate means a subagent can never do what the main agent couldn't. Depth one and a per-turn cap bound the cost of a runaway block. Keeping the parent's turn makes undo cover all of a turn's changes.
 
-**Rejected.** Parallel or background subagents (the gate and the TUI ask one question at a time; later). Nesting. Asking before each spawn (the subagent's own changes ask). Giving the subagent the parent's conversation (large and unfocused). Its own turn numbers (undo would miss its changes).
+**Rejected.** Parallel or background subagents (the gate and the TUI ask one question at a time; later: D-065). Nesting. Asking before each spawn (the subagent's own changes ask). Giving the subagent the parent's conversation (large and unfocused). Its own turn numbers (undo would miss its changes).
 
 **Source.** Roadmap item "Subagents via `api.spawnAgent`". Recommended options accepted while the user was away, specifying 026-subagents, 2026-11-23. The `model` field, `api.models()` and the configurable limits were asked for by the user in review, 2026-11-24.
+
+---
+
+## D-065 — Background subagents
+
+**Decision.**
+- `api.spawnAgent({..., background: true})` returns `{agent, status: "running"}` at once; the subagent runs on its own thread. `agent.subagentsRunning` (default 4, 1 to 16) caps how many run at once; they count towards `agent.subagentsPerTurn`.
+- `api.waitAgent(name | {agent, timeoutMs})` returns the subagent's result (default wait 10 minutes, at most 1 hour; on timeout `status: "running"`), outside the block clock; Esc ends the wait. `api.agents()` lists the session's subagents; `api.stopAgent(name)` stops one. A subagent can't call any of them.
+- A background subagent never asks the user: a question becomes `Prompter.Answer.UNATTENDED` and the operation is denied with that reason. Saved rules, permission modes and session allows still apply. While no turn runs, the TUI answers every question that way too, including network questions.
+- Replies that finished and weren't collected are put before the main agent's next prompt, once each (`subagent.delivered`).
+- Esc stops the turn and a foreground subagent, not background ones. Closing the session (and so the end of `-p`) stops every running subagent with `stopReason: "stopped"`. `/undo` and `/rewind` wait until no background subagent runs.
+- The TUI shows a background subagent's start and end lines (above the prompt while the user types), not its steps. `/agents` lists the subagents, `/agents NAME` shows one's last 20 events, `/stop NAME|all` stops them.
+- Every event's envelope names its `agent` (`main`, `sub-N`) and `source` (`host`: written by JHarness; `guest`: sent by agent code with `api.emit`). `jharness log --agent NAME` and `--source host|guest` filter by them.
+
+**Why.** The user asked to see which agents run, follow one and stop one, and to tell the agents' events apart (review of spec 026). Background work lets the main agent do other things meanwhile. Questions can't safely pop up from several threads while the user types, so unattended agents get none: they can never do more than rules already allow. Keeping undo away from running writers keeps checkpoints consistent.
+
+**Rejected.** Background subagents that queue questions for later (blocks them indefinitely, confusing prompts). Typing commands during a turn (the terminal is in raw mode for Esc). Esc stopping background subagents too (they'd be lost with any turn; `/stop all` does that). A separate log file per agent (one timeline is easier to follow; the filters split it).
+
+**Source.** User review of spec 026, 2026-11-24. Recommended options accepted while the user was away, specifying 027-background-subagents, 2026-11-24.
 
 ---
 
@@ -1017,6 +1037,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q67 | What should `/` and Tab do in the TUI? | Print the `/help` text; Tab after a partial command completes it, listing matches with descriptions | Commands can be found without leaving the prompt | D-062 |
 | Q68 | What is a custom agent and how is it chosen? | A folder with `agent.json`, `prompt.md` and `helpers.js`; `--agent NAME` at start; it only narrows tools, mode and steps; project agents need trust | US-4.1 without new privileges | D-063 |
 | Q69 | How do subagents work? | `api.spawnAgent` runs a fresh loop in its own isolate under the session's gate, narrowed by a custom agent; depth one; per-turn and step limits configurable (10 and 100 by default); an optional model profile, listed by `api.models()`; returns the final reply | Big tasks split without a subagent ever doing more than the main agent | D-064 |
+| Q70 | How does a user see, follow and stop running agents, and tell their events apart? | Background subagents with `/agents`, `/agents NAME` and `/stop NAME\|all`; every event names its agent (`main`, `sub-N`) and its source (`host` or `guest`), and `jharness log` filters by both | Parallel work stays visible and stoppable without stopping the main agent | D-065 |
 
 ---
 

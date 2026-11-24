@@ -462,6 +462,10 @@ public final class EgressProxy implements AutoCloseable {
                     }
                     return "allowed by the user; saved to " + projectRules;
                 }
+                case UNATTENDED -> {
+                    blocked(host, port, ip, "no one could answer (no turn was running, or a background subagent asked)");
+                    return null;
+                }
                 default -> {
                     blocked(host, port, ip, "denied by the user");
                     return null;
