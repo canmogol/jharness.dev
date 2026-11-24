@@ -1,6 +1,15 @@
 # Changelog
 
-<!-- last-commit: c18d20c11203bf114a1253b634501a50d8549078 -->
+<!-- last-commit: 9604a728f74a335bb77f198b14ff96deb6c99a9a -->
+
+## 2026-11-24 · Tool definitions decided
+
+- Decided, not built yet: Maven, Gradle and npm will be JSON definition files, and git and `rg` stay in code. On first run the files are copied into `~/.jharness/tools/`; trusted projects can add their own in `.jharness/tools/` (D-066).
+- A definition maps typed, pattern-checked fields to fixed arguments, never free-form ones, and may not name a shell. Only the user's own files may name a workspace wrapper or allow loopback.
+- The trust question will list a project's tools, and a new or changed project tool asks again.
+- `api.tool(name, request)` and `api.tools()` will replace `api.maven`, `api.gradle` and `api.npm` (D-067).
+- Constitution 1.6 amends Articles IV and V to match. D-008, D-009, D-050 and D-061 are marked as amended.
+- `examples/.jharness/tools/` holds `maven.json`, `gradle.json` and `npm.json`, which give today's operations exactly. The reviewer agent example moved to `examples/.jharness/agents/reviewer/`.
 
 ## 2026-11-24 · 027 Background subagents
 
