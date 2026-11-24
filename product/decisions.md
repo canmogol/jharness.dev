@@ -81,6 +81,7 @@ Last updated: 2026-11-24
 | D-068 | git and `rg` stay in Java code, not tool definitions: per-operation approvals, use in untrusted projects, injection defences, secrets, undo and structured results need host code | Accepted |
 | D-069 | `/follow [NAME]` shows a running background subagent like the main loop (streamed reply, steps, diffs) until Esc or its end; it stays a view, and shared model clients name the subagent on its events | Accepted |
 | D-070 | Project folders under `sessions/`, `projects/` and `checkpoints/` are the workspace path as a slug plus 7 hex characters; session ids are the UTC start time plus 4 hex characters; old folders are left alone | Accepted |
+| D-071 | `/switch NAME` makes the prompt talk to a subagent: new turns in its own conversation, its questions asked instead of denied, Esc stops its turn; subagents stay open after their task (at most 16 idle); `/switch main` goes back | Accepted |
 
 ---
 
@@ -1068,6 +1069,23 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-071 — Switching to a subagent
+
+**Decision.**
+- `/switch NAME` makes the prompt talk to that subagent: it shows `NAME> `, and each message is a new turn in the subagent's own conversation, marked as coming from the user. `/switch main` goes back; the subagent keeps its conversation for later.
+- While the user is switched to a subagent, that subagent is attended: its approval questions are asked, as in a main turn, instead of being denied as unattended (D-065). Other background subagents stay unattended.
+- Its reply streams and its steps print as in `/follow`. Esc stops its current turn, as Esc stops a main turn. Switching to a subagent that is still running waits for its turn to end, asking its questions meanwhile.
+- Subagents, foreground and background, stay open after their task: the loop, conversation and isolate are kept. At most 16 idle ones stay open; beyond that the oldest idle one is closed and can't be talked to. Closing the session closes them all.
+- Replies the user gets by talking aren't handed to the main agent; the user took the conversation over. A stopped subagent can be talked to again.
+
+**Why.** Background subagents can't ask (D-065), so work that needs an approval stalled. Switching lets the user answer and steer that subagent directly, without the main agent in between (roadmap, user request in the review of spec 027).
+
+**Rejected.** Queuing background questions until the user looks (D-065). Asking every background question as it comes (prompts over the user's typing). Closing subagents when their task ends (nothing left to talk to).
+
+**Source.** Roadmap item "Switch to an agent, answer its questions and talk to it". Recommended options accepted while the user was away, specifying 032-switch-to-agent, 2026-11-24.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1149,6 +1167,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q73 | Why aren't git and `rg` tool definitions too? | A definition only runs a program with checked arguments and returns its output; git and `rg` need host code for approvals per operation, untrusted projects, injection defences, secrets, undo and parsed results | Moving them would turn the format into a programming language, and a mistake in a file would become a security hole | D-068 |
 | Q74 | How does a user watch what a running subagent does? | `/follow sub-N` streams its reply and steps like the main loop; Esc stops watching and the subagent keeps running | `/agents sub-N` only printed past events | D-069 |
 | Q75 | How are session, permission and checkpoint folders named? | `users-xyz-projects-jharness.dev-2787870/s-2026-11-24T105226Z-18a9.jsonl`: the path as a slug with a short hash, and the start time | Easy to find by hand; the hash keeps paths with the same slug apart | D-070 |
+| Q76 | How does the user answer a subagent's questions and talk to it? | `/switch sub-N`: the prompt becomes `sub-N>`, messages are new turns in its conversation, and its approvals are asked while you are switched to it | Background subagents can finish work that needs approval without the main agent in between | D-071 |
 
 ---
 

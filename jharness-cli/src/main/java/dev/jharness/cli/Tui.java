@@ -41,6 +41,7 @@ final class Tui {
               /agents         list this session's subagents
               /agents NAME    show a subagent's last 20 events
               /follow [NAME]  watch a background subagent live, like the main loop (Esc stops watching)
+              /switch NAME    talk to a subagent: your messages and its questions go to it (/switch main goes back)
               /stop NAME|all  stop a running background subagent, or all of them
               /diff           show the last turn's file changes
               /undo           undo the last turn's file changes and remove it from the conversation
@@ -97,6 +98,8 @@ final class Tui {
     private Path logPath;
     /** The background subagent {@code /follow} shows, or null (spec 030). */
     private volatile String following;
+    /** The subagent the prompt talks to after {@code /switch}, or null for the main agent (spec 032). */
+    private volatile String talking;
 
     Tui(Terminal terminal, Path historyFile) throws IOException {
         this(terminal, historyFile, System.getenv());
@@ -280,7 +283,7 @@ final class Tui {
                 }
                 continue;
             }
-            TurnResult r = turn(session, t);
+            TurnResult r = talking != null ? talkTurn(session, t) : turn(session, t);
             out.println();
             if (!r.stopReason().equals("done")) {
                 raw.println(styler.error("[" + r.stopReason() + (r.error() == null ? "" : ": " + r.error()) + "]"));
@@ -303,7 +306,8 @@ final class Tui {
             out.flush();
         }
         try {
-            return reader.readLine("> ");
+            String t = talking;
+            return reader.readLine(t == null ? "> " : t + "> ");
         } finally {
             if (keys) {
                 raw.print(MODIFY_KEYS_OFF);
@@ -504,6 +508,7 @@ final class Tui {
             case "/agents" -> agents(session, parts.length > 1 ? parts[1].strip() : "");
             case "/stop" -> stop(session, parts.length > 1 ? parts[1].strip() : "");
             case "/follow" -> follow(session, parts.length > 1 ? parts[1].strip() : "");
+            case "/switch" -> switchTo(session, parts.length > 1 ? parts[1].strip() : "");
             case "/network" -> network(session, parts.length > 1 ? parts[1].strip() : "");
             case "/thinking" -> {
                 showThinking = !showThinking;
@@ -640,6 +645,122 @@ final class Tui {
         out.println();
         out.println(stopped ? "Stopped following " + name + "; it keeps running (/follow " + name + " to watch again)."
                 : name + " has ended; /agents " + name + " shows its events.");
+    }
+
+    /**
+     * {@code /switch NAME} (spec 032): the prompt talks to that subagent. Its output shows like the main
+     * loop's and its questions are asked, not denied. A running subagent is watched until its turn ends;
+     * Esc stops that turn. {@code /switch main} goes back.
+     */
+    private void switchTo(Session session, String name) {
+        if (name.isEmpty()) {
+            out.println("Usage: /switch NAME or /switch main. " + (talking == null ? "Talking to the main agent." : "Talking to " + talking + "."));
+            return;
+        }
+        if (name.equals("main")) {
+            if (talking != null) {
+                out.println("Back to the main agent; " + talking + " keeps its conversation (/switch " + talking + " to go on).");
+            }
+            talking = null;
+            following = null;
+            session.attend(null);
+            return;
+        }
+        if (!session.subagentOpen(name)) {
+            boolean known = session.subagents().stream().anyMatch(a -> a.name().equals(name));
+            out.println(known ? name + " is closed (its sandbox was freed); start a new subagent instead."
+                    : "No subagent " + name + " in this session." + (session.subagents().isEmpty() ? ""
+                            : " Subagents: " + String.join(", ", session.subagents().stream().map(Session.Subagent::name).toList()) + "."));
+            return;
+        }
+        talking = name;
+        following = name;
+        session.attend(name);
+        Session.Subagent a = session.subagents().stream().filter(x -> x.name().equals(name)).findFirst().orElseThrow();
+        String task = a.task().strip().replaceAll("\\s+", " ");
+        out.println("Talking to " + name + " (" + (task.length() > 80 ? task.substring(0, 80) + "…" : task) + "). Your messages go to it and its "
+                + "questions come to you; /switch main goes back.");
+        if (session.runningSubagents().contains(name)) {
+            out.println(name + " is running; you can type when its turn ends" + (terminal.getType().startsWith("dumb") ? "." : " (Esc stops it)."));
+            out.flush();
+            watch(session, name, () -> session.interruptSubagent(name));
+        } else if (!a.status().equals("running")) {
+            raw.println(styler.dim("Its last reply ended with: " + a.status()));
+        }
+        out.flush();
+    }
+
+    /** One message to the subagent the user switched to, with Esc and approvals as in a main turn. */
+    private TurnResult talkTurn(Session session, String text) {
+        String name = talking;
+        boolean keys = !terminal.getType().startsWith("dumb");
+        Attributes saved = null;
+        EscWatcher w = null;
+        if (keys) {
+            saved = terminal.getAttributes();
+            Attributes a = new Attributes(saved);
+            a.setLocalFlag(Attributes.LocalFlag.ICANON, false);
+            a.setLocalFlag(Attributes.LocalFlag.ECHO, false);
+            a.setControlChar(Attributes.ControlChar.VMIN, 0);
+            a.setControlChar(Attributes.ControlChar.VTIME, 1);
+            terminal.setAttributes(a);
+            w = new EscWatcher(terminal.reader(), () -> session.interruptSubagent(name));
+            prompter().watcher = w;
+        }
+        styler.reset();
+        prompter().idle = false;
+        try {
+            // Its reply streams through the followed-agent events, so the callback prints nothing.
+            return session.talk(name, text, d -> {});
+        } catch (IllegalArgumentException e) {
+            return new TurnResult("", "error", 0, e.getMessage());
+        } finally {
+            prompter().idle = true;
+            synchronized (this) {
+                flushPending();
+            }
+            if (w != null) {
+                prompter().watcher = null;
+                w.close();
+                terminal.setAttributes(saved);
+            }
+        }
+    }
+
+    /** Waits, in raw mode with Esc watched, until the subagent's current turn ends; questions are asked meanwhile. */
+    private void watch(Session session, String name, Runnable onEsc) {
+        boolean keys = !terminal.getType().startsWith("dumb");
+        Attributes saved = null;
+        EscWatcher w = null;
+        if (keys) {
+            saved = terminal.getAttributes();
+            Attributes r = new Attributes(saved);
+            r.setLocalFlag(Attributes.LocalFlag.ICANON, false);
+            r.setLocalFlag(Attributes.LocalFlag.ECHO, false);
+            r.setControlChar(Attributes.ControlChar.VMIN, 0);
+            r.setControlChar(Attributes.ControlChar.VTIME, 1);
+            terminal.setAttributes(r);
+            w = new EscWatcher(terminal.reader(), onEsc);
+            prompter().watcher = w;
+        }
+        prompter().idle = false;
+        try {
+            while (session.runningSubagents().contains(name)) {
+                Thread.sleep(100);
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        } finally {
+            prompter().idle = true;
+            synchronized (this) {
+                flushPending();
+            }
+            if (w != null) {
+                prompter().watcher = null;
+                w.close();
+                terminal.setAttributes(saved);
+            }
+        }
     }
 
     /** {@code /stop NAME} and {@code /stop all} (spec 027 AC-08). */

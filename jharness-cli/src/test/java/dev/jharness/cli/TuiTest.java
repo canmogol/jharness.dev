@@ -226,6 +226,29 @@ class TuiTest {
         assertFalse(sc.substring(0, follow).contains("Sub says hi."), "not shown before /follow");
     }
 
+    /** Spec 032: /switch talks to a subagent, whose questions come to the user, and /switch main goes back. */
+    @Test
+    void switchTalksToASubagent() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws32"));
+        Tui tui = new Tui(terminal("go\n/switch sub-9\n/switch sub-1\nblue\ny\n/agents\n/switch main\n/exit\n"), null);
+        try (Session session = replaySession(tmp.resolve("home32"), ws, "{}", tui,
+                "```js\nJSON.parse(api.waitAgent(JSON.parse(api.spawnAgent({task: 'pick a color', background: true})).agent)).reply\n```",
+                "Which color?",
+                "It asks which color.",
+                "```js\napi.writeFile('c.txt', 'blue')\n```",
+                "Saved blue.")) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("No subagent sub-9 in this session. Subagents: sub-1."), sc);
+        assertTrue(sc.contains("Talking to sub-1 (pick a color). Your messages go to it and its questions come to you"), sc);
+        assertTrue(sc.contains("sub-1> blue"), "the prompt names the subagent: " + sc);
+        assertTrue(sc.contains("Allow writeFile: write c.txt"), "its question was asked: " + sc);
+        assertTrue(sc.contains("▸ [sub-1] step 1: ok") && sc.contains("Saved blue."), sc);
+        assertEquals("blue", Files.readString(ws.resolve("c.txt")));
+        assertTrue(sc.contains("Back to the main agent; sub-1 keeps its conversation (/switch sub-1 to go on)."), sc);
+    }
+
     /** Spec 020 AC-06. */
     @Test
     void modelRetriesShowAsSteps() throws Exception {
@@ -326,7 +349,7 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/model", "/agent", "/agents", "/follow", "/stop", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
+        assertEquals(List.of("/model", "/agent", "/agents", "/follow", "/switch", "/stop", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
                 List.copyOf(Tui.COMMANDS.keySet()));
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
         assertEquals("quit (or Ctrl-D)", Tui.COMMANDS.get("/exit"));

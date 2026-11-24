@@ -225,4 +225,44 @@ class BackgroundSubagentTest {
             assertEquals("stopped", s.subagents().get(1).status());
         }
     }
+
+    /** Spec 032: the user talks to a finished subagent; its questions are asked only while it is attended. */
+    @Test
+    void theUserTalksToASubagentAndAnswersItsQuestions() throws Exception {
+        try (Session s = open(List.of(js("JSON.parse(api.waitAgent(JSON.parse(api.spawnAgent({task: 'pick a color', background: true})).agent)).reply"),
+                "It asks which color."),
+                Map.of("sub-1", List.of("Which color?", js("api.writeFile('a.txt', 'blue')"), "Saved blue.", js("api.writeFile('a.txt', 'red')"),
+                        "Could not save red.")))) {
+            s.loop().turn("go", d -> {});
+            assertTrue(resultOf(1).contains("Which color?"), resultOf(1));
+            assertTrue(s.subagentOpen("sub-1"));
+            s.attend("sub-1");
+            TurnResult r = s.talk("sub-1", "blue", d -> {});
+            assertEquals("Saved blue.", r.reply());
+            assertEquals(1, asked.get(), "its question reached the user");
+            assertEquals("blue", Files.readString(ws.resolve("a.txt")));
+            var req = subs.get("sub-1").requests().get(1);
+            assertTrue(req.messages().stream().anyMatch(m -> m.content().equals("Which color?")), "its own conversation goes on");
+            assertTrue(req.messages().getLast().content().startsWith(SubagentRunner.FROM_USER) && req.messages().getLast().content().endsWith("blue"));
+            s.attend(null);
+            s.talk("sub-1", "now red", d -> {});
+            String denied = subs.get("sub-1").requests().get(4).messages().getLast().content();
+            assertTrue(denied.contains("no one can answer while this runs in the background"), "unattended again: " + denied);
+            assertEquals(1, asked.get());
+            assertEquals("done", s.subagents().getFirst().status());
+            assertTrue(assertThrows(IllegalArgumentException.class, () -> s.talk("sub-9", "x", d -> {})).getMessage().contains("no subagent sub-9"));
+        }
+    }
+
+    @Test
+    void theOldestIdleSubagentsAreClosedBeyondTheLimit() throws Exception {
+        settings = Settings.parse("{\"agent\": {\"subagentsPerTurn\": 20}}", "s");
+        int n = SubagentRunner.MAX_OPEN + 1;
+        try (Session s = open(List.of(js("for (let i = 0; i < " + n + "; i++) { api.spawnAgent('t' + i); } 'ok'"), "done"), Map.of())) {
+            s.loop().turn("go", d -> {});
+            assertFalse(s.subagentOpen("sub-1"), "the oldest idle one was closed");
+            assertTrue(s.subagentOpen("sub-2") && s.subagentOpen("sub-" + n));
+            assertTrue(assertThrows(IllegalArgumentException.class, () -> s.talk("sub-1", "x", d -> {})).getMessage().contains("closed"));
+        }
+    }
 }

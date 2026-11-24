@@ -65,6 +65,8 @@ def main():
                             "{ api.waitAgent({agent: 'sub-1', timeoutMs: 50}); }\n'started'\n```"}) + "\n")
         f.write(json.dumps({"reply": "```js\nwhile (true) {}\n```"}) + "\n")
         f.write(json.dumps({"reply": "Background started."}) + "\n")
+        # After /stop all, the user switches to the stopped subagent and talks to it (spec 032).
+        f.write(json.dumps({"reply": "Hello from sub-1."}) + "\n")
 
     pid, fd = pty.fork()
     if pid == 0:
@@ -75,7 +77,8 @@ def main():
     transcript = read_available(fd, 8.0)
     steps = [(b"n\r", 2.0), (b"change a.txt\r", 4.0), (b"y\r", 4.0), (b"/help\r", 1.0), (b"/undo\r", 1.5),
              (b"spin\r", 2.5), (b"\x1b", 2.5),
-             (b"bg\r", 5.0), (b"/follow\r", 1.5), (b"\x1b", 1.5), (b"/stop all\r", 4.0), (b"/\t", 1.5), (b"\x15", 0.5), (b"\x04", 3.0)]
+             (b"bg\r", 5.0), (b"/follow\r", 1.5), (b"\x1b", 1.5), (b"/stop all\r", 4.0),
+             (b"/switch sub-1\r", 1.0), (b"hi\r", 2.0), (b"/switch main\r", 1.0), (b"/\t", 1.5), (b"\x15", 0.5), (b"\x04", 3.0)]
     content_after_change = None
     help_end = 0
     tab_help = False
@@ -108,6 +111,7 @@ def main():
         "diff": "-old" in text and "+new" in text,
         "undo": "Restored a.txt." in text and content == "old",
         "esc": "[interrupted]" in text,
+        "switch": "Talking to sub-1" in text and "sub-1> " in text and "Hello from sub-1." in text and "Back to the main agent" in text,
         "follow": "Following sub-1" in text and "Stopped following sub-1; it keeps running" in text and "Stopped sub-1." in text,
         "exit": os.waitstatus_to_exitcode(status) == 0,
         "trust-saved": os.path.exists(os.path.join(home, ".jharness", "trusted.json")),
