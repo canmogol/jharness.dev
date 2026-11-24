@@ -81,7 +81,7 @@ public final class OpenAiCompatibleProvider extends HttpProvider {
             delta.accept(t);
         }, think);
         String[] stop = {null};
-        int[] usage = {0, 0};
+        int[] usage = {0, 0, 0};
         boolean done = Sse.read(in, (event, data) -> {
             if (data.equals("[DONE]")) {
                 return false;
@@ -110,6 +110,8 @@ public final class OpenAiCompatibleProvider extends HttpProvider {
             if (j.hasNonNull("usage")) {
                 usage[0] = j.get("usage").path("prompt_tokens").asInt();
                 usage[1] = j.get("usage").path("completion_tokens").asInt();
+                // Already part of prompt_tokens (OpenAI, vLLM, LM Studio report it; spec 040).
+                usage[2] = j.get("usage").path("prompt_tokens_details").path("cached_tokens").asInt();
             }
             return true;
         });
@@ -117,7 +119,7 @@ public final class OpenAiCompatibleProvider extends HttpProvider {
         if (!done && stop[0] == null) {
             throw new ModelException("the stream from " + profile.baseUrl() + " ended before the reply was complete");
         }
-        return new ChatReply(text.toString(), thinking.toString(), stop[0] == null ? "stop" : stop[0], usage[0], usage[1]);
+        return new ChatReply(text.toString(), thinking.toString(), stop[0] == null ? "stop" : stop[0], usage[0], usage[1], usage[2], 0);
     }
 
     @Override

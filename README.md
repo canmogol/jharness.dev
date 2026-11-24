@@ -110,6 +110,10 @@ A failed model request is sent again when nothing from it has reached you yet: r
 
 Long sessions keep going when the model's context fills up. Each profile has a `"contextWindow"` in tokens (default 32,768 for `openai-compatible`, 200,000 for `anthropic`; set it to what your model and server allow). When the conversation reaches 80% of the window minus `maxTokens`, the model first writes a summary of the older messages, which then replace them, and the line `▸ context compacted: about 27,000 → 3,100 tokens` says so. `/context` shows how full it is and `/compact` compacts now. `"agent": {"compactAt": 0.7}` compacts earlier, and `"autoCompact": false` turns it off. Turns inside a summary can no longer be rewound.
 
+Claude profiles use Anthropic's prompt cache: the system prompt and the conversation so far are marked so the next request reads them from the cache, which is faster and costs less. `"promptCache": false` in the profile turns it off. Local OpenAI-compatible servers cache on their own. `jharness log` shows `cacheReadTokens` and `cacheWriteTokens` on each `model.completed`.
+
+Type `@` and a path in a prompt to attach a file or folder: `Why does @src/main/java/App.java fail?` Tab completes the path. The file's contents, or the folder's listing, go with the prompt, and `▸ attached src/main/java/App.java (2,310 characters)` says so. Paths follow the same rules as the agent's reads: the workspace and read-only mounts, never the deny list. Use `@"a file.txt"` for paths with spaces. Big files are cut at 50,000 characters, and one prompt attaches at most a quarter of the context window.
+
 Then, in a project folder:
 
 ```

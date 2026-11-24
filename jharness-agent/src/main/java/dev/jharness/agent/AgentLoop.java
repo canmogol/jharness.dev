@@ -214,7 +214,7 @@ public final class AgentLoop {
         String summary;
         try {
             ChatReply r = provider.stream(new ChatRequest(COMPACT_SYSTEM, List.of(ChatMessage.user(COMPACT_INSTRUCTIONS + transcript(summarized, budget))),
-                    SUMMARY_TOKENS), d -> {});
+                    SUMMARY_TOKENS, false), d -> {});
             summary = r.text().strip();
             if (summary.isEmpty()) {
                 throw new ModelException("the summary was empty");
@@ -368,22 +368,31 @@ public final class AgentLoop {
 
     /** One user turn. Never throws for model or guest problems; they end the turn with a stop reason. */
     public synchronized TurnResult turn(String prompt, Consumer<String> onDelta) {
+        return turn(prompt, Mentions.Result.NONE, onDelta);
+    }
+
+    /** One user turn with the files the prompt mentions attached to its message (spec 040). */
+    public synchronized TurnResult turn(String prompt, Mentions.Result attached, Consumer<String> onDelta) {
         turns.next();
         interrupted = cancelled;
         turnThread = Thread.currentThread();
         try {
-            return runTurn(prompt, onDelta);
+            return runTurn(prompt, attached, onDelta);
         } finally {
             turnThread = null;
             Thread.interrupted();
         }
     }
 
-    private TurnResult runTurn(String prompt, Consumer<String> onDelta) {
+    private TurnResult runTurn(String prompt, Mentions.Result attached, Consumer<String> onDelta) {
         bus.publish(turns.get(), "turn.started", Json.object().put("prompt", prompt));
+        if (!attached.isEmpty()) {
+            bus.publish(turns.get(), "prompt.attached", attached.event());
+        }
         liveTurns.put(turns.current(), conversation.size());
         String before = notes.get();
-        conversation.add(ChatMessage.user(before.isEmpty() ? prompt : before + "\n\n" + prompt));
+        String text = prompt + attached.text();
+        conversation.add(ChatMessage.user(before.isEmpty() ? text : before + "\n\n" + text));
         int steps = 0;
         int continued = 0;
         stepsNow = 0;

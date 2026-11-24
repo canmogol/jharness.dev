@@ -171,6 +171,13 @@ jobs:
           grep -q "Compacted and done." "$tmp/cmp.txt"
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --type context. | tee "$tmp/cmp-log.txt"
           grep -q "context.compacted  by=auto" "$tmp/cmp-log.txt"
+          # @file mentions (spec 040): a mentioned file is attached and recorded; a deny-listed one is not.
+          printf 'shop notes\n' > "$tmp/ws/notes.md" && printf 'TOKEN=x\n' > "$tmp/ws/.env"
+          printf '%s\n' '{"reply":"Read the notes."}' > "$tmp/at.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/at.jsonl" -p "Summarize @notes.md and @.env" | tee "$tmp/at.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json --type prompt.attached | tee "$tmp/at-log.jsonl"
+          grep '"path":"notes.md"' "$tmp/at-log.jsonl" | grep -q '"mention":".env"'
+          rm "$tmp/ws/notes.md" "$tmp/ws/.env"
           # Action reviewer (spec 038): a fake System One server doubts a write, so bypass mode still refuses it.
           python3 -I jharness-agent/src/test/resources/fake_systemone_server.py "$tmp/so.port" 0.05 &
           so=$!

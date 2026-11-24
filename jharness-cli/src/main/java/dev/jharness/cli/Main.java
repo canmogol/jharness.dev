@@ -293,7 +293,7 @@ public final class Main implements Callable<Integer> {
                         text = x.prompt() == null ? "" : x.prompt();
                     }
                 }
-                return s.loop().turn(text, d -> {
+                return s.turn(text, d -> {
                     out.print(d);
                     out.flush();
                 });

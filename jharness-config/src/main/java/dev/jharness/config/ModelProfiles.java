@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 /** The {@code model} and {@code models} sections: named profiles and the default (D-032). */
 public final class ModelProfiles {
 
-    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes", "retries", "retryMaxWait", "responseTimeout", "contextWindow");
+    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes", "retries", "retryMaxWait", "responseTimeout", "contextWindow", "promptCache");
 
     private final String defaultName;
     private final Map<String, ModelProfile> profiles;
@@ -173,8 +173,18 @@ public final class ModelProfiles {
         if (maxTokens >= window) {
             throw new ConfigException(where + ".maxTokens (" + maxTokens + ") must be below contextWindow (" + window + ")");
         }
+        boolean cache = ModelProfile.ANTHROPIC.equals(provider);
+        if (n.has("promptCache")) {
+            if (!n.get("promptCache").isBoolean()) {
+                throw new ConfigException(where + ".promptCache: expected true or false");
+            }
+            if (!ModelProfile.ANTHROPIC.equals(provider)) {
+                throw new ConfigException(where + ".promptCache applies only to anthropic profiles; OpenAI-compatible servers cache prompts on their own");
+            }
+            cache = n.get("promptCache").asBoolean();
+        }
         return new ModelProfile(name, provider, baseUrl.replaceAll("/+$", ""), model, apiKeyEnv, maxTokens, notes,
-                retries, retryMaxWait, responseTimeout, window);
+                retries, retryMaxWait, responseTimeout, window, cache);
     }
 
     private static java.time.Duration duration(JsonNode n, String key, String where, java.time.Duration dflt,

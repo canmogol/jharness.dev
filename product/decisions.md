@@ -88,6 +88,7 @@ Last updated: 2026-11-24
 | D-075 | `api.todos` keeps each agent's todo list, shown in the TUI; `/plan` toggles plan mode, which notes itself in each message; the main agent's `api.proposePlan` asks the user to leave plan mode and carry out the plan | Accepted |
 | D-076 | MCP client: our own small client over stdio and streamable HTTP; servers only from the user's `mcp` settings; stdio servers in the OS sandbox through the proxy; each `tools/call` asks (`kind: mcp`, "always" per server/tool); `api.mcp({list})` and the prompt list the tools | Accepted |
 | D-077 | Token counting and compaction: each profile has a `contextWindow`; the model's own counts, else about 3.5 characters a token; at `agent.compactAt` (0.8) of the window minus the reply size, the model summarizes the older conversation; `/context` and `/compact`; turns in a summary can't be rewound | Accepted |
+| D-078 | Prompt caching and `@file` mentions: Claude requests mark the system prompt and the last message for the 5-minute prompt cache (`promptCache`, on by default); `inputTokens` counts the whole prompt; `@path` in a user prompt attaches a file or folder under the file policy, within a size budget | Accepted |
 
 ---
 
@@ -1236,6 +1237,26 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** Roadmap item "Token counting, auto-compaction, prompt caching, `@file` mentions", split so prompt caching and `@file` mentions follow in their own spec; US-2.8. Recommended options accepted while the user was away, specifying 039-token-counting-and-compaction, 2026-11-24.
 
+## D-078 — Prompt caching and `@file` mentions
+
+**Decision.** Repeated prompts cost less on Claude, and the user can hand the agent files by name.
+
+- **Caching.** For `anthropic` profiles, the system prompt goes as a text block with `cache_control: {type: "ephemeral"}` (5 minutes), and so does the last message of each request. The next request reads everything up to the earlier breakpoint from the cache. `promptCache: false` turns it off; one-off requests, such as a compaction summary, are never marked. `openai-compatible` profiles send nothing extra and can't set `promptCache`; servers that cache report `prompt_tokens_details.cached_tokens`, which is read.
+- **Counts.** `inputTokens` is the whole prompt, cached parts included, so the context count (D-077) stays right. `model.completed` adds `cacheReadTokens` and `cacheWriteTokens` when they aren't 0.
+- **Mentions.** `@path` at the start of a word in a user prompt (TUI, `-p`, slash command templates), or `@"path with spaces"`, names a file or folder. It is read through the file policy (D-041): the workspace and read-only mounts, never the deny list. The prompt the user typed is unchanged in `turn.started`. The message sent to the model gets an `# Attached files` section with each file in a fence longer than any backtick run inside it, and each folder's listing.
+- **Limits.** Up to 20 mentions; 50,000 characters a file; 200,000 a prompt and at most a quarter of the context window, at about 3.5 characters a token. A cut file says so and points to `api.readFile`. Binary files, missing paths and refused paths are not attached and are named. A word that doesn't exist and has no `/` or `.`, such as `@Override`, is left alone.
+- **Display and events.** `prompt.attached` records the files, their sizes and what was skipped. The TUI prints `▸ attached …` or `▸ not attached: @x: reason`. Tab completes `@` paths, skipping deny-listed entries.
+
+**Why.** An agent loop sends the same growing prefix on every step, so a cache breakpoint on the last message makes almost every request a cache read. Two breakpoints are enough for Anthropic's 20-block lookback, since each message is one block. A mention saves a model step and a round trip for files the user already knows matter. Going through the file policy means a mention can't reach anything the agent couldn't read itself.
+
+**Rejected.**
+- The 1-hour cache (writes cost twice as much; a session rarely pauses that long).
+- A breakpoint on every message (only four are allowed, and two are enough).
+- Mentions outside the file policy, such as `@~/.ssh/config` (the same rules as the agent's reads).
+- Mentions in subagent tasks and agent-written text (the agent can read files itself).
+
+**Source.** Roadmap item "Prompt caching, `@file` mentions"; US-2.8. Recommended options accepted while the user was away, specifying 040-prompt-caching-and-file-mentions, 2026-11-24.
+
 ---
 
 ## Questions and answers
@@ -1327,6 +1348,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q81 | How are MCP servers configured and called? | In `~/.jharness/settings.json` `"mcp": {"servers": {...}}` (command or url); `api.mcp({server, tool, input})` calls a tool after approval; `api.mcp({list: true})` lists them | Lets the agent use the user's other tools under the same sandbox and permissions | D-076 |
 | Q82 | How does the action reviewer ask System One? | One `noul` question per state-changing operation, with the user's request and the action as `state`; below `askBelow` asks, below `denyBelow` denies; failures ask | Maps the answer straight onto D-031's two thresholds | D-031 |
 | Q83 | How do long sessions keep working when the context fills? | Count tokens (the model's counts, else an estimate); at 80% of the window minus the reply size, the model summarizes the older conversation; `/context`, `/compact` | Works with any model and adds nothing to the binary | D-077 |
+| Q84 | How do prompt caching and `@file` mentions work? | Claude requests mark the system prompt and the last message for the 5-minute cache; `@path` attaches files and folders under the file policy within a size budget | Lower cost per step; files by name without a model step | D-078 |
 
 ---
 

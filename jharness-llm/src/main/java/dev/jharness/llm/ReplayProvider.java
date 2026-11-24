@@ -156,7 +156,8 @@ public final class ReplayProvider implements ModelProvider {
             from = to;
         }
         // A recording may give the token counts the real model reported (spec 039).
-        ChatReply reply = new ChatReply(text, thinking, "replay", line.path("inputTokens").asInt(0), line.path("outputTokens").asInt(0));
+        ChatReply reply = new ChatReply(text, thinking, "replay", line.path("inputTokens").asInt(0), line.path("outputTokens").asInt(0),
+                line.path("cacheReadTokens").asInt(0), line.path("cacheWriteTokens").asInt(0));
         bus.publish(origin.get(), "model.completed", ModelEvents.completed("replay", "replay", reply));
         return reply;
     }
