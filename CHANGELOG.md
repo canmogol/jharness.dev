@@ -1,6 +1,27 @@
 # Changelog
 
-<!-- last-commit: 9604a728f74a335bb77f198b14ff96deb6c99a9a -->
+<!-- last-commit: 06c56429e62950d4251f49a67e56d0210338025f -->
+
+## 2026-11-24 · 029 Prompt examples
+
+- The system prompt's examples grew from 4 to 11 short tasks, aimed at small local models.
+- The new ones explore a project, find a tool that runs the tests and keep only the failures, run one test class, check `git status` before committing, fetch a page, start a background subagent and collect its result, and record progress with `api.emit`.
+- `ExamplesTest` runs every example in a real session against a small test project, so an example that stops working fails the build.
+- Decision: git and `rg` stay in Java code, because approvals per operation, use in untrusted projects, injection defences, secrets, undo and structured results need host code (D-068).
+
+## 2026-11-24 · 028 Tool definitions
+
+- Maven, Gradle and npm now come from JSON definition files. The first start writes the shipped ones from `examples/.jharness/tools/` to `~/.jharness/tools/`; after that, editing, adding or deleting a file there changes the tools.
+- Each operation is an argument template over typed fields (`flag`, `string` with a pattern, `enum`, `integer`, `folder`). Unknown keys, bad patterns and unused fields are refused.
+- A definition can't name a shell, set the loader, path or proxy variables, make sensitive home folders writable, or pass a value that starts with `-`.
+- A trusted project's `.jharness/tools/` can add, replace or turn off tools, but can't name a wrapper, make home folders writable or allow loopback.
+- The trust question lists the project's tools, and each start names them. A new or changed project tool asks again; `-p` leaves it out and says so.
+- `api.tool(name, request)` and `api.tools()` replace `api.maven`, `api.gradle` and `api.npm`. The system prompt lists the tools, and custom agents can name one tool as `tool:NAME`.
+- "Always" approvals for tools also record the program that runs, so builds saved as "always" ask once more.
+- `jharness tools` lists the tools; `show NAME` prints one, `check` validates every file and `reset [NAME]` writes a shipped file again.
+- `jharness -p tools` and `-p log` now run as prompts instead of failing as subcommand names.
+- Security case REPO-11 checks hostile project tool files.
+- Decisions: tool definitions (D-066) and `api.tool` (D-067).
 
 ## 2026-11-24 · Tool definitions decided
 
