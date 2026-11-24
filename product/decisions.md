@@ -83,6 +83,7 @@ Last updated: 2026-11-24
 | D-070 | Project folders under `sessions/`, `projects/` and `checkpoints/` are the workspace path as a slug plus 7 hex characters; session ids are the UTC start time plus 4 hex characters; old folders are left alone | Accepted |
 | D-071 | `/switch NAME` makes the prompt talk to a subagent: new turns in its own conversation, its questions asked instead of denied, Esc stops its turn; subagents stay open after their task (at most 16 idle); `/switch main` goes back | Accepted |
 | D-072 | In an interactive session a background subagent's question waits (up to `agent.backgroundQuestionWait`, 10 min) with a notice; `/switch` asks it; `agent.backgroundQuestions: deny` and `-p` deny at once | Accepted |
+| D-073 | JS hooks: `NAME.js` in `~/.jharness/hooks/` and trusted projects' `.jharness/hooks/` define `preTool` (block only, fails closed), `postTool` (observe) and `stop` (go on, at most 3 times a turn); each runs in its own isolate with subagent limits, and its own api calls are gated and run no hooks | Accepted |
 
 ---
 
@@ -272,7 +273,7 @@ Last updated: 2026-11-24
 
 **Source.** Accepted by the user on 2026-11-17.
 
-**Consequences.** A hook that needs git or a build tool calls `api.git`, `api.maven`, `api.gradle` or `api.npm`, with the usual approvals.
+**Consequences.** A hook that needs git or a build tool calls `api.git` or `api.tool` (D-067), with the usual approvals. How hooks are written and run: D-073.
 
 ## D-023 — MCP tools through `api.mcp(...)`
 
@@ -1104,6 +1105,29 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-073 — JS hooks
+
+**Decision.**
+- **Files.** A hook is a JavaScript file `NAME.js` in `~/.jharness/hooks/`, or in a trusted project's `.jharness/hooks/`, which the trust question lists. Names use lower-case letters, digits and `-`. Files are at most 64 KB and can't be links, and a user file others can write is refused.
+- **Functions.** A file defines any of three functions:
+  - `preTool(call)` runs before every `api` call, before the permission gate. `call` has `agent`, `api`, `kind`, `summary` and `detail` (such as `path` or the git request). Returning `{block: "reason"}` refuses the call with `blocked by hook NAME: reason`. A pre-tool hook that throws or hits a limit blocks the call (fails closed).
+  - `postTool(call)` runs after the call, with `status` (`ok`, `error`, `denied`, `blocked`), `result` (at most 10,000 characters) or `error`. It observes only; errors are logged.
+  - `stop(turn)` runs when an agent's turn would end with a reply and no code. `turn` has `agent`, `turn`, `steps`, `continued`, `reply` and `calls` (`api`, `kind`, `summary`, `status`). Returning `{continue: "message"}` gives the agent that message and lets it go on, at most 3 times a turn.
+- **Only tighten.** Hooks never approve. A call they let through still goes to the gate, and nothing a hook returns can change a call's arguments.
+- **Where they run.** Each hook has its own isolate with the `subagent` sandbox limits and a fresh context per call (Article III). The caller's block clock is paused meanwhile.
+- **Their own calls.** A hook's own `api` calls go through the session's gate and run no hooks, and its events carry `hook-NAME`.
+- **Scope.** Hooks apply to the main agent, subagents and the session's start-up `readContext`. They run in name order, user hooks before project hooks, and the first block wins.
+- **Visibility.** `hooks.loaded` lists the hooks and the broken files; `hook.ran` records each run (`outcome`: `ok`, `block`, `continue`, `error`). The TUI prints blocks, continues and errors, and `/hooks` lists the hooks.
+- **Example.** `examples/.jharness/hooks/guard.js` blocks pushes to `main` or `master` and hand edits of lock files, and asks the main agent to run the tests when it changed files without doing so.
+
+**Why.** US-4.2: team guardrails that apply automatically. D-022 rules out shell hooks. Checking before the gate means a guardrail holds even in bypass mode, and failing closed means a broken guardrail doesn't silently allow. Stop hooks let a team require a last step, such as tests, without changing the agent.
+
+**Rejected.** Hooks that change a call's arguments (they would have to be checked again, and a change could loosen a call; later). Hooks that approve (Article VII). A hook isolate per call (start-up cost); one per hook with a fresh context per run keeps the rules. Failing open for pre-tool errors.
+
+**Source.** Roadmap item "JS hooks (pre-tool, post-tool, stop); no shell hooks", D-022, US-4.2. Recommended options accepted while the user was away, specifying 034-js-hooks, 2026-11-24.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1187,6 +1211,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q75 | How are session, permission and checkpoint folders named? | `users-xyz-projects-jharness.dev-2787870/s-2026-11-24T105226Z-18a9.jsonl`: the path as a slug with a short hash, and the start time | Easy to find by hand; the hash keeps paths with the same slug apart | D-070 |
 | Q76 | How does the user answer a subagent's questions and talk to it? | `/switch sub-N`: the prompt becomes `sub-N>`, messages are new turns in its conversation, and its approvals are asked while you are switched to it | Background subagents can finish work that needs approval without the main agent in between | D-071 |
 | Q77 | Can a background subagent's question reach the user instead of being denied? | Yes: it waits with a notice above the prompt, `/agents` shows `waiting`, and `/switch NAME` asks it; after 10 minutes it is denied | Background work that needs one approval no longer fails, without questions popping up over the user's typing | D-072 |
+| Q78 | How do hooks work? | JS files with `preTool(call)`, `postTool(call)` and `stop(turn)`; a pre-tool hook returns `{block}` before the gate, a stop hook returns `{continue}`; hooks never approve | Team guardrails apply to every agent without a shell (D-022) | D-073 |
 
 ---
 

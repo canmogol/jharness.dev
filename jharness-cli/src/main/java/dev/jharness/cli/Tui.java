@@ -38,6 +38,7 @@ final class Tui {
               /model          list model profiles
               /model NAME     switch to another profile
               /agent          list custom agents (start one with jharness --agent NAME)
+              /hooks          list the JS hooks in ~/.jharness/hooks/ and the project's .jharness/hooks/
               /agents         list this session's subagents
               /agents NAME    show a subagent's last 20 events
               /follow [NAME]  watch a background subagent live, like the main loop (Esc stops watching)
@@ -176,11 +177,19 @@ final class Tui {
 
     /** The trust question, listing the tools the project defines (spec 028, D-066). */
     boolean askTrust(Path workspace, List<dev.jharness.process.ToolDefinitions.ProjectTool> tools) {
+        return askTrust(workspace, tools, List.of());
+    }
+
+    /** The trust question, listing the project's tools and its hooks (specs 028, 034). */
+    boolean askTrust(Path workspace, List<dev.jharness.process.ToolDefinitions.ProjectTool> tools, List<String> hooks) {
         out.println("Do you trust " + workspace + "?");
         out.println("Trusting it lets its .jharness/settings.json loosen JHarness rules (permission mode, sandbox limits, mounts, models).");
         if (!tools.isEmpty()) {
             out.println("It also lets JHarness run the tools the project defines in .jharness/tools/:");
             tools.forEach(t -> out.println("  " + t.line()));
+        }
+        if (!hooks.isEmpty()) {
+            out.println("It also runs the project's hooks on every api call (.jharness/hooks/): " + String.join(", ", hooks));
         }
         out.println("Untrusted projects can only make JHarness stricter.");
         out.flush();
@@ -263,6 +272,7 @@ final class Tui {
             out.println("Project tools: " + String.join("; ", project.stream().map(dev.jharness.process.ToolDefinitions.ProjectTool::line).toList()));
         }
         session.tools().errors().forEach((n, err) -> raw.println(styler.error("Tool " + n + " is unavailable: " + err)));
+        session.describeHooks().stream().filter(l -> l.contains("  broken: ")).forEach(l -> raw.println(styler.error("Hook " + l)));
         out.flush();
         while (true) {
             String line;
@@ -513,6 +523,13 @@ final class Tui {
             case "/follow" -> follow(session, parts.length > 1 ? parts[1].strip() : "");
             case "/switch" -> switchTo(session, parts.length > 1 ? parts[1].strip() : "");
             case "/network" -> network(session, parts.length > 1 ? parts[1].strip() : "");
+            case "/hooks" -> {
+                List<String> h = session.describeHooks();
+                if (h.isEmpty()) {
+                    out.println("No hooks. Put NAME.js files with preTool, postTool or stop functions in ~/.jharness/hooks/.");
+                }
+                h.forEach(out::println);
+            }
             case "/thinking" -> {
                 showThinking = !showThinking;
                 out.println("Thinking: " + (showThinking ? "shown" : "hidden"));
@@ -871,6 +888,19 @@ final class Tui {
                 if (e.body().has("error")) {
                     int line = e.body().path("line").asInt(0);
                     raw.println(styler.error("  " + (line > 0 ? "line " + line + ": " : "") + e.body().get("error").asText()));
+                }
+            }
+            case "hook.ran" -> {
+                String outcome = e.body().get("outcome").asText();
+                String hook = e.body().get("hook").asText();
+                String reason = e.body().path("reason").asText("");
+                switch (outcome) {
+                    case "block" -> raw.println(styler.error("▸ hook " + hook + " blocked a call: " + reason));
+                    case "continue" -> raw.println(styler.step("▸ hook " + hook + " asks to go on: " + reason));
+                    case "error" -> raw.println(styler.error("▸ hook " + hook + " failed in " + e.body().get("event").asText() + ": " + reason));
+                    default -> {
+                        // ok: only in the session log
+                    }
                 }
             }
             case "model.retry" -> {

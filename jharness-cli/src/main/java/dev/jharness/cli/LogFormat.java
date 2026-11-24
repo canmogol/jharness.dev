@@ -28,6 +28,7 @@ final class LogFormat {
             Map.entry("session.model_changed", List.of("profile", "provider", "model")),
             Map.entry("subagent.started", List.of("customAgent", "model", "maxSteps", "background", "task")),
             Map.entry("subagent.delivered", List.of("agents")),
+            Map.entry("hook.ran", List.of("hook", "event", "outcome", "reason")),
             Map.entry("subagent.waiting", List.of("summary")),
             Map.entry("subagent.wait_ended", List.of("outcome")),
             Map.entry("subagent.completed", List.of("stopReason", "steps", "durationMs", "error")),
