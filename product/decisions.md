@@ -84,6 +84,7 @@ Last updated: 2026-11-24
 | D-071 | `/switch NAME` makes the prompt talk to a subagent: new turns in its own conversation, its questions asked instead of denied, Esc stops its turn; subagents stay open after their task (at most 16 idle); `/switch main` goes back | Accepted |
 | D-072 | In an interactive session a background subagent's question waits (up to `agent.backgroundQuestionWait`, 10 min) with a notice; `/switch` asks it; `agent.backgroundQuestions: deny` and `-p` deny at once | Accepted |
 | D-073 | JS hooks: `NAME.js` in `~/.jharness/hooks/` and trusted projects' `.jharness/hooks/` define `preTool` (block only, fails closed), `postTool` (observe) and `stop` (go on, at most 3 times a turn); each runs in its own isolate with subagent limits, and its own api calls are gated and run no hooks | Accepted |
+| D-074 | Slash commands: `NAME.md` templates (`$ARGUMENTS`) and `NAME.js` commands (`run(args)` returns a prompt, `{print}` or nothing) in `~/.jharness/commands/` and trusted projects; they can't replace built-ins and also work in `-p` | Accepted |
 
 ---
 
@@ -1128,6 +1129,26 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-074 — Slash commands
+
+**Decision.**
+- **Files.** A command is `NAME.md` or `NAME.js` in `~/.jharness/commands/`, or in a trusted project's `.jharness/commands/`, where it replaces the user's command of the same name. Names are lower-case letters, digits and `-`, starting with a letter. A file can't take a built-in name such as `/help`. Files are at most 64 KB and can't be links, and a user file others can write is refused.
+- **Markdown.** The file's text is the prompt; `$ARGUMENTS` becomes what the user typed after the command. Optional front matter (`---` / `description: …` / `---`) describes it, and otherwise its first line does.
+- **JS.** The file defines `run(args)` and may set a `description` string. `run` returns a prompt string or `{prompt}`, which is sent as the user's message, `{print: text}`, which is only shown, or nothing.
+  - It runs in its own isolate with the `subagent` limits and a fresh context.
+  - Its `api` calls go through the gate and the hooks like the main agent's.
+- **Where commands run.** The prompt goes to the agent the prompt talks to: the main agent, or the subagent after `/switch`. `-p "/name args"` expands the same way.
+- **Discovery.** `/commands` lists them and `/help` adds them under "Your commands"; Tab completes them. `commands.loaded` and `command.ran` record them.
+- **Examples.** `examples/.jharness/commands/review.md` and `changed.js`.
+
+**Why.** US-4.3: repeated prompts as one command. Templates cover most uses with no code. JS commands can gather context first, under the same sandbox and gate as agent code.
+
+**Rejected.** Shell commands (D-008, D-022). Letting files replace built-ins (a repo could hide `/undo`). YAML or JSON command definitions (Markdown is the prompt itself).
+
+**Source.** Roadmap item "Slash commands (Markdown templates and JS)", US-4.3. Recommended options accepted while the user was away, specifying 035-slash-commands, 2026-11-24.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1212,6 +1233,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q76 | How does the user answer a subagent's questions and talk to it? | `/switch sub-N`: the prompt becomes `sub-N>`, messages are new turns in its conversation, and its approvals are asked while you are switched to it | Background subagents can finish work that needs approval without the main agent in between | D-071 |
 | Q77 | Can a background subagent's question reach the user instead of being denied? | Yes: it waits with a notice above the prompt, `/agents` shows `waiting`, and `/switch NAME` asks it; after 10 minutes it is denied | Background work that needs one approval no longer fails, without questions popping up over the user's typing | D-072 |
 | Q78 | How do hooks work? | JS files with `preTool(call)`, `postTool(call)` and `stop(turn)`; a pre-tool hook returns `{block}` before the gate, a stop hook returns `{continue}`; hooks never approve | Team guardrails apply to every agent without a shell (D-022) | D-073 |
+| Q79 | How are slash commands defined? | A Markdown file is a prompt template; a JS file's `run(args)` builds a prompt or prints text, in its own sandbox | Repeated tasks become one command without a new release | D-074 |
 
 ---
 

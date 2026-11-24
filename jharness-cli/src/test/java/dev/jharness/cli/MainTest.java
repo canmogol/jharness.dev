@@ -154,4 +154,17 @@ class MainTest {
         assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--agent", "reader", "-p", "x"));
         assertTrue(err.toString().contains("\"model\" names \"missing\""), err.toString());
     }
+
+    /** Spec 035: a slash command works in -p. */
+    @Test
+    void headlessSlashCommand() throws Exception {
+        Path c = Files.createDirectories(home.resolve(".jharness/commands"));
+        Files.writeString(c.resolve("greet.md"), "Say hello to $ARGUMENTS.");
+        Files.writeString(c.resolve("bad.js"), "function run() { throw new Error('broken'); }");
+        Path r = replay("Hello!");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "/greet Bob"));
+        assertTrue(sessionLog().contains("\"prompt\":\"Say hello to Bob.\""), sessionLog());
+        assertEquals(1, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "/bad"));
+        assertTrue(err.toString().contains("broken"), err.toString());
+    }
 }

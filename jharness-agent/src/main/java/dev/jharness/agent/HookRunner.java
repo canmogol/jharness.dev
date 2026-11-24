@@ -192,7 +192,7 @@ final class HookRunner implements Hooks, AgentLoop.StopHook {
         if (!r.ok()) {
             throw new IllegalStateException(r.error() != null ? r.error() : r.status() + (r.limit() != null ? " (" + r.limit() + ")" : ""));
         }
-        JsonNode v = Json.parse(r.value().startsWith("\"") ? Json.parse(r.value()).asText() : r.value());
+        JsonNode v = Json.parse(r.value());
         lastMs = (System.nanoTime() - t0) / 1_000_000;
         return v;
     }

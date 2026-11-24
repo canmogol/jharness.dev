@@ -274,6 +274,29 @@ class TuiTest {
         assertEquals("saved", Files.readString(ws.resolve("c.txt")));
     }
 
+    /** Spec 035: a user's slash command runs as a turn, and /commands and /help list it. */
+    @Test
+    void userSlashCommands() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws35"));
+        Path home = tmp.resolve("home35");
+        Path c = Files.createDirectories(home.resolve(".jharness/commands"));
+        Files.writeString(c.resolve("greet.md"), "---\ndescription: say hello to someone\n---\nSay hello to $ARGUMENTS.\n");
+        Files.writeString(c.resolve("count.js"), "function run(args) { return {print: 'count: ' + args.split(' ').length}; }");
+        Tui tui = new Tui(terminal("/greet Bob\n/count a b c\n/commands\n/help\n/nope\n/exit\n"), null);
+        ReplayProvider[] replay = new ReplayProvider[1];
+        try (Session session = Session.open(home, ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> replay[0] = ReplayProvider.ofReplies(List.of("Hello Bob!"), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("/greet → Say hello to Bob.") && sc.contains("Hello Bob!"), sc);
+        assertEquals("Say hello to Bob.", replay[0].requests().getFirst().messages().getFirst().content());
+        assertTrue(sc.contains("count: 3"), sc);
+        assertTrue(sc.matches("(?s).*/greet +say hello to someone.*"), sc);
+        assertTrue(sc.contains("Your commands:"), sc);
+        assertTrue(sc.contains("Unknown command /nope"), sc);
+    }
+
     /** Spec 020 AC-06. */
     @Test
     void modelRetriesShowAsSteps() throws Exception {
@@ -374,7 +397,7 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/model", "/agent", "/hooks", "/agents", "/follow", "/switch", "/stop", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
+        assertEquals(List.of("/model", "/agent", "/hooks", "/commands", "/agents", "/follow", "/switch", "/stop", "/diff", "/undo", "/rewind", "/events", "/thinking", "/network", "/help", "/exit"),
                 List.copyOf(Tui.COMMANDS.keySet()));
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
         assertEquals("quit (or Ctrl-D)", Tui.COMMANDS.get("/exit"));

@@ -61,6 +61,8 @@ public final class Session implements AutoCloseable {
     private AgentDefinition agent;
     private ToolDefinitions tools;
     private HookRunner hooks;
+    private ApiServices services;
+    private volatile CommandRunner commands;
     private SubagentRunner subagents;
     private Path home;
     private boolean trusted;
@@ -229,6 +231,7 @@ public final class Session implements AutoCloseable {
         s.agent = agent;
         s.tools = tools;
         s.hooks = hooks;
+        s.services = services;
         s.subagents = subagents;
         s.home = home;
         s.trusted = access.trusted();
@@ -321,6 +324,16 @@ public final class Session implements AutoCloseable {
         subagents.profile(p.name());
         bus.publish(turns.get(), "session.model_changed", Json.object().put("profile", p.name())
                 .put("provider", provider.provider()).put("model", provider.model()));
+    }
+
+    /**
+     * The slash commands (spec 035), loaded on first use; {@code builtIn} are the names the UI keeps for itself.
+     */
+    public synchronized CommandRunner commands(java.util.Set<String> builtIn) {
+        if (commands == null) {
+            commands = CommandRunner.load(home, workspace.root(), trusted, builtIn, settings, bus, turns, services);
+        }
+        return commands;
     }
 
     /** The project's hook files, for the trust question (spec 034). */

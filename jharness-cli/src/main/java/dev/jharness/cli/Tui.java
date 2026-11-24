@@ -39,6 +39,7 @@ final class Tui {
               /model NAME     switch to another profile
               /agent          list custom agents (start one with jharness --agent NAME)
               /hooks          list the JS hooks in ~/.jharness/hooks/ and the project's .jharness/hooks/
+              /commands       list your slash commands from ~/.jharness/commands/ and the project's .jharness/commands/
               /agents         list this session's subagents
               /agents NAME    show a subagent's last 20 events
               /follow [NAME]  watch a background subagent live, like the main loop (Esc stops watching)
@@ -135,7 +136,15 @@ final class Tui {
             return;
         }
         COMMANDS.forEach((name, desc) -> out.add(new org.jline.reader.Candidate(name, name, null, desc, null, null, true)));
+        Session s = current;
+        if (s != null) {
+            s.commands(COMMANDS.keySet()).commands().values().forEach(c -> out.add(
+                    new org.jline.reader.Candidate("/" + c.name(), "/" + c.name(), null, c.description(), null, null, true)));
+        }
     }
+
+    /** The running session, for Tab completion of the user's own commands. */
+    private static volatile Session current;
 
     /** Tab on a lone {@code /} prints the help above the prompt (spec 024 AC-01); otherwise it completes as usual. */
     private void slashTab() {
@@ -262,6 +271,7 @@ final class Tui {
         events = debug ? "all" : session.settings().ui().events();
         showThinking = debug || session.settings().ui().thinking().equals("show");
         session.bus().subscribe(this::onEvent);
+        current = session;
         logPath = session.logPath();
         out.println("JHarness in " + session.workspace().root() + " · model " + modelName(session)
                 + (session.agent() != null ? " · agent " + session.agent().name() : "")
@@ -475,7 +485,14 @@ final class Tui {
             case "/exit", "/quit" -> {
                 return false;
             }
-            case "/help" -> out.print(HELP);
+            case "/help" -> {
+                out.print(HELP);
+                List<String> c = session.commands(COMMANDS.keySet()).describe();
+                if (!c.isEmpty()) {
+                    out.println("Your commands:");
+                    c.forEach(out::println);
+                }
+            }
             case "/diff" -> {
                 String d = session.loop().lastTurnDiff();
                 out.print(d.isEmpty() ? "No file changes in the last turn.\n" : d);
@@ -544,9 +561,53 @@ final class Tui {
                     out.println("Usage: /events [none|steps|all]");
                 }
             }
-            default -> out.println("Unknown command " + parts[0] + ". Type /help for the commands.");
+            case "/commands" -> {
+                List<String> c = session.commands(COMMANDS.keySet()).describe();
+                if (c.isEmpty()) {
+                    out.println("No slash commands. Add NAME.md (a prompt; $ARGUMENTS is what you type after it) or NAME.js (run(args)) to ~/.jharness/commands/.");
+                }
+                c.forEach(out::println);
+                session.commands(COMMANDS.keySet()).errors().forEach((f, err) -> raw.println(styler.error(f + ": " + err)));
+            }
+            default -> {
+                if (!custom(session, parts[0].substring(1), parts.length > 1 ? parts[1].strip() : "")) {
+                    out.println("Unknown command " + parts[0] + ". Type /help for the commands.");
+                }
+            }
         }
         out.flush();
+        return true;
+    }
+
+    /**
+     * A command from {@code ~/.jharness/commands/} or the project's (spec 035): its prompt runs as a turn
+     * (to the switched-to subagent, if any), or its text is printed.
+     *
+     * @return false if there is no such command
+     */
+    private boolean custom(Session session, String name, String args) {
+        var runner = session.commands(COMMANDS.keySet());
+        if (runner.get(name) == null) {
+            return false;
+        }
+        dev.jharness.agent.CommandRunner.Expansion x;
+        try {
+            x = runner.run(name, args);
+        } catch (RuntimeException e) {
+            raw.println(styler.error(String.valueOf(e.getMessage())));
+            return true;
+        }
+        if (x.print() != null) {
+            out.println(x.print());
+        } else if (x.prompt() != null && !x.prompt().isBlank()) {
+            raw.println(styler.dim("/" + name + " → " + (x.prompt().length() > 100 ? x.prompt().substring(0, 100).replace('\n', ' ') + "…"
+                    : x.prompt().replace('\n', ' '))));
+            TurnResult r = talking != null ? talkTurn(session, x.prompt()) : turn(session, x.prompt());
+            out.println();
+            if (!r.stopReason().equals("done")) {
+                raw.println(styler.error("[" + r.stopReason() + (r.error() == null ? "" : ": " + r.error()) + "]"));
+            }
+        }
         return true;
     }
 

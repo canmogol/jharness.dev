@@ -274,7 +274,26 @@ public final class Main implements Callable<Integer> {
                 if (afterOpen != null) {
                     afterOpen.accept(s);
                 }
-                return s.loop().turn(prompt, d -> {
+                String text = prompt;
+                // A slash command from ~/.jharness/commands/ works in -p too (spec 035).
+                if (text.startsWith("/") && !text.startsWith("//")) {
+                    String[] p = text.strip().split("\\s+", 2);
+                    var runner = s.commands(Tui.COMMANDS.keySet());
+                    if (runner.get(p[0].substring(1)) != null) {
+                        dev.jharness.agent.CommandRunner.Expansion x;
+                        try {
+                            x = runner.run(p[0].substring(1), p.length > 1 ? p[1] : "");
+                        } catch (RuntimeException e) {
+                            return new TurnResult("", "error", 0, String.valueOf(e.getMessage()));
+                        }
+                        if (x.print() != null) {
+                            out.println(x.print());
+                            return new TurnResult("", "done", 0, null);
+                        }
+                        text = x.prompt() == null ? "" : x.prompt();
+                    }
+                }
+                return s.loop().turn(text, d -> {
                     out.print(d);
                     out.flush();
                 });
