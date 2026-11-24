@@ -89,6 +89,7 @@ Last updated: 2026-11-24
 | D-076 | MCP client: our own small client over stdio and streamable HTTP; servers only from the user's `mcp` settings; stdio servers in the OS sandbox through the proxy; each `tools/call` asks (`kind: mcp`, "always" per server/tool); `api.mcp({list})` and the prompt list the tools | Accepted |
 | D-077 | Token counting and compaction: each profile has a `contextWindow`; the model's own counts, else about 3.5 characters a token; at `agent.compactAt` (0.8) of the window minus the reply size, the model summarizes the older conversation; `/context` and `/compact`; turns in a summary can't be rewound | Accepted |
 | D-078 | Prompt caching and `@file` mentions: Claude requests mark the system prompt and the last message for the 5-minute prompt cache (`promptCache`, on by default); `inputTokens` counts the whole prompt; `@path` in a user prompt attaches a file or folder under the file policy, within a size budget | Accepted |
+| D-079 | Command aliases and argument completion: `/quit` and `/q` are aliases of `/exit`, not listed; built-in names and aliases win over command files, and the clash is reported; Tab after a command lists its choices and cycles through them; command files declare `args` | Accepted |
 
 ---
 
@@ -1257,6 +1258,36 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** Roadmap item "Prompt caching, `@file` mentions"; US-2.8. Recommended options accepted while the user was away, specifying 040-prompt-caching-and-file-mentions, 2026-11-24.
 
+## D-079 — Command aliases and argument completion
+
+**Decision.** Common exits work, and Tab knows each command's arguments.
+
+- **Aliases.** `/quit` and `/q` do what `/exit` does. The help and Tab completion list `/exit` alone, and its description names the aliases.
+- **Clashes.** Built-in names and aliases are reserved. A command file in `~/.jharness/commands/` or the project's `.jharness/commands/` with one of those names is not used: `command.shadowed` records it, `commands.loaded` lists it under `shadowed`, and the TUI prints a line at the start.
+- **Arguments.** After a command and a space, Tab lists the choices for the next argument, and Tab again cycles through them with the current one highlighted (JLine's list and menu):
+
+  | Command | Choices |
+  | --- | --- |
+  | `/events` | `none`, `steps`, `all` |
+  | `/model` | the profile names |
+  | `/agents`, `/follow` | this session's subagents |
+  | `/stop` | the subagents, then `all` |
+  | `/switch` | `main`, then the subagents |
+  | `/rewind` | the turns it can go back to, then `--force` |
+  | `/network` | `allow`, `deny`, `remove`, `reload`; for `remove`, the targets in both rules files; after the target, `--project` |
+
+  `/thinking` takes no argument, so it has no choices.
+- **Command files.** A template's front matter can say `args: a, b, c` (or `[a, b, c]`), and a script can define `const args = [...]`. Up to 50 choices, each one word of up to 60 characters, completes the first argument.
+
+**Why.** Users type `/quit` and `/q` out of habit from other tools. Letting a file take a built-in name would make the same keys do different things in different projects. Choices taken from the session (profiles, subagents, turns, rules) save looking them up first.
+
+**Rejected.**
+- Listing aliases in the help (two more lines for one command).
+- Letting a project command replace a built-in (a cloned repo could change what `/exit` or `/undo` does).
+- Completing free-form arguments such as hosts for `allow` (nothing to complete from).
+
+**Source.** The user's request for exit aliases and argument completion, 2026-11-24. Recommended options accepted while the user was away, specifying 041-command-aliases-and-completion.
+
 ---
 
 ## Questions and answers
@@ -1349,6 +1380,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q82 | How does the action reviewer ask System One? | One `noul` question per state-changing operation, with the user's request and the action as `state`; below `askBelow` asks, below `denyBelow` denies; failures ask | Maps the answer straight onto D-031's two thresholds | D-031 |
 | Q83 | How do long sessions keep working when the context fills? | Count tokens (the model's counts, else an estimate); at 80% of the window minus the reply size, the model summarizes the older conversation; `/context`, `/compact` | Works with any model and adds nothing to the binary | D-077 |
 | Q84 | How do prompt caching and `@file` mentions work? | Claude requests mark the system prompt and the last message for the 5-minute cache; `@path` attaches files and folders under the file policy within a size budget | Lower cost per step; files by name without a model step | D-078 |
+| Q85 | Should `/quit` and `/q` work, and can Tab complete command arguments? | Yes: aliases of `/exit`, not listed; built-ins win over command files; Tab lists and cycles each command's choices, and command files declare `args` | Fewer keystrokes; built-ins mean the same thing everywhere | D-079 |
 
 ---
 

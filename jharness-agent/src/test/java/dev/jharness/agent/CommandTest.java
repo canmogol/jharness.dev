@@ -68,13 +68,40 @@ class CommandTest {
         Files.writeString(user().resolve("twice.js"), "function run() { return 'b'; }");
         try (Session s = open(false)) {
             var e = s.commands(BUILT_IN).errors();
-            assertTrue(e.get("~/.jharness/commands/help.md").contains("built-in"), e.toString());
+            assertFalse(e.containsKey("~/.jharness/commands/help.md"), "a clash, not an error: " + e);
+            assertEquals(List.of(new CommandRunner.Clash("~/.jharness/commands/help.md", "help", "user")), s.commands(BUILT_IN).clashes());
             assertTrue(e.get("~/.jharness/commands/Bad.md").contains("command names"), e.toString());
             assertTrue(e.get("~/.jharness/commands/norun.js").contains("no run(args)"), e.toString());
             assertTrue(e.get("~/.jharness/commands/syntax.js").contains("doesn't run"), e.toString());
             assertTrue(e.get("~/.jharness/commands/twice.md").contains("defined twice"), e.toString());
             assertNull(s.commands(BUILT_IN).get("help"));
         }
+    }
+
+    /** Spec 041 AC-02, AC-05: aliases are built-in names too; args lists come from front matter or a JS array. */
+    @Test
+    void aliasesWinAndArgsAreDeclared() throws Exception {
+        Files.writeString(user().resolve("q.md"), "quick");
+        Files.writeString(user().resolve("quit.js"), "function run() { return 'x'; }");
+        Files.writeString(user().resolve("ship.md"), "---\ndescription: ship it\nargs: [patch, minor, \"major\"]\n---\nShip a $ARGUMENTS release.\n");
+        Files.writeString(user().resolve("lint.js"), "const args = ['fix', 'check', 'fix'];\nfunction run(args) { return 'Lint: ' + args; }");
+        Files.writeString(user().resolve("plain.md"), "No args here.");
+        Files.writeString(user().resolve("wide.md"), "---\nargs: two words, ok\n---\nx");
+        Path log;
+        try (Session s = open(true)) {
+            var r = s.commands(java.util.Set.of("/exit", "/quit", "/q"));
+            assertEquals(List.of("q", "quit"), r.clashes().stream().map(CommandRunner.Clash::name).toList());
+            assertNull(r.get("q"));
+            assertEquals(List.of("patch", "minor", "major"), r.get("ship").args());
+            assertEquals(List.of("fix", "check"), r.get("lint").args(), "duplicates dropped");
+            assertEquals(List.of(), r.get("plain").args());
+            assertEquals("Lint: fix", r.run("lint", "fix").prompt(), "run(args) still gets the typed argument");
+            assertTrue(r.errors().get("~/.jharness/commands/wide.md").contains("one word"), r.errors().toString());
+            log = s.logPath();
+        }
+        var shadowed = dev.jharness.events.SessionLog.read(log).stream().filter(e -> e.get("type").asText().equals("command.shadowed")).toList();
+        assertEquals(2, shadowed.size());
+        assertEquals("~/.jharness/commands/q.md", shadowed.getFirst().get("file").asText());
     }
 
     @Test

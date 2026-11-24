@@ -423,7 +423,7 @@ class TuiTest {
         assertEquals(List.of("/model", "/agent", "/hooks", "/commands", "/mcp", "/agents", "/follow", "/switch", "/stop", "/plan", "/todos", "/diff", "/undo", "/rewind", "/context", "/compact", "/events", "/thinking", "/network", "/help", "/exit"),
                 List.copyOf(Tui.COMMANDS.keySet()));
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
-        assertEquals("quit (or Ctrl-D)", Tui.COMMANDS.get("/exit"));
+        assertEquals("quit (also /quit, /q, or Ctrl-D)", Tui.COMMANDS.get("/exit"));
     }
 
     /** Spec 039 AC-02, AC-05: /context shows the count and threshold; /compact summarizes between turns. */
@@ -466,6 +466,87 @@ class TuiTest {
         assertTrue(screen().contains("README.md"), "Tab completed the path: " + screen());
     }
 
+    /** Spec 041 AC-01: /quit and /q leave like /exit; the help lists /exit alone. */
+    @Test
+    void quitAliases() throws Exception {
+        for (String q : List.of("/quit", "/q")) {
+            screen.reset();
+            Path ws = Files.createDirectories(tmp.resolve("ws-" + q.substring(1)));
+            Tui tui = new Tui(terminal(q + "\nhello\n"), null);
+            try (Session session = Session.open(tmp.resolve("home-" + q.substring(1)), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                    (bus, turns) -> ReplayProvider.ofReplies(List.of("never sent"), bus, turns))) {
+                tui.run(session);
+            }
+            assertFalse(screen().contains("never sent") || screen().contains("Unknown command"), q + ": " + screen());
+        }
+        assertFalse(Tui.COMMANDS.containsKey("/quit") || Tui.COMMANDS.containsKey("/q"));
+        assertTrue(Tui.BUILT_IN.containsAll(List.of("/exit", "/quit", "/q", "/help")));
+    }
+
+    /** Spec 041 AC-02: a command file named like an alias is not used, and the TUI says so at the start. */
+    @Test
+    void aCommandFileCantTakeAnAlias() throws Exception {
+        Path home = tmp.resolve("home-clash");
+        Files.createDirectories(home.resolve(".jharness/commands"));
+        Files.writeString(home.resolve(".jharness/commands/q.md"), "Quick task");
+        Path ws = Files.createDirectories(tmp.resolve("ws-clash"));
+        Tui tui = new Tui(terminal("/q\n"), null);
+        try (Session session = Session.open(home, ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("never sent"), bus, turns))) {
+            tui.run(session);
+        }
+        assertTrue(screen().contains("Command ~/.jharness/commands/q.md is not used: /q is a built-in command"), screen());
+        assertFalse(screen().contains("never sent"), screen());
+    }
+
+    /** Spec 041 AC-03 to AC-05: each command's argument choices. */
+    @Test
+    void argumentChoices() throws Exception {
+        Path home = tmp.resolve("home-args");
+        Files.createDirectories(home.resolve(".jharness/commands"));
+        Files.writeString(home.resolve(".jharness/network.rules"), "allow example.com\ndeny *.ads.example:443\n");
+        Files.writeString(home.resolve(".jharness/commands/ship.md"), "---\nargs: patch, minor\n---\nShip $ARGUMENTS");
+        Path ws = Files.createDirectories(tmp.resolve("ws-args"));
+        Settings st = Settings.parse("{\"models\":{\"local\":{\"provider\":\"openai-compatible\",\"baseUrl\":\"http://127.0.0.1:1/v1\",\"model\":\"q\"},"
+                + "\"claude\":{\"provider\":\"anthropic\",\"model\":\"c\"}}}", "t");
+        try (Session s = Session.open(home, ws, st, Session.Access.prompter(op -> dev.jharness.security.Prompter.Answer.ONCE),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("one", "two"), bus, turns))) {
+            s.turn("a", d -> {});
+            s.turn("b", d -> {});
+            assertEquals(List.of("none", "steps", "all"), Tui.argChoices("/events", List.of(), s));
+            assertEquals(List.of(), Tui.argChoices("/events", List.of("all"), s));
+            assertEquals(java.util.Set.of("local", "claude"), java.util.Set.copyOf(Tui.argChoices("/model", List.of(), s)));
+            assertEquals(List.of(), Tui.argChoices("/agents", List.of(), s), "no subagents yet");
+            assertEquals(List.of("all"), Tui.argChoices("/stop", List.of(), s));
+            assertEquals(List.of("main"), Tui.argChoices("/switch", List.of(), s));
+            assertEquals(List.of("1", "2"), Tui.argChoices("/rewind", List.of(), s));
+            assertEquals(List.of("--force"), Tui.argChoices("/rewind", List.of("1"), s));
+            assertEquals(List.of("allow", "deny", "remove", "reload"), Tui.argChoices("/network", List.of(), s));
+            assertEquals(List.of("example.com", "*.ads.example:443"), Tui.argChoices("/network", List.of("remove"), s));
+            assertEquals(List.of(), Tui.argChoices("/network", List.of("allow"), s), "the host is typed");
+            assertEquals(List.of("--project"), Tui.argChoices("/network", List.of("allow", "x.org"), s));
+            assertEquals(List.of(), Tui.argChoices("/network", List.of("reload"), s));
+            assertEquals(List.of(), Tui.argChoices("/thinking", List.of(), s), "it takes no arguments");
+            assertEquals(List.of("patch", "minor"), Tui.argChoices("/ship", List.of(), s));
+            assertEquals(List.of(), Tui.argChoices("/ship", List.of("patch"), s));
+            assertEquals(List.of(), Tui.argChoices("/nope", List.of(), s));
+        }
+    }
+
+    /** Spec 041 AC-03: Tab after a command lists its choices; Tab again cycles through them. */
+    @Test
+    void tabCyclesThroughArgumentChoices() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws-cycle"));
+        Tui tui = new Tui(xterm("/events \t\t\t\r\r/exit\r"), null, java.util.Map.of());
+        try (Session session = Session.open(tmp.resolve("home-cycle"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("none") && sc.contains("steps") && sc.contains("all"), "listed: " + sc);
+        assertTrue(sc.contains("Events: steps"), "the second Tab in the menu picked steps: " + sc);
+    }
+
     /** Spec 024 AC-01, AC-02: "/" then Tab prints the help; "/mo" then Tab completes /model; other text keeps its Tab behavior. */
     @Test
     void slashTabPrintsTheHelpAndCompletesCommands() throws Exception {
@@ -497,7 +578,7 @@ class TuiTest {
             tui3.run(session);
         }
         sc = screen();
-        assertTrue(sc.contains("vents") && sc.contains("(show the event level and the session log file)") && sc.contains("(quit (or Ctrl-D))"),
+        assertTrue(sc.contains("vents") && sc.contains("(show the event level and the session log file)") && sc.contains("(quit (also /quit, /q, or Ctrl-D))"),
                 "both matches listed with descriptions (JLine colors the typed /e): " + sc);
     }
 

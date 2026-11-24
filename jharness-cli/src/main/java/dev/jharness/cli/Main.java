@@ -278,7 +278,7 @@ public final class Main implements Callable<Integer> {
                 // A slash command from ~/.jharness/commands/ works in -p too (spec 035).
                 if (text.startsWith("/") && !text.startsWith("//")) {
                     String[] p = text.strip().split("\\s+", 2);
-                    var runner = s.commands(Tui.COMMANDS.keySet());
+                    var runner = s.commands(Tui.BUILT_IN);
                     if (runner.get(p[0].substring(1)) != null) {
                         dev.jharness.agent.CommandRunner.Expansion x;
                         try {
