@@ -1,7 +1,20 @@
 # Changelog
 
-<!-- last-commit: 01476138f08fd279795c79db1d0c99a05b79dd2d -->
+<!-- last-commit: 8700eb24f3d04397a6b624b206f9b07565cd128e -->
 
+## 2026-11-24 · Phase 3 gate
+
+- Phase 3 (extensibility) is done. The shipped custom agent (`examples/.jharness/agents/reviewer/`) and hook (`examples/.jharness/hooks/guard.js`) pass the gate in the native binary on Linux and macOS (`docs/p3-gate.md`).
+- `scripts/p3-gate.sh` runs the gate against a small git repo, and CI runs it on every target.
+
+## 2026-11-24 · 038 Action reviewer
+
+- An optional action reviewer asks a decision model through the System One API whether each change fits your request: hosted Jev on TypeSafe or DigitalOcean, or a server on your machine such as Laya.
+- Turn it on with `reviewer` in your own `~/.jharness/settings.json`: `enabled`, `url`, `model` (default `jev-latest`), `apiKeyEnv`, `askBelow` (0.90), `denyBelow` (0.20), `timeoutMs` (3000) and `onError` (`ask` or `deny`). A project can't set it or turn it off.
+- It only tightens. Below `askBelow` an allowed change asks you, with the reviewer's reason, even in bypass mode or with a saved rule; below `denyBelow` it is refused. If the reviewer fails or is slow, you are asked; it never allows.
+- Reads are never sent. The start-up line says when changes and their context leave your machine.
+- `reviewer.ready`, `review.verdict` and `review.failed` record it, and CI's native step checks a refusal against a fake server.
+- Decision: D-031 refined (Q82).
 ## 2026-11-24 · D-031 Action reviewer back-end
 
 - The optional action reviewer is now one kind of back-end: a decision model behind the System One API (`POST /v1/systemone`), such as hosted Jev or a locally running equivalent like Laya. It can still only tighten decisions.

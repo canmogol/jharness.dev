@@ -93,6 +93,8 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 
 **Gate:** one custom agent and one hook ship as working examples.
 
+**Gate passed 2026-11-24:** the shipped reviewer agent and guard hook pass all 13 checks of `scripts/p3-gate.sh` in the native binary on linux-amd64 and macos-aarch64, and CI runs it on every target. Run in `../docs/p3-gate.md`.
+
 ## Phase 4 — Context and release (v0.1)
 
 - [ ] Token counting, auto-compaction, prompt caching, `@file` mentions

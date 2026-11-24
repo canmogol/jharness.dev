@@ -178,6 +178,10 @@ jobs:
           "$bin" log --home "$tmp/home-rev" --cwd "$tmp/ws" last --json --type review. | tee "$tmp/rev-log.txt"
           grep '"type":"review.verdict"' "$tmp/rev-log.txt" | grep -q '"outcome":"deny"'
 
+      # The P3 gate (docs/p3-gate.md): the shipped custom agent and hook work in the native binary.
+      - name: P3 gate
+        run: scripts/p3-gate.sh jharness-cli/target/jharness
+
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check
         run: python3 -I scripts/tui-pty-check.py jharness-cli/target/jharness
