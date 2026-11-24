@@ -2,7 +2,7 @@
 
 The rules every feature must follow. A feature's `plan.md` must pass the constitution check below before tasks are written. Changing an article needs a new entry in `decisions.md` that says why.
 
-Version 1.5 · Ratified 2026-11-16 · Amended 2026-11-20 (Article V: Gradle loopback on macOS, D-050), 2026-11-17 (Article VII: reviewer only tightens, D-031; Article III: JS-only hooks, D-022, and configurable limit values, D-003; Article IV: stdio MCP servers, D-023, and `rg`, D-027)
+Version 1.6 · Ratified 2026-11-16 · Amended 2026-11-24 (Articles IV and V: tool definition files, D-066), 2026-11-20 (Article V: Gradle loopback on macOS, D-050), 2026-11-17 (Article VII: reviewer only tightens, D-031; Article III: JS-only hooks, D-022, and configurable limit values, D-003; Article IV: stdio MCP servers, D-023, and `rg`, D-027)
 
 ---
 
@@ -21,12 +21,12 @@ Every agent context runs under `SandboxPolicy.UNTRUSTED` and `HostAccess.UNTRUST
 *Source: D-003, D-004, D-022*
 
 ### IV. No shell
-Agent code cannot start processes. The host starts processes only through `ProcessRunner`: typed git, Maven, Gradle, npm and `rg` operations, and stdio MCP servers from the user's own configuration. Every process gets an argv list: never `sh -c`, never a command string built by concatenation, never an executable from inside the workspace except wrappers in trusted projects.
-*Source: D-008, D-009, D-023, D-027*
+Agent code cannot start processes. The host starts processes only through `ProcessRunner`: typed git and `rg` operations, typed operations from tool definition files (Maven, Gradle, npm and any tool the user or a trusted project defines), and stdio MCP servers from the user's own configuration. A tool definition maps typed, pattern-checked fields to fixed arguments; it never passes free-form arguments, and it may not name a shell or a command runner as its executable. Every process gets an argv list: never `sh -c`, never a command string built by concatenation, never an executable from inside the workspace except a wrapper that a definition in the user's own folder names, in a trusted project.
+*Source: D-008, D-009, D-023, D-027, D-066*
 
 ### V. All network traffic goes through the host proxy
-Every outbound connection, from the Java `HttpClient` and from every command-line tool, goes through the host egress proxy and its rules files. No code may build an HTTP client or open a socket that skips it. Build tools run in an OS sandbox that only allows the proxy port. One exception: on macOS, Gradle runs may also use any loopback port, for Gradle's daemon, which also lets them accept connections from the LAN ([D-050](decisions.md#d-050--gradle-on-macos-uses-loopback)).
-*Source: D-012, D-025, D-049, D-050*
+Every outbound connection, from the Java `HttpClient` and from every command-line tool, goes through the host egress proxy and its rules files. No code may build an HTTP client or open a socket that skips it. Build tools run in an OS sandbox that only allows the proxy port. One exception: on macOS, a tool whose definition sets `loopback` (the shipped Gradle definition, for Gradle's daemon) may also use any loopback port, which also lets it accept connections from the LAN ([D-050](decisions.md#d-050--gradle-on-macos-uses-loopback)). Only definitions in the user's own folder may set it.
+*Source: D-012, D-025, D-049, D-050, D-066*
 
 ### VI. Strings at the boundary
 Only strings and JSON cross into and out of isolates. No live host object is handed to the guest.

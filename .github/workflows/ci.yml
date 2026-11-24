@@ -107,7 +107,7 @@ jobs:
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last | tee "$tmp/timeline.txt"
           grep -q "loop.result  step=1 status=ok" "$tmp/timeline.txt"
           # The example custom agent (spec 025): its helpers run and its tools hold in the native binary.
-          mkdir -p "$tmp/home/.jharness/agents" && cp -R examples/agents/reviewer "$tmp/home/.jharness/agents/"
+          mkdir -p "$tmp/home/.jharness/agents" && cp -R examples/.jharness/agents/reviewer "$tmp/home/.jharness/agents/"
           printf '%s\n' '{"reply":"```js\ntypeof changedFiles + \" \" + api.readFile(\"a.txt\")\n```"}' '{"reply":"```js\napi.writeFile(\"a.txt\", \"x\")\n```"}' '{"reply":"Reviewed."}' > "$tmp/agent.jsonl"
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/agent.jsonl" --agent reviewer -p "review" | tee "$tmp/agent.txt"
           grep -q "Reviewed." "$tmp/agent.txt"

@@ -1,0 +1,49 @@
+{
+  "description": "Apache Maven. Runs the project's own build code.",
+  "executable": "mvn",
+  "wrapper": { "file": "mvnw" },
+  "proxy": "maven-settings",
+  "javaHome": true,
+  "writable": ["~/.m2/repository", "~/.m2/wrapper"],
+  "args": ["-B", "-ntp", "-Dstyle.color=never", "{proxySettings}"],
+  "offline": { "args": ["-o"] },
+  "operations": {
+    "compile": { "args": ["{module}", "{profiles}", "{threads}", "compile"] },
+    "test":    { "args": ["{module}", "{tests}", "{profiles}", "{threads}", "test"] },
+    "verify":  { "args": ["{module}", "{tests}", "{skipTests}", "{profiles}", "{threads}", "verify"] },
+    "package": { "args": ["{module}", "{skipTests}", "{profiles}", "{threads}", "package"] },
+    "install": { "args": ["{module}", "{tests}", "{skipTests}", "{profiles}", "{threads}", "install"] },
+    "clean":   { "args": ["{module}", "clean"] }
+  },
+  "fields": {
+    "module": {
+      "type": "folder",
+      "args": ["-pl", "{}", "-am"],
+      "description": "A module folder in the workspace; builds it and the modules it needs"
+    },
+    "tests": {
+      "type": "string",
+      "pattern": "[A-Za-z0-9_.*#$][A-Za-z0-9_.*#,+$-]{0,199}",
+      "args": ["-Dtest={}", "-Dsurefire.failIfNoSpecifiedTests=false"],
+      "description": "Test selectors such as AppTest, com.x.*Test#method or A,B"
+    },
+    "skipTests": {
+      "type": "flag",
+      "args": ["-DskipTests"],
+      "description": "Compile the tests but don't run them"
+    },
+    "profiles": {
+      "type": "string",
+      "pattern": "!?[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}(,!?[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}){0,9}",
+      "args": ["-P", "{}"],
+      "description": "Profiles to turn on or off, such as dev or dev,!ci"
+    },
+    "threads": {
+      "type": "string",
+      "pattern": "[1-9]|[12][0-9]|3[0-2]|[1-4]C",
+      "args": ["-T", "{}"],
+      "description": "Build threads: 1 to 32, or 1C to 4C per core"
+    }
+  },
+  "conflicts": [["tests", "skipTests"]]
+}
