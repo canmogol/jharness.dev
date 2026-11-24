@@ -165,6 +165,18 @@ jobs:
           cat "$tmp/mcp-log.txt"
           grep -q "mcp.connected" "$tmp/mcp-log.txt"
           "$bin" log --home "$tmp/home-mcp" --cwd "$tmp/ws" last --json --type api.call | grep '"api":"mcp"' | grep -q '"status":"ok"'
+          # Action reviewer (spec 038): a fake System One server doubts a write, so bypass mode still refuses it.
+          python3 -I jharness-agent/src/test/resources/fake_systemone_server.py "$tmp/so.port" 0.05 &
+          so=$!
+          for i in $(seq 50); do [ -s "$tmp/so.port" ] && break; sleep 0.1; done
+          mkdir -p "$tmp/home-rev/.jharness"
+          printf '{"permissions": {"mode": "bypass"}, "reviewer": {"enabled": true, "url": "http://127.0.0.1:%s/v1/systemone"}}' "$(cat "$tmp/so.port")" > "$tmp/home-rev/.jharness/settings.json"
+          printf '%s\n' '{"reply":"```js\ntry { api.writeFile(\"reviewed.txt\", \"x\"); \"written\" } catch (e) { e.message }\n```"}' '{"reply":"Tried."}' > "$tmp/rev.jsonl"
+          "$bin" --home "$tmp/home-rev" --cwd "$tmp/ws" --replay "$tmp/rev.jsonl" -p "review" | tee "$tmp/rev.txt"
+          kill "$so"
+          test ! -e "$tmp/ws/reviewed.txt"
+          "$bin" log --home "$tmp/home-rev" --cwd "$tmp/ws" last --json --type review. | tee "$tmp/rev-log.txt"
+          grep '"type":"review.verdict"' "$tmp/rev-log.txt" | grep -q '"outcome":"deny"'
 
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check

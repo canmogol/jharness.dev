@@ -19,20 +19,20 @@ import dev.jharness.events.Json;
 /**
  * User settings from {@code ~/.jharness/settings.json}: {@code model}, {@code models}, {@code sandbox},
  * {@code timeouts}, {@code agent},
- * {@code permissions}, {@code files}, {@code ui}, {@code http}, {@code git} and {@code offline}. Project and session layers come with the layered-settings feature. Unknown
+ * {@code permissions}, {@code files}, {@code ui}, {@code http}, {@code git}, {@code offline}, {@code mcp} and {@code reviewer}. Project and session layers come with the layered-settings feature. Unknown
  * keys and bad values throw {@link ConfigException}, which stops start-up.
  */
 public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts timeouts, AgentSettings agent,
         PermissionSettings permissions, FileSettings files, UiSettings ui, HttpSettings http, GitSettings git, boolean offline,
-        McpSettings mcp) {
+        McpSettings mcp, ReviewerSettings reviewer) {
 
     private static final Set<String> TOP = Set.of("model", "models", "sandbox", "timeouts", "agent", "permissions", "files", "ui", "http", "git", "offline",
-            "mcp");
+            "mcp", "reviewer");
 
     public static Settings defaults() {
         return new Settings(ModelProfiles.empty(), SandboxSettings.defaults(), Timeouts.defaults(), AgentSettings.defaults(),
                 PermissionSettings.defaults(), FileSettings.defaults(), UiSettings.defaults(), HttpSettings.defaults(),
-                GitSettings.defaults(), false, McpSettings.defaults());
+                GitSettings.defaults(), false, McpSettings.defaults(), ReviewerSettings.defaults());
     }
 
     public static Path userFile(Path home) {
@@ -74,7 +74,7 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
     static Settings parse(ObjectNode root, String source, boolean complete) throws ConfigException {
         for (Map.Entry<String, JsonNode> e : root.properties()) {
             if (!TOP.contains(e.getKey())) {
-                throw new ConfigException(source + ": unknown key \"" + e.getKey() + "\" (known: model, models, sandbox, timeouts, agent, permissions, files, ui, http, git, offline, mcp)");
+                throw new ConfigException(source + ": unknown key \"" + e.getKey() + "\" (known: model, models, sandbox, timeouts, agent, permissions, files, ui, http, git, offline, mcp, reviewer)");
             }
         }
         JsonNode offline = root.get("offline");
@@ -92,7 +92,8 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
                 HttpSettings.parse(root.get("http"), source),
                 GitSettings.parse(root.get("git"), source),
                 offline != null && offline.asBoolean(),
-                McpSettings.parse(root.get("mcp"), source));
+                McpSettings.parse(root.get("mcp"), source),
+                ReviewerSettings.parse(root.get("reviewer"), source));
     }
 
     // --- Layers (D-043) ------------------------------------------------------------------------
@@ -118,8 +119,9 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
         ObjectNode project = read(pf);
         parse(user, uf.toString(), false);
         List<String> ignored = new ArrayList<>();
-        // A project never sets git tokens or MCP servers: they start programs and send secrets (D-055, D-076).
-        for (String userOnly : List.of("git", "mcp")) {
+        // A project never sets git tokens, MCP servers or the reviewer: they start programs, send secrets
+        // or send the session's context somewhere (D-055, D-076, D-031).
+        for (String userOnly : List.of("git", "mcp", "reviewer")) {
             if (project.has(userOnly)) {
                 project = project.deepCopy();
                 project.remove(userOnly);
