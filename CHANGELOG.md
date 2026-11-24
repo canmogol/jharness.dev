@@ -1,6 +1,35 @@
 # Changelog
 
-<!-- last-commit: 8fe6290d12881b692e3fcef8934f00e185d01c55 -->
+<!-- last-commit: 01476138f08fd279795c79db1d0c99a05b79dd2d -->
+
+## 2026-11-24 · D-031 Action reviewer back-end
+
+- The optional action reviewer is now one kind of back-end: a decision model behind the System One API (`POST /v1/systemone`), such as hosted Jev or a locally running equivalent like Laya. It can still only tighten decisions.
+
+## 2026-11-24 · 037 MCP client
+
+- `mcp.servers` in the user's `settings.json` defines MCP servers: stdio servers (`command`, `args`, `env`, `secretEnv`, `writable`, `timeout`) and HTTP servers (`url`, `tokenSecret`, `timeout`). A project's `mcp` is always ignored.
+- Stdio servers start through `ProcessRunner` in the OS sandbox and live for the session. HTTP servers go through the egress proxy, with their endpoint allowed automatically and the secret sent as a bearer token.
+- Servers connect at session start. One that fails is listed with its error in `api.mcp({list: true})`, the system prompt and `/mcp`.
+- `api.mcp({server, tool, input})` checks the server, tool and input first, then asks (`kind: mcp`); "always" saves `server/tool`, and plan mode denies. `api.mcp({list: true})` lists servers and tools without asking.
+- CI's native step lists a stdio server's tools.
+- Decision: MCP client (D-076).
+
+## 2026-11-24 · 036 Todo list and plan mode
+
+- `api.todos(list)` sets the agent's todo list (up to 50 items, `pending`, `in_progress` or `done`), and `api.todos()` reads it. Each agent has its own list; the TUI shows it with `✓`, `▸` and `☐`, and `/todos` prints it.
+- `/plan` turns plan mode on and off. In plan mode changes are refused without asking, and the prompt shows `[plan] `.
+- `api.proposePlan(text)` shows the plan and asks whether to leave plan mode and carry it out. Only the main agent can ask, and not a custom agent with `plan: true`.
+- Decision: todo list and plan mode (D-075).
+
+## 2026-11-24 · 035 Slash commands
+
+- `NAME.md` prompt templates and `NAME.js` commands in `~/.jharness/commands/`, or a trusted project's `.jharness/commands/`, add `/NAME` commands.
+- A template's text, with `$ARGUMENTS` replaced, becomes your message. A JS command's `run(args)` returns a prompt, `{print}` text or nothing; it runs in its own sandbox, and its api calls go through the permission check and the hooks.
+- Commands go to the main agent, or to the subagent after `/switch`. `jharness -p "/NAME args"` expands them too.
+- `/commands` lists commands and broken files; `/help` and Tab include them.
+- Examples: `examples/.jharness/commands/review.md` and `changed.js`.
+- Decision: slash commands (D-074).
 
 ## 2026-11-24 · 034 JS hooks
 
