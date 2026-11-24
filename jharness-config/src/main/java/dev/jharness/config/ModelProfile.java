@@ -15,9 +15,12 @@ import java.time.Duration;
  * @param responseTimeout how long to wait for the response to start
  * @param contextWindow the most tokens the model takes in one request, prompt and reply together (spec 039);
  *        32,768 for {@code openai-compatible} and 200,000 for {@code anthropic} unless set
+ * @param promptCache whether requests mark the stable prefix for the provider's prompt cache (spec 040);
+ *        only {@code anthropic} uses it, and it is on by default there
  */
 public record ModelProfile(String name, String provider, String baseUrl, String model, String apiKeyEnv,
-        int maxTokens, String notes, int retries, Duration retryMaxWait, Duration responseTimeout, int contextWindow) {
+        int maxTokens, String notes, int retries, Duration retryMaxWait, Duration responseTimeout, int contextWindow,
+        boolean promptCache) {
 
     public static final String OPENAI_COMPATIBLE = "openai-compatible";
     public static final String ANTHROPIC = "anthropic";
@@ -36,6 +39,13 @@ public record ModelProfile(String name, String provider, String baseUrl, String 
 
     public static int defaultContextWindow(String provider) {
         return ANTHROPIC.equals(provider) ? ANTHROPIC_CONTEXT_WINDOW : DEFAULT_CONTEXT_WINDOW;
+    }
+
+    /** A profile with the default prompt cache setting for its provider. */
+    public ModelProfile(String name, String provider, String baseUrl, String model, String apiKeyEnv, int maxTokens, String notes,
+            int retries, Duration retryMaxWait, Duration responseTimeout, int contextWindow) {
+        this(name, provider, baseUrl, model, apiKeyEnv, maxTokens, notes, retries, retryMaxWait, responseTimeout, contextWindow,
+                ANTHROPIC.equals(provider));
     }
 
     /** A profile with the default retry and timeout settings. */

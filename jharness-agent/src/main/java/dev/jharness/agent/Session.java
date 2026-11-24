@@ -69,6 +69,7 @@ public final class Session implements AutoCloseable {
     private SubagentRunner subagents;
     private Path home;
     private boolean trusted;
+    private FilePolicy files;
 
     private Session(EventBus bus, SessionLog log, AgentIsolate isolate, AgentLoop loop, Workspace workspace, TurnCounter turns,
             Settings settings) {
@@ -260,6 +261,7 @@ public final class Session implements AutoCloseable {
         s.subagents = subagents;
         s.home = home;
         s.trusted = access.trusted();
+        s.files = files;
         s.proxy = proxy;
         s.sessionDir = sessionDir;
         return s;
@@ -531,6 +533,21 @@ public final class Session implements AutoCloseable {
 
     public AgentLoop loop() {
         return loop;
+    }
+
+    /** The files a prompt mentions with {@code @path}, read under the file policy (spec 040). */
+    public Mentions.Result mentions(String prompt) {
+        return Mentions.attach(prompt, files, Mentions.budget(loop.provider().contextWindow()));
+    }
+
+    /** Tab completion for an {@code @path} word (spec 040). */
+    public java.util.List<String> completeMention(String word) {
+        return Mentions.complete(word, files);
+    }
+
+    /** One user turn with its {@code @path} mentions attached (spec 040). */
+    public TurnResult turn(String prompt, java.util.function.Consumer<String> onDelta) {
+        return loop.turn(prompt, mentions(prompt), onDelta);
     }
 
     public Workspace workspace() {

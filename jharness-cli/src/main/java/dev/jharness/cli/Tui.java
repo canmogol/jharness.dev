@@ -60,6 +60,7 @@ final class Tui {
               /network allow|deny X [--project]   add a rule (host, *.suffix, IP or CIDR, optional :port)
               /network remove X [--project]       remove the rules naming X
               /network reload re-read both rules files
+              @PATH           attach a file or folder to the prompt (Tab completes the path)
               Shift+Enter, Alt+Enter, Ctrl-J  new line; Enter sends
               Esc             stop the running turn
               /help           show this help (or type / and press Tab)
@@ -137,6 +138,14 @@ final class Tui {
 
     /** Command names for a first word that starts with {@code /} (spec 024 AC-02); nothing otherwise. */
     static void completeCommand(LineReader r, org.jline.reader.ParsedLine line, List<org.jline.reader.Candidate> out) {
+        if (line.word().startsWith("@")) {
+            // A file or folder to attach (spec 040); a folder stays open so Tab can go on into it.
+            Session s = current;
+            if (s != null) {
+                s.completeMention(line.word()).forEach(w -> out.add(new org.jline.reader.Candidate(w, w, null, null, null, null, !w.endsWith("/"))));
+            }
+            return;
+        }
         if (line.wordIndex() != 0 || !line.word().startsWith("/")) {
             return;
         }
@@ -366,7 +375,7 @@ final class Tui {
         styler.reset();
         prompter().idle = false;
         try {
-            return session.loop().turn(text, this::stream);
+            return session.turn(text, this::stream);
         } finally {
             prompter().idle = true;
             flushPending();
@@ -1042,6 +1051,17 @@ final class Tui {
                     raw.println(styler.dim(String.format("▸ %scontext compacted: about %,d → %,d tokens", who, e.body().get("tokensBefore").asInt(),
                             e.body().get("tokensAfter").asInt())));
                 }
+            }
+            case "prompt.attached" -> {
+                List<String> parts = new java.util.ArrayList<>();
+                e.body().get("files").forEach(f -> parts.add(f.get("path").asText() + (f.get("folder").asBoolean() ? "/" : "")
+                        + (f.get("truncated").asBoolean() ? " (cut)" : "")));
+                if (!parts.isEmpty()) {
+                    raw.println(styler.dim(TerminalSafe.escape(String.format("▸ attached %s (%,d characters)", String.join(", ", parts),
+                            e.body().get("chars").asInt()))));
+                }
+                e.body().get("skipped").forEach(k -> raw.println(styler.error(TerminalSafe.escape("▸ not attached: @" + k.get("mention").asText()
+                        + ": " + k.get("reason").asText()))));
             }
             case "context.compact_failed" -> raw.println(styler.error("▸ " + who + "compaction failed: " + e.body().get("error").asText()));
             case "review.verdict" -> {

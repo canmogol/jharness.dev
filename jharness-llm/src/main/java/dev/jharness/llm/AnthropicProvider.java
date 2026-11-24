@@ -56,14 +56,32 @@ public final class AnthropicProvider extends HttpProvider {
         o.put("model", profile.model());
         o.put("max_tokens", req.maxTokens() > 0 ? req.maxTokens() : profile.maxTokens());
         o.put("stream", true);
+        boolean cache = profile.promptCache() && req.cache();
         if (req.system() != null && !req.system().isEmpty()) {
-            o.put("system", req.system());
+            if (cache) {
+                cached(o.putArray("system").addObject().put("type", "text").put("text", req.system()));
+            } else {
+                o.put("system", req.system());
+            }
         }
         ArrayNode m = o.putArray("messages");
-        for (ChatMessage c : req.messages()) {
-            m.addObject().put("role", c.role()).put("content", c.content());
+        int last = req.messages().size() - 1;
+        for (int i = 0; i <= last; i++) {
+            ChatMessage c = req.messages().get(i);
+            ObjectNode msg = m.addObject().put("role", c.role());
+            if (cache && i == last) {
+                // The second breakpoint: the next request reads everything up to here from the cache (spec 040).
+                cached(msg.putArray("content").addObject().put("type", "text").put("text", c.content()));
+            } else {
+                msg.put("content", c.content());
+            }
         }
         return o;
+    }
+
+    /** Marks a block as the end of a cached prefix (5-minute cache). */
+    private static void cached(ObjectNode block) {
+        block.putObject("cache_control").put("type", "ephemeral");
     }
 
     @Override
@@ -71,7 +89,7 @@ public final class AnthropicProvider extends HttpProvider {
         StringBuilder text = new StringBuilder();
         StringBuilder thinking = new StringBuilder();
         String[] stop = {null};
-        int[] usage = {0, 0};
+        int[] usage = {0, 0, 0, 0};
         boolean[] stopped = {false};
         Sse.read(in, (event, data) -> {
             JsonNode j;
@@ -82,7 +100,12 @@ public final class AnthropicProvider extends HttpProvider {
             }
             String type = j.path("type").asText(event == null ? "" : event);
             switch (type) {
-                case "message_start" -> usage[0] = j.path("message").path("usage").path("input_tokens").asInt();
+                case "message_start" -> {
+                    JsonNode u = j.path("message").path("usage");
+                    usage[0] = u.path("input_tokens").asInt();
+                    usage[2] = u.path("cache_read_input_tokens").asInt();
+                    usage[3] = u.path("cache_creation_input_tokens").asInt();
+                }
                 case "content_block_delta" -> {
                     JsonNode d = j.path("delta");
                     if ("text_delta".equals(d.path("type").asText())) {
@@ -118,7 +141,8 @@ public final class AnthropicProvider extends HttpProvider {
         if (!stopped[0]) {
             throw new ModelException("the stream from Anthropic ended before message_stop");
         }
-        return new ChatReply(text.toString(), thinking.toString(), stop[0] == null ? "end_turn" : stop[0], usage[0], usage[1]);
+        return new ChatReply(text.toString(), thinking.toString(), stop[0] == null ? "end_turn" : stop[0],
+                usage[0] + usage[2] + usage[3], usage[1], usage[2], usage[3]);
     }
 
     @Override

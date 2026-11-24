@@ -15,6 +15,12 @@ final class ModelEvents {
     static ObjectNode completed(String provider, String model, ChatReply r) {
         ObjectNode b = Json.object().put("provider", provider).put("model", model).put("stopReason", r.stopReason())
                 .put("inputTokens", r.inputTokens()).put("outputTokens", r.outputTokens());
+        if (r.cacheReadTokens() > 0) {
+            b.put("cacheReadTokens", r.cacheReadTokens());
+        }
+        if (r.cacheWriteTokens() > 0) {
+            b.put("cacheWriteTokens", r.cacheWriteTokens());
+        }
         put(b, "text", r.text());
         if (!r.thinking().isEmpty()) {
             put(b, "thinking", r.thinking());

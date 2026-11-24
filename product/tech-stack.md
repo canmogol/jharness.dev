@@ -52,8 +52,13 @@ Model requests are retried per profile (D-058):
 | `retryMaxWait` | 60 s | 1 s to 10 min |
 | `responseTimeout` | 120 s | 5 s to 30 min |
 | `contextWindow` | 32,768 tokens (`openai-compatible`), 200,000 (`anthropic`) | 2,048 to 10,000,000; above `maxTokens` |
+| `promptCache` | `true` (`anthropic`) | `true` or `false`; `anthropic` profiles only |
 
 Compaction (D-077): at `agent.compactAt` (0.8) of the window minus `maxTokens`, the model summarizes the older conversation in up to 2,048 tokens. Tokens are the model's own counts, else about 3.5 characters a token.
+
+Prompt caching (D-078): Claude requests mark the system prompt and the last message with a 5-minute `cache_control` breakpoint; OpenAI-compatible servers cache on their own, and their cached counts are read when reported.
+
+`@path` mentions (D-078): up to 20 per prompt, 50,000 characters a file, 200,000 a prompt and at most a quarter of the context window (about 3.5 characters a token); folders list up to 200 entries.
 
 ## Action reviewer (optional, D-031)
 

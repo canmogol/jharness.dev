@@ -42,7 +42,11 @@ class ProvidersTest {
     }
 
     private ModelProvider provider(String provider, Map<String, String> env) throws Exception {
-        String extra = provider.equals("anthropic") ? ",\"apiKeyEnv\":\"TEST_KEY\"" : "";
+        return provider(provider, env, "");
+    }
+
+    private ModelProvider provider(String provider, Map<String, String> env, String more) throws Exception {
+        String extra = (provider.equals("anthropic") ? ",\"apiKeyEnv\":\"TEST_KEY\"" : "") + more;
         Settings s = Settings.parse("{\"models\":{\"p\":{\"provider\":\"" + provider + "\",\"baseUrl\":\"" + stub.baseUrl()
                 + (provider.equals("openai-compatible") ? "/v1" : "") + "\",\"model\":\"m-1\",\"maxTokens\":100" + extra + "}}}", "test");
         ModelProfile p = s.models().resolve("p");
@@ -127,9 +131,61 @@ class ProvidersTest {
         assertEquals("sk-ant-test", sent.header("x-api-key"));
         assertEquals("2023-06-01", sent.header("anthropic-version"));
         var body = Json.parse(sent.body());
-        assertEquals("You write JS.", body.get("system").asText());
+        assertEquals("You write JS.", body.get("system").get(0).get("text").asText());
         assertEquals("user", body.get("messages").get(0).get("role").asText());
         assertTrue(events.stream().noneMatch(e -> e.toJsonLine().contains("sk-ant-test")), "the key reached an event");
+    }
+
+    private static final String ANTHROPIC_CACHED = Streams.ANTHROPIC_OK.replace("\"usage\":{\"input_tokens\":25,\"output_tokens\":1}",
+            "\"usage\":{\"input_tokens\":25,\"cache_creation_input_tokens\":300,\"cache_read_input_tokens\":4000,\"output_tokens\":1}");
+
+    @Test
+    void anthropicMarksTheSystemPromptAndTheLastMessageForTheCache() throws Exception {
+        stub.enqueue(Reply.sse(ANTHROPIC_CACHED));
+        var two = new ChatRequest("You write JS.", List.of(ChatMessage.user("read a"), ChatMessage.assistant("ok"), ChatMessage.user("result")), 0);
+        ChatReply r = provider("anthropic", Map.of("TEST_KEY", "k")).stream(two, t -> {});
+        var body = Json.parse(stub.requests().getFirst().body());
+        var system = body.get("system").get(0);
+        assertEquals("text", system.get("type").asText());
+        assertEquals("ephemeral", system.get("cache_control").get("type").asText());
+        var m = body.get("messages");
+        assertEquals("read a", m.get(0).get("content").asText(), "earlier messages stay plain strings");
+        assertEquals("ok", m.get(1).get("content").asText());
+        var last = m.get(2).get("content").get(0);
+        assertEquals("result", last.get("text").asText());
+        assertEquals("ephemeral", last.get("cache_control").get("type").asText());
+        assertEquals(4325, r.inputTokens(), "the whole prompt, cached parts included");
+        assertEquals(4000, r.cacheReadTokens());
+        assertEquals(300, r.cacheWriteTokens());
+        var done = completed();
+        assertEquals(4000, done.get("cacheReadTokens").asInt());
+        assertEquals(300, done.get("cacheWriteTokens").asInt());
+    }
+
+    @Test
+    void anthropicWithoutTheCacheSendsPlainStrings() throws Exception {
+        stub.enqueue(Reply.sse(Streams.ANTHROPIC_OK)).enqueue(Reply.sse(Streams.ANTHROPIC_OK));
+        ModelProvider off = provider("anthropic", Map.of("TEST_KEY", "k"), ",\"promptCache\":false");
+        off.stream(req(), t -> {});
+        var body = Json.parse(stub.requests().getFirst().body());
+        assertEquals("You write JS.", body.get("system").asText());
+        assertEquals("read a", body.get("messages").get(0).get("content").asText());
+        assertFalse(completed().has("cacheReadTokens"));
+        provider("anthropic", Map.of("TEST_KEY", "k")).stream(new ChatRequest("S", List.of(ChatMessage.user("x")), 10, false), t -> {});
+        var oneOff = Json.parse(stub.requests().get(1).body());
+        assertEquals("S", oneOff.get("system").asText(), "a one-off request isn't cached");
+        assertEquals("x", oneOff.get("messages").get(0).get("content").asText());
+    }
+
+    @Test
+    void openAiReportsCachedPromptTokens() throws Exception {
+        stub.enqueue(Reply.sse(Streams.OPENAI_OK.replace("\"total_tokens\":21}", "\"total_tokens\":21,\"prompt_tokens_details\":{\"cached_tokens\":8}}")));
+        ChatReply r = provider("openai-compatible", Map.of()).stream(req(), t -> {});
+        assertEquals(12, r.inputTokens());
+        assertEquals(8, r.cacheReadTokens());
+        assertEquals(0, r.cacheWriteTokens());
+        var body = Json.parse(stub.requests().getFirst().body());
+        assertFalse(body.toString().contains("cache_control"), "nothing extra is sent to OpenAI-compatible servers");
     }
 
     @Test

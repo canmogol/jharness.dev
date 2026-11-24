@@ -442,6 +442,30 @@ class TuiTest {
         assertTrue(sc.contains("Turns up to 1 are kept as a summary."), sc);
     }
 
+    /** Spec 040 AC-04, AC-06: @path attaches a file and says so; a missing one is named; Tab completes paths. */
+    @Test
+    void mentionsAttachAndComplete() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws40"));
+        Files.writeString(ws.resolve("README.md"), "# Shop\n");
+        Tui tui = new Tui(terminal("Explain @README.md and @gone.txt\n/exit\n"), null);
+        try (Session session = Session.open(tmp.resolve("home40"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("It is a shop."), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("▸ attached README.md (7 characters)"), sc);
+        assertTrue(sc.contains("▸ not attached: @gone.txt: not found"), sc);
+        assertTrue(sc.contains("It is a shop."), sc);
+
+        screen.reset();
+        Tui tui2 = new Tui(xterm("@REA\t\u0015/exit\r"), null, java.util.Map.of());
+        try (Session session = Session.open(tmp.resolve("home41"), ws, Settings.defaults(), Session.Access.prompter(tui2.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(), bus, turns))) {
+            tui2.run(session);
+        }
+        assertTrue(screen().contains("README.md"), "Tab completed the path: " + screen());
+    }
+
     /** Spec 024 AC-01, AC-02: "/" then Tab prints the help; "/mo" then Tab completes /model; other text keeps its Tab behavior. */
     @Test
     void slashTabPrintsTheHelpAndCompletesCommands() throws Exception {
