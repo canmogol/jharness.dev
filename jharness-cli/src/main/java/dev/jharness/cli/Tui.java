@@ -40,6 +40,7 @@ final class Tui {
               /agent          list custom agents (start one with jharness --agent NAME)
               /hooks          list the JS hooks in ~/.jharness/hooks/ and the project's .jharness/hooks/
               /commands       list your slash commands from ~/.jharness/commands/ and the project's .jharness/commands/
+              /mcp            list the MCP servers from your settings and their tools
               /agents         list this session's subagents
               /agents NAME    show a subagent's last 20 events
               /follow [NAME]  watch a background subagent live, like the main loop (Esc stops watching)
@@ -544,6 +545,13 @@ final class Tui {
             case "/follow" -> follow(session, parts.length > 1 ? parts[1].strip() : "");
             case "/switch" -> switchTo(session, parts.length > 1 ? parts[1].strip() : "");
             case "/network" -> network(session, parts.length > 1 ? parts[1].strip() : "");
+            case "/mcp" -> {
+                List<String> m = session.describeMcp();
+                if (m.isEmpty()) {
+                    out.println("No MCP servers. Add them to \"mcp\": {\"servers\": {...}} in ~/.jharness/settings.json.");
+                }
+                m.forEach(out::println);
+            }
             case "/plan" -> {
                 try {
                     boolean on = session.togglePlanMode();

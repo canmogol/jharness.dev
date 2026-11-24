@@ -25,11 +25,13 @@ public record Operation(String api, Kind kind, String summary, ObjectNode detail
         /** An {@code api.spawnAgent} (spec 026): it changes nothing itself; the subagent's own calls are decided one by one. */
         AGENT,
         /** The agent's own session state (spec 036): its todo list, or a plan it proposes; no file or process. */
-        SESSION;
+        SESSION,
+        /** An {@code api.mcp} tool call (spec 037): the server may do anything, so it asks by default. */
+        MCP;
 
         /** True for kinds that change state and need approval by default (D-010). */
         public boolean changesState() {
-            return this == WRITE || this == GIT_WRITE || this == BUILD || this == HTTP_WRITE;
+            return this == WRITE || this == GIT_WRITE || this == BUILD || this == HTTP_WRITE || this == MCP;
         }
 
         public String wire() {

@@ -75,6 +75,8 @@ public final class ProjectRules {
                 r.rules.add(new Rule(Operation.Kind.BUILD, n.get("op").asText()));
             } else if (kind.equals("http-write") && n.path("op").isTextual()) {
                 r.rules.add(new Rule(Operation.Kind.HTTP_WRITE, n.get("op").asText()));
+            } else if (kind.equals("mcp") && n.path("op").isTextual()) {
+                r.rules.add(new Rule(Operation.Kind.MCP, n.get("op").asText()));
             } else {
                 throw new IllegalArgumentException(r.file + ": unknown rule " + n);
             }
@@ -97,6 +99,7 @@ public final class ProjectRules {
             case GIT_WRITE -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.GIT_WRITE, op.detail().get("op").asText()) : null;
             case BUILD -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.BUILD, op.detail().get("op").asText()) : null;
             case HTTP_WRITE -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.HTTP_WRITE, op.detail().get("op").asText()) : null;
+            case MCP -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.MCP, op.detail().get("op").asText()) : null;
             default -> null;
         };
     }

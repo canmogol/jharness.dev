@@ -63,6 +63,7 @@ public final class Session implements AutoCloseable {
     private HookRunner hooks;
     private ApiServices services;
     private PlanState plans;
+    private dev.jharness.mcp.McpServers mcp;
     private volatile CommandRunner commands;
     private SubagentRunner subagents;
     private Path home;
@@ -206,16 +207,18 @@ public final class Session implements AutoCloseable {
             gate = new ToolsGate(gate, agent.name(), agent.tools());
         }
         SubagentRunner subagents = new SubagentRunner(home, ws.root(), access.trusted(), settings, loaded, bus, turns);
-        ApiServices base = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http, null);
+        dev.jharness.mcp.McpServers mcp = settings.mcp().servers().isEmpty() ? null
+                : dev.jharness.mcp.McpServers.start(settings.mcp(), runner, ws.root(), home, loaded::apply, bus, turns);
+        ApiServices base = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http, null, null, null, mcp);
         HookRunner hooks = HookRunner.load(home, ws.root(), access.trusted(), settings, bus, turns, base);
         ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http, subagents,
-                hooks.any() ? hooks : null, plans);
+                hooks.any() ? hooks : null, plans, mcp);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
         String contextJson = ctx.ok() ? ctx.value() : null;
         String projectMd = SystemPrompt.readMemory(ws.root().resolve("JHARNESS.md"));
         String userMd = SystemPrompt.readMemory(home.resolve(".jharness").resolve("JHARNESS.md"));
-        String toolsText = SystemPrompt.tools(builds.list());
+        String toolsText = SystemPrompt.tools(builds.list()) + (mcp == null ? "" : SystemPrompt.mcp(dev.jharness.events.Json.write(mcp.list(null))));
         String system = SystemPrompt.build(contextJson, projectMd, userMd, agent) + toolsText;
         if (agent != null && agent.helpers() != null) {
             isolate.useHelpers(agent.helpers());
@@ -240,6 +243,7 @@ public final class Session implements AutoCloseable {
         s.hooks = hooks;
         s.services = services;
         s.plans = plans;
+        s.mcp = mcp;
         s.subagents = subagents;
         s.home = home;
         s.trusted = access.trusted();
@@ -277,7 +281,7 @@ public final class Session implements AutoCloseable {
         Path project = projectNetworkRules(root);
         boolean offline = settings.offline();
         // Offline, only model endpoints on this machine or a private network are allowed automatically (D-055).
-        List<Rule> endpoints = modelEndpoints(settings.models()).stream()
+        List<Rule> endpoints = java.util.stream.Stream.concat(modelEndpoints(settings.models()).stream(), mcpEndpoints(settings.mcp()).stream())
                 .filter(r -> !offline || NetworkRules.local(r.target().toString())).toList();
         boolean trusted = access.trusted();
         EgressProxy p = EgressProxy.start(() -> new NetworkRules(RulesFile.load(general), RulesFile.load(project), trusted, endpoints, offline),
@@ -300,6 +304,36 @@ public final class Session implements AutoCloseable {
             l.add(RulesFile.rule(Rule.Action.ALLOW, h + ":" + port, "model profile " + e.getKey()));
         }
         return List.copyOf(l);
+    }
+
+    /** The user's HTTP MCP servers are allowed automatically, like model endpoints (D-076). */
+    static List<Rule> mcpEndpoints(dev.jharness.config.McpSettings mcp) {
+        List<Rule> l = new java.util.ArrayList<>();
+        for (var srv : mcp.servers().values()) {
+            if (srv.url() == null) {
+                continue;
+            }
+            URI u = URI.create(srv.url());
+            int port = u.getPort() > 0 ? u.getPort() : "https".equalsIgnoreCase(u.getScheme()) ? 443 : 80;
+            String host = u.getHost();
+            String h = host.startsWith("[") ? host : host.contains(":") ? "[" + host + "]" : host;
+            l.add(RulesFile.rule(Rule.Action.ALLOW, h + ":" + port, "MCP server " + srv.name()));
+        }
+        return List.copyOf(l);
+    }
+
+    /** {@code /mcp}: each server, how it is reached and its tools or error. */
+    public List<String> describeMcp() {
+        List<String> out = new java.util.ArrayList<>();
+        if (mcp == null) {
+            return out;
+        }
+        mcp.servers().values().forEach(srv -> {
+            List<String> names = new java.util.ArrayList<>();
+            srv.tools().forEach(t -> names.add(t.path("name").asText()));
+            out.add(srv.name() + "  " + srv.kind() + "  " + (srv.error() != null ? "unavailable: " + srv.error() : String.join(", ", names)));
+        });
+        return out;
     }
 
     /** Whether the session runs in offline mode (D-033, D-055). */
@@ -466,6 +500,9 @@ public final class Session implements AutoCloseable {
         subagents.closeAll();
         if (hooks != null) {
             hooks.close();
+        }
+        if (mcp != null) {
+            mcp.close();
         }
         isolate.close();
         if (proxy != null) {

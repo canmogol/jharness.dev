@@ -17,6 +17,7 @@
     <module>jharness-security</module>
     <module>jharness-process</module>
     <module>jharness-net</module>
+    <module>jharness-mcp</module>
     <module>jharness-sandbox</module>
     <module>jharness-llm</module>
     <module>jharness-agent</module>
@@ -77,6 +78,7 @@
       <dependency><groupId>dev.jharness</groupId><artifactId>jharness-security</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>dev.jharness</groupId><artifactId>jharness-process</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>dev.jharness</groupId><artifactId>jharness-net</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>dev.jharness</groupId><artifactId>jharness-mcp</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>dev.jharness</groupId><artifactId>jharness-sandbox</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>dev.jharness</groupId><artifactId>jharness-llm</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>dev.jharness</groupId><artifactId>jharness-agent</artifactId><version>${project.version}</version></dependency>
