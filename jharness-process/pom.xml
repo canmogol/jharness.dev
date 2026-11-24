@@ -16,4 +16,20 @@
     <!-- Tests run sandboxed clients through the real egress proxy (spec 013). -->
     <dependency><groupId>dev.jharness</groupId><artifactId>jharness-net</artifactId><scope>test</scope></dependency>
   </dependencies>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- The shipped tool definitions (spec 028, D-066): examples/.jharness/tools/ is the one copy. -->
+      <resource>
+        <directory>${project.basedir}/../examples/.jharness/tools</directory>
+        <targetPath>dev/jharness/process/tools</targetPath>
+        <includes>
+          <include>*.json</include>
+        </includes>
+      </resource>
+    </resources>
+  </build>
 </project>

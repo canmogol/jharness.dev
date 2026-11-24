@@ -324,12 +324,13 @@ public final class Smoke {
                 Files.writeString(ws.resolve("probe.js"), PROBE_JS);
                 Files.writeString(ws.resolve("package.json"), "{\"name\":\"smoke\",\"version\":\"1.0.0\",\"scripts\":{\"probe\":\"node probe.js 127.0.0.1:"
                         + web.getLocalPort() + "\"}}");
-                var tools = dev.jharness.process.BuildOperations.findOnPath(ws);
+                var defs = dev.jharness.process.ToolDefinitions.defaults();
+                var tools = dev.jharness.process.BuildOperations.findOnPath(defs, ws);
                 var ops = new dev.jharness.process.BuildOperations(new ProcessRunner(bus, () -> o, 30_000, sb), new Workspace(ws),
-                        Timeouts.defaults(), true, tools, home, System.getenv("JAVA_HOME"));
+                        Timeouts.defaults(), true, defs, tools, home, System.getenv("JAVA_HOME"), false);
                 String out;
                 try {
-                    out = ops.run(dev.jharness.process.BuildOperations.Tool.NPM, Json.parseObject("{\"op\":\"run\",\"script\":\"probe\"}")).output();
+                    out = ops.run("npm", Json.parseObject("{\"op\":\"run\",\"script\":\"probe\"}")).output();
                 } catch (RuntimeException e) {
                     out = e.toString();
                 }

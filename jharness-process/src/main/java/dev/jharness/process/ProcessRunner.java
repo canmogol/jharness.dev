@@ -235,7 +235,8 @@ public final class ProcessRunner {
             "PATH", "JAVA_HOME", "JAVA_TOOL_OPTIONS",
             "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "GIT_OPTIONAL_LOCKS", "GIT_WORK_TREE", "GIT_ASKPASS", "GIT_CONFIG_COUNT",
             "npm_config_offline", "npm_config_proxy", "npm_config_https_proxy", "npm_config_update_notifier", "npm_config_fund",
-            "npm_config_audit", "npm_config_color", "npm_config_progress");
+            "npm_config_audit", "npm_config_color", "npm_config_progress",
+            "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY", "no_proxy");
 
     /** {@code GIT_CONFIG_KEY_<n>} and {@code GIT_CONFIG_VALUE_<n>}: how git gets the proxy without argv (spec 017). */
     static final java.util.regex.Pattern GIT_CONFIG_ENTRY = java.util.regex.Pattern.compile("GIT_CONFIG_(KEY|VALUE)_[0-9]{1,2}");
@@ -262,7 +263,7 @@ public final class ProcessRunner {
 
     static void checkEnv(Map<String, String> env) {
         for (Map.Entry<String, String> v : env.entrySet()) {
-            if (!ENV_NAMES.contains(v.getKey()) && !GIT_CONFIG_ENTRY.matcher(v.getKey()).matches()) {
+            if (!ENV_NAMES.contains(v.getKey()) && !GIT_CONFIG_ENTRY.matcher(v.getKey()).matches() && !ToolDefinition.envNameAllowed(v.getKey())) {
                 throw new IllegalArgumentException("environment variable " + v.getKey() + " is not one JHarness passes to processes");
             }
             if (v.getValue() == null || v.getValue().indexOf('\0') >= 0) {

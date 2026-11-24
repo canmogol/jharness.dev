@@ -62,7 +62,39 @@ public final class TrustStore {
 
     /** Saves the answer (0700 folder, 0600 file, written atomically). */
     public synchronized void record(Path workspace, boolean trusted) {
-        projects.putObject(key(workspace)).put("trusted", trusted).put("date", LocalDate.now().toString());
+        record(workspace, trusted, java.util.Map.of());
+    }
+
+    /** Saves the answer with the project tool files the user saw when trusting it (spec 028, D-066). */
+    public synchronized void record(Path workspace, boolean trusted, java.util.Map<String, String> tools) {
+        ObjectNode e = projects.putObject(key(workspace)).put("trusted", trusted).put("date", LocalDate.now().toString());
+        if (trusted) {
+            ObjectNode t = e.putObject("tools");
+            tools.forEach(t::put);
+        }
+        save();
+    }
+
+    /** The project tool files the user confirmed, by tool name and SHA-256 (D-066). */
+    public synchronized java.util.Map<String, String> confirmedTools(Path workspace) {
+        java.util.Map<String, String> out = new java.util.TreeMap<>();
+        JsonNode t = projects.path(key(workspace)).path("tools");
+        t.properties().forEach(x -> out.put(x.getKey(), x.getValue().asText()));
+        return out;
+    }
+
+    /** Records the project tool files the user confirmed now. */
+    public synchronized void confirmTools(Path workspace, java.util.Map<String, String> tools) {
+        JsonNode n = projects.get(key(workspace));
+        if (!(n instanceof ObjectNode e)) {
+            return;
+        }
+        ObjectNode t = e.putObject("tools");
+        tools.forEach(t::put);
+        save();
+    }
+
+    private void save() {
         ObjectNode root = Json.object();
         root.set("projects", projects);
         try {

@@ -147,7 +147,7 @@ class CustomAgentTest {
                 (bus, turns) -> replay[0] = ReplayProvider.ofReplies(List.of(
                         "```js\nchangedFiles().join(',') + ' | ' + diffOf('App.java')\n```",
                         "```js\napi.writeFile('App.java', 'x')\n```",
-                        "```js\napi.npm({op: 'test'})\n```",
+                        "```js\napi.tool('npm', {op: 'test'})\n```",
                         "App.java line 1: add subtracts."), bus, turns))) {
             assertSame(reviewer, s.agent());
             s.loop().turn("review my changes", d -> {});
@@ -164,7 +164,7 @@ class CustomAgentTest {
         String afterWrite = reqs.get(2).messages().getLast().content();
         assertTrue(afterWrite.contains("agent reviewer can't use api.writeFile"), afterWrite);
         String afterNpm = reqs.get(3).messages().getLast().content();
-        assertTrue(afterNpm.contains("can't use api.npm"), afterNpm);
+        assertTrue(afterNpm.contains("can't use api.tool"), afterNpm);
         assertEquals("class App { int add(int a, int b) { return a - b; } }\n", Files.readString(ws.resolve("App.java")));
         List<JsonNode> events = SessionLog.read(log);
         JsonNode started = events.stream().filter(e -> e.get("type").asText().equals("session.started")).findFirst().orElseThrow();

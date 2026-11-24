@@ -19,7 +19,6 @@ import dev.jharness.events.Event;
 import dev.jharness.events.EventBus;
 import dev.jharness.events.Json;
 import dev.jharness.events.Origin;
-import dev.jharness.process.BuildOperations.Tool;
 import dev.jharness.security.Workspace;
 
 /** Spec 019: runs that the sandbox's proxy refusal failed are repeated, within the call's timeout. */
@@ -137,8 +136,8 @@ class ProxyRetryTest {
             Files.writeString(root.resolve("package.json"), "{}");
             ProcessRunner runner = new ProcessRunner(bus, () -> Origin.main(1), 30_000, net.sandbox);
             BuildOperations ops = new BuildOperations(runner, new Workspace(root), Timeouts.defaults(), true,
-                    Map.of(Tool.NPM, new Executable("npm", npm, bin)), tmp.resolve("home"), null);
-            ProcessResult r = ops.run(Tool.NPM, Json.parseObject("{\"op\":\"install\"}"));
+                    ToolDefinitions.defaults(), Map.of("npm", new Executable("npm", npm, bin)), tmp.resolve("home"), null, false);
+            ProcessResult r = ops.run("npm", Json.parseObject("{\"op\":\"install\"}"));
             assertEquals(0, r.exitCode(), r.full());
             assertTrue(r.output().contains("installed"));
             assertEquals("3", Files.readString(root.resolve("runs")).strip());
@@ -161,8 +160,8 @@ class ProxyRetryTest {
             Files.writeString(root.resolve("package.json"), "{}");
             ProcessRunner runner = new ProcessRunner(bus, () -> Origin.main(1), 30_000, net.sandbox);
             BuildOperations ops = new BuildOperations(runner, new Workspace(root), Timeouts.defaults(), true,
-                    Map.of(Tool.NPM, new Executable("npm", npm, bin)), tmp.resolve("home"), null);
-            assertEquals(1, ops.run(Tool.NPM, Json.parseObject("{\"op\":\"install\"}")).exitCode());
+                    ToolDefinitions.defaults(), Map.of("npm", new Executable("npm", npm, bin)), tmp.resolve("home"), null, false);
+            assertEquals(1, ops.run("npm", Json.parseObject("{\"op\":\"install\"}")).exitCode());
             assertEquals("1", Files.readString(root.resolve("runs")).strip());
             assertFalse(types().contains("process.retried"));
         }

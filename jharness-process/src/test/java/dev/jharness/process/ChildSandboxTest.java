@@ -98,18 +98,18 @@ class ChildSandboxTest {
     @Test
     void gradleAloneGetsLoopback() {
         var route = new ChildSandbox.ProxyRoute(4321, tmp.resolve("proxy.sock"), "u", "p");
-        String p = ChildSandbox.seatbeltProfile(policy(), BuildOperations.grants(BuildOperations.Tool.GRADLE, List.of()), route);
+        String p = ChildSandbox.seatbeltProfile(policy(), BuildOperations.grants(ToolDefinitions.defaults().get("gradle"), List.of()), route);
         assertTrue(p.contains("(allow network-outbound (remote ip \"localhost:4321\"))"), p);
         assertTrue(p.contains("(allow network-bind (local ip \"localhost:*\"))"), p);
         assertTrue(p.contains("(allow network-inbound (local ip \"localhost:*\"))"), p);
         assertTrue(p.contains("(allow network-outbound (remote ip \"localhost:*\"))"), p);
         assertFalse(p.contains("remote ip \"*:") || p.contains("(remote tcp") || p.contains("(allow network*"), "only loopback: " + p);
-        for (var tool : List.of(BuildOperations.Tool.MAVEN, BuildOperations.Tool.NPM)) {
+        for (var tool : List.of(ToolDefinitions.defaults().get("maven"), ToolDefinitions.defaults().get("npm"))) {
             String q = ChildSandbox.seatbeltProfile(policy(), BuildOperations.grants(tool, List.of()), route);
             assertFalse(q.contains("localhost:*"), tool + ": " + q);
         }
         assertThrows(IllegalArgumentException.class, () -> new ChildSandbox.Grants(List.of(), false, true));
-        List<String> b = ChildSandbox.bubblewrapArgs(policy(), ws, BuildOperations.grants(BuildOperations.Tool.GRADLE, List.of()), route);
+        List<String> b = ChildSandbox.bubblewrapArgs(policy(), ws, BuildOperations.grants(ToolDefinitions.defaults().get("gradle"), List.of()), route);
         assertTrue(b.contains("--unshare-all") && !b.contains("--share-net"), b.toString());
     }
 

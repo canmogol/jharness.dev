@@ -165,14 +165,54 @@ final class Tui {
 
     /** The trust question (AC-01, AC-02); end of input means no. */
     boolean askTrust(Path workspace) {
+        return askTrust(workspace, List.of());
+    }
+
+    /** The trust question, listing the tools the project defines (spec 028, D-066). */
+    boolean askTrust(Path workspace, List<dev.jharness.process.ToolDefinitions.ProjectTool> tools) {
         out.println("Do you trust " + workspace + "?");
         out.println("Trusting it lets its .jharness/settings.json loosen JHarness rules (permission mode, sandbox limits, mounts, models).");
+        if (!tools.isEmpty()) {
+            out.println("It also lets JHarness run the tools the project defines in .jharness/tools/:");
+            tools.forEach(t -> out.println("  " + t.line()));
+        }
         out.println("Untrusted projects can only make JHarness stricter.");
         out.flush();
         while (true) {
             String a;
             try {
                 a = reader.readLine("[y] trust  [n] don't trust: ");
+            } catch (UserInterruptException | EndOfFileException e) {
+                return false;
+            }
+            switch (a.strip().toLowerCase()) {
+                case "y", "yes" -> {
+                    return true;
+                }
+                case "n", "no" -> {
+                    return false;
+                }
+                default -> {
+                    out.println("Please answer y or n.");
+                    out.flush();
+                }
+            }
+        }
+    }
+
+    /**
+     * A trusted project's tool files are new or changed since the user confirmed them (D-066).
+     *
+     * @return true to use the project's tools this session
+     */
+    boolean askProjectTools(List<dev.jharness.process.ToolDefinitions.ProjectTool> changed) {
+        out.println("This project's tools are new or changed since you last confirmed them (.jharness/tools/):");
+        changed.forEach(t -> out.println("  " + t.line()));
+        out.flush();
+        while (true) {
+            String a;
+            try {
+                a = reader.readLine("Use the project's tools this session? [y] yes  [n] no, only mine: ");
             } catch (UserInterruptException | EndOfFileException e) {
                 return false;
             }
@@ -212,6 +252,11 @@ final class Tui {
                 + (session.agent() != null ? " · agent " + session.agent().name() : "")
                 + (session.offline() ? " · offline" : "") + " · /help for commands");
         raw.println(styler.dim("Session log: " + session.logPath()));
+        var project = session.tools().project();
+        if (!project.isEmpty()) {
+            out.println("Project tools: " + String.join("; ", project.stream().map(dev.jharness.process.ToolDefinitions.ProjectTool::line).toList()));
+        }
+        session.tools().errors().forEach((n, err) -> raw.println(styler.error("Tool " + n + " is unavailable: " + err)));
         out.flush();
         while (true) {
             String line;

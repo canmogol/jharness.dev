@@ -78,7 +78,7 @@ class CommandExecutionTest {
 
     @Test
     void noShellIsKnownAndMetacharactersStayLiteral() throws Exception {
-        for (String sh : List.of("sh", "bash", "zsh", "env", "node", "python3")) {
+        for (String sh : List.of("sh", "bash", "zsh", "env", "nohup", "timeout")) {
             assertThrows(IllegalArgumentException.class, () -> Executables.resolve(sh, "/bin:/usr/bin", ws), sh);
         }
         Path m = marker("shell");

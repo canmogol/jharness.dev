@@ -12,81 +12,32 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.jharness.config.Timeouts;
 import dev.jharness.events.Json;
+import dev.jharness.process.ToolDefinition.Field;
+import dev.jharness.process.ToolDefinition.Proxy;
+import dev.jharness.process.ToolDefinition.Type;
 import dev.jharness.security.Workspace;
 
 /**
- * Typed Maven, Gradle and npm operations (D-008, D-009, D-049, spec 013). Requests are JSON objects
- * such as {@code {"op":"test","tests":"AppTest"}}; free-form arguments are never accepted. Every run
- * goes through the OS sandbox with the tool's cache folders and the proxy port, and the tool is
- * pointed at the egress proxy without putting the password on the command line.
+ * Typed operations of the defined tools (D-008, D-049, D-066, specs 013 and 028). Requests are JSON
+ * objects such as {@code {"op":"test","tests":"AppTest"}}; free-form arguments are never accepted: each
+ * field's checked value goes into the argv slot its definition names. Every run goes through the OS
+ * sandbox with the tool's writable folders and the proxy port, and the tool is pointed at the egress
+ * proxy without putting the password on the command line.
  */
 public final class BuildOperations {
-
-    public enum Tool {
-        MAVEN("maven", "mvn"), GRADLE("gradle", "gradle"), NPM("npm", "npm");
-
-        private final String api;
-        private final String executable;
-
-        Tool(String api, String executable) {
-            this.api = api;
-            this.executable = executable;
-        }
-
-        /** The {@code api} method name: {@code maven}, {@code gradle} or {@code npm}. */
-        public String api() {
-            return api;
-        }
-
-        /** The executable looked up on {@code PATH}. */
-        public String executable() {
-            return executable;
-        }
-    }
-
-    private static final Map<Tool, Map<String, Set<String>>> FIELDS = Map.of(
-            Tool.MAVEN, Map.of(
-                    "compile", Set.of("module", "profiles", "threads"),
-                    "test", Set.of("module", "tests", "profiles", "threads"),
-                    "verify", Set.of("module", "tests", "skipTests", "profiles", "threads"),
-                    "package", Set.of("module", "skipTests", "profiles", "threads"),
-                    "install", Set.of("module", "tests", "skipTests", "profiles", "threads"),
-                    "clean", Set.of("module")),
-            Tool.GRADLE, Map.of(
-                    "build", Set.of("project", "skipTests", "parallel", "continue"),
-                    "test", Set.of("project", "tests", "parallel", "continue"),
-                    "check", Set.of("project", "skipTests", "parallel", "continue"),
-                    "assemble", Set.of("project", "parallel", "continue"),
-                    "clean", Set.of("project")),
-            Tool.NPM, Map.of(
-                    "ci", Set.of("omitDev"),
-                    "install", Set.of("omitDev"),
-                    "test", Set.of(),
-                    "run", Set.of("script")));
-
-    /** Test selectors such as {@code AppTest}, {@code com.x.*Test#method} or {@code A,B}; never an option. */
-    static final String TESTS = "[A-Za-z0-9_.*#$][A-Za-z0-9_.*#,+$-]{0,199}";
-    /** Gradle project paths such as {@code :app} or {@code :libs:core}. */
-    static final String GRADLE_PROJECT = "(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}){1,10}";
-    /** npm script names. */
-    static final String SCRIPT = "[A-Za-z0-9_][A-Za-z0-9_.:@/-]{0,99}";
-
-    /** Maven profiles to turn on or off (spec 023), such as {@code dev} or {@code dev,!ci}. */
-    static final String PROFILES = "!?[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}(,!?[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}){0,9}";
-    /** Maven build threads: 1 to 32, or 1C to 4C per core. */
-    static final String THREADS = "[1-9]|[12][0-9]|3[0-2]|[1-4]C";
 
     static final String BASE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 
@@ -95,54 +46,65 @@ public final class BuildOperations {
     private final Duration timeout;
     private final Duration max;
     private final boolean trusted;
-    private final Map<Tool, Executable> onPath;
+    private final ToolDefinitions tools;
+    private final Map<String, Executable> onPath;
     private final Path home;
     private final String javaHome;
     private final boolean offline;
 
     /**
-     * @param trusted whether the project is trusted (D-011); builds run project code, so they need it
-     * @param onPath the tools found on {@code PATH} outside the workspace; missing tools are absent
-     * @param home the user's home, for the cache folders
-     * @param javaHome {@code JAVA_HOME} to pass to Maven and Gradle, or null
+     * @param trusted whether the project is trusted (D-011); tools run project code, so they need it
+     * @param onPath each tool's executable found on {@code PATH} outside the workspace; missing tools are absent
+     * @param home the user's home, for the writable folders
+     * @param javaHome {@code JAVA_HOME} for tools whose definition sets {@code javaHome}, or null
+     * @param offline add each definition's {@code offline} arguments and variables (D-033, D-055)
      */
-    public BuildOperations(ProcessRunner runner, Workspace workspace, Timeouts timeouts, boolean trusted,
-            Map<Tool, Executable> onPath, Path home, String javaHome) {
-        this(runner, workspace, timeouts, trusted, onPath, home, javaHome, false);
-    }
-
-    /** @param offline run Maven with {@code -o}, Gradle with {@code --offline} and npm offline (D-033, D-055) */
-    public BuildOperations(ProcessRunner runner, Workspace workspace, Timeouts timeouts, boolean trusted,
-            Map<Tool, Executable> onPath, Path home, String javaHome, boolean offline) {
-        this.offline = offline;
+    public BuildOperations(ProcessRunner runner, Workspace workspace, Timeouts timeouts, boolean trusted, ToolDefinitions tools,
+            Map<String, Executable> onPath, Path home, String javaHome, boolean offline) {
         this.runner = runner;
         this.workspace = workspace;
         this.timeout = timeouts.process();
         this.max = timeouts.processMax();
         this.trusted = trusted;
+        this.tools = tools;
         this.onPath = Map.copyOf(onPath);
         this.home = home;
         this.javaHome = javaHome != null && !javaHome.isBlank() && Files.isDirectory(Path.of(javaHome)) ? javaHome : null;
+        this.offline = offline;
     }
 
-    /** Finds each tool on this process's {@code PATH}, skipping folders inside the workspace. */
-    public static Map<Tool, Executable> findOnPath(Path workspace) {
-        Map<Tool, Executable> m = new LinkedHashMap<>();
-        for (Tool t : Tool.values()) {
-            Executables.resolve(t.executable(), workspace).ifPresent(e -> m.put(t, e));
+    /** Finds each tool's executable on this process's {@code PATH}, skipping folders inside the workspace. */
+    public static Map<String, Executable> findOnPath(ToolDefinitions tools, Path workspace) {
+        Map<String, Executable> m = new LinkedHashMap<>();
+        for (ToolDefinition d : tools.tools().values()) {
+            Executables.resolve(d.executable(), workspace).ifPresent(e -> m.put(d.name(), e));
         }
         return m;
     }
 
-    public static Set<String> operations(Tool tool) {
-        return FIELDS.get(tool).keySet();
+    public ToolDefinitions tools() {
+        return tools;
+    }
+
+    /** The definition, after checking the tool exists. */
+    public ToolDefinition definition(String name) {
+        ToolDefinition d = tools.get(name);
+        if (d == null) {
+            String err = tools.errors().get(name);
+            if (err != null) {
+                throw new OperationException("tool " + name + " can't be used: " + err);
+            }
+            throw new OperationException("no tool \"" + name + "\" (tools: " + (tools.tools().isEmpty() ? "none" : String.join(", ", tools.tools().keySet()))
+                    + "; api.tools() lists them)");
+        }
+        return d;
     }
 
     /** The operation name, after checking it exists. */
-    public static String op(Tool tool, ObjectNode req) {
+    public static String op(ToolDefinition d, ObjectNode req) {
         JsonNode op = req.get("op");
-        if (op == null || !op.isTextual() || !FIELDS.get(tool).containsKey(op.asText())) {
-            throw new OperationException(tool.api() + " op must be one of " + String.join(", ", new TreeSet<>(FIELDS.get(tool).keySet())));
+        if (op == null || !op.isTextual() || !d.operations().containsKey(op.asText())) {
+            throw new OperationException(d.name() + " op must be one of " + String.join(", ", new TreeSet<>(d.operations().keySet())));
         }
         return op.asText();
     }
@@ -151,149 +113,145 @@ public final class BuildOperations {
      * Checks the request and the project without running anything, so a bad request fails before
      * anyone is asked to approve it.
      */
-    public void check(Tool tool, ObjectNode req) {
+    public void check(String tool, ObjectNode req) {
+        ToolDefinition d = definition(tool);
         if (!trusted) {
-            throw new OperationException(tool.api() + " runs the project's own build code; trust this project first"
+            throw new OperationException(tool + " runs the project's own code; trust this project first"
                     + " (JHarness asks when it opens a folder; see ~/.jharness/trusted.json)");
         }
-        args(tool, req);
-        executable(tool);
+        args(d, req, null);
+        executable(d);
         CallTimeout.of(req, timeout, max);
     }
 
-    /** The argv after the executable, validated. Exposed for tests; {@code settings} is Maven's generated settings file. */
-    List<String> args(Tool tool, ObjectNode req, Path settings) {
-        String op = op(tool, req);
-        Set<String> allowed = FIELDS.get(tool).get(op);
+    /** The checked field values of a request, by field name (flags only when true). */
+    private Map<String, JsonNode> values(ToolDefinition d, String op, ObjectNode req) {
+        List<String> takes = d.fieldsOf(op);
         for (Iterator<String> it = req.fieldNames(); it.hasNext(); ) {
             String f = it.next();
-            if (!f.equals("op") && !f.equals(CallTimeout.FIELD) && !allowed.contains(f)) {
-                List<String> takes = new ArrayList<>(new TreeSet<>(allowed));
-                takes.add(CallTimeout.FIELD);
-                throw new OperationException(tool.api() + " " + op + " does not take \"" + f + "\" (takes: " + String.join(", ", takes) + ")");
+            if (!f.equals("op") && !f.equals(CallTimeout.FIELD) && !takes.contains(f)) {
+                List<String> list = new ArrayList<>(new TreeSet<>(takes));
+                list.add(CallTimeout.FIELD);
+                throw new OperationException(d.name() + " " + op + " does not take \"" + f + "\" (takes: " + String.join(", ", list) + ")");
             }
         }
-        List<String> a = new ArrayList<>();
-        switch (tool) {
-            case MAVEN -> {
-                a.addAll(List.of("-B", "-ntp", "-Dstyle.color=never"));
-                if (offline) {
-                    a.add("-o");
+        Map<String, JsonNode> out = new LinkedHashMap<>();
+        for (String name : takes) {
+            Field f = d.fields().get(name);
+            JsonNode v = req.get(name);
+            if (v == null || v.isNull()) {
+                if (f.required()) {
+                    throw new OperationException(d.name() + " " + op + " needs a \"" + name + "\"" + (f.description().isEmpty() ? "" : ": " + f.description()));
                 }
+                v = f.dflt();
+                if (v == null) {
+                    continue;
+                }
+            }
+            String err = ToolDefinition.valueError(f, v);
+            if (err != null) {
+                throw new OperationException(err);
+            }
+            if (f.type() == Type.FLAG && !v.asBoolean()) {
+                continue;
+            }
+            if (f.type() == Type.FOLDER) {
+                v = Json.MAPPER.getNodeFactory().textNode(folder(name, v.asText()));
+            }
+            if ("npm-script".equals(f.check()) && !scripts().contains(v.asText())) {
+                throw new OperationException("package.json has no script \"" + v.asText() + "\" (scripts: " + String.join(", ", new TreeSet<>(scripts())) + ")");
+            }
+            out.put(name, v);
+        }
+        for (List<String> group : d.conflicts()) {
+            List<String> present = group.stream().filter(out::containsKey).toList();
+            if (present.size() > 1) {
+                throw new OperationException(String.join(" and ", present.stream().map(x -> "\"" + x + "\"").toList()) + " can't be used together");
+            }
+        }
+        return out;
+    }
+
+    /** The argv after the executable, validated. Exposed for tests; {@code settings} is Maven's generated settings file. */
+    List<String> args(ToolDefinition d, ObjectNode req, Path settings) {
+        String op = op(d, req);
+        Map<String, JsonNode> values = values(d, op, req);
+        List<String> a = new ArrayList<>();
+        for (String x : d.args()) {
+            if (x.equals("{" + ToolDefinition.PROXY_SETTINGS + "}")) {
                 if (settings != null) {
                     a.addAll(List.of("--global-settings", settings.toString()));
                 }
-                String module = text(req, "module");
-                if (module != null) {
-                    a.addAll(List.of("-pl", folder(module), "-am"));
-                }
-                String tests = text(req, "tests");
-                boolean skip = flag(req, "skipTests");
-                if (tests != null && skip) {
-                    throw new OperationException("\"tests\" and \"skipTests\" can't be used together");
-                }
-                if (tests != null) {
-                    a.add("-Dtest=" + matching(tests, TESTS, "tests"));
-                    a.add("-Dsurefire.failIfNoSpecifiedTests=false");
-                }
-                if (skip) {
-                    a.add("-DskipTests");
-                }
-                String profiles = text(req, "profiles");
-                if (profiles != null) {
-                    a.addAll(List.of("-P", matching(profiles, PROFILES, "profiles")));
-                }
-                String threads = text(req, "threads");
-                if (threads != null) {
-                    a.addAll(List.of("-T", matching(threads, THREADS, "threads (1 to 32, or 1C to 4C)")));
-                }
-                a.add(op);
+            } else {
+                a.add(x);
             }
-            case GRADLE -> {
-                a.addAll(List.of("--console=plain", "--no-daemon"));
-                if (offline) {
-                    a.add("--offline");
+        }
+        if (offline) {
+            a.addAll(d.offlineArgs());
+        }
+        for (String x : d.operations().get(op)) {
+            Matcher m = ToolDefinition.PLACEHOLDER.matcher(x);
+            if (m.matches()) {
+                JsonNode v = values.get(m.group(1));
+                if (v != null) {
+                    a.addAll(expand(d.fields().get(m.group(1)), v));
                 }
-                String project = text(req, "project");
-                a.add((project != null ? matching(project, GRADLE_PROJECT, "project") + ":" : "") + op);
-                String tests = text(req, "tests");
-                if (tests != null) {
-                    a.addAll(List.of("--tests", matching(tests, TESTS, "tests")));
-                }
-                if (flag(req, "skipTests")) {
-                    a.addAll(List.of("-x", "test"));
-                }
-                if (flag(req, "parallel")) {
-                    a.add("--parallel");
-                }
-                if (flag(req, "continue")) {
-                    a.add("--continue");
-                }
+                continue;
             }
-            case NPM -> {
-                switch (op) {
-                    case "ci", "install" -> {
-                        a.addAll(List.of(op, "--ignore-scripts"));
-                        if (flag(req, "omitDev")) {
-                            a.add("--omit=dev");
-                        }
-                    }
-                    case "test" -> a.add("test");
-                    case "run" -> {
-                        String script = text(req, "script");
-                        if (script == null) {
-                            throw new OperationException("npm run needs a \"script\" from package.json");
-                        }
-                        matching(script, SCRIPT, "script");
-                        if (!scripts().contains(script)) {
-                            throw new OperationException("package.json has no script \"" + script + "\" (scripts: "
-                                    + String.join(", ", new TreeSet<>(scripts())) + ")");
-                        }
-                        a.addAll(List.of("run", script));
-                    }
-                    default -> throw new AssertionError(op);
-                }
+            StringBuilder sb = new StringBuilder();
+            m.reset();
+            while (m.find()) {
+                JsonNode v = values.get(m.group(1));
+                m.appendReplacement(sb, Matcher.quoteReplacement(v == null ? "" : expand(d.fields().get(m.group(1)), v).getFirst()));
+            }
+            m.appendTail(sb);
+            if (!sb.isEmpty()) {
+                a.add(sb.toString());
             }
         }
         return a;
     }
 
-    List<String> args(Tool tool, ObjectNode req) {
-        return args(tool, req, null);
+    List<String> args(String tool, ObjectNode req) {
+        return args(definition(tool), req, null);
+    }
+
+    List<String> args(String tool, ObjectNode req, Path settings) {
+        return args(definition(tool), req, settings);
+    }
+
+    private static List<String> expand(Field f, JsonNode v) {
+        if (f.type() == Type.ENUM) {
+            return f.values().get(v.asText());
+        }
+        String s = f.type() == Type.FLAG ? "" : v.asText();
+        return f.args().stream().map(x -> x.replace("{}", s)).toList();
     }
 
     /**
-     * The wrapper in the workspace when there is one (trusted projects only, constitution Article IV),
-     * otherwise the tool from {@code PATH}.
+     * The wrapper in the workspace when the definition names one and it exists (trusted projects only,
+     * constitution Article IV), otherwise the tool from {@code PATH}.
      */
-    Executable executable(Tool tool) {
-        switch (tool) {
-            case MAVEN -> {
-                Optional<Executable> w = wrapper("mvnw");
-                if (w.isPresent()) {
-                    return w.get();
+    Executable executable(ToolDefinition d) {
+        if (d.wrapper() != null) {
+            Optional<Executable> w = wrapper(d.wrapper().file());
+            if (w.isPresent()) {
+                if (d.wrapper().checksum() != null && !pinsChecksum(workspace.root().resolve(d.wrapper().checksum()))) {
+                    throw new OperationException("./" + d.wrapper().file() + " is present but " + d.wrapper().checksum() + " doesn't pin"
+                            + " distributionSha256Sum; add the checksum of the distribution so the wrapper can't fetch another");
                 }
-            }
-            case GRADLE -> {
-                Optional<Executable> w = wrapper("gradlew");
-                if (w.isPresent()) {
-                    Path props = workspace.root().resolve("gradle/wrapper/gradle-wrapper.properties");
-                    if (!pinsChecksum(props)) {
-                        throw new OperationException("./gradlew is present but gradle/wrapper/gradle-wrapper.properties doesn't pin"
-                                + " distributionSha256Sum; add the checksum of the Gradle distribution so the wrapper can't fetch another");
-                    }
-                    return w.get();
-                }
-            }
-            case NPM -> {
-                // npm has no wrapper.
+                return w.get();
             }
         }
-        Executable e = onPath.get(tool);
+        Executable e = onPath.get(d.name());
         if (e == null) {
-            throw new OperationException(tool.api() + " is not installed (" + tool.executable() + " was not found on PATH outside the workspace)");
+            throw new OperationException(d.name() + " is not installed (" + d.executable() + " was not found on PATH outside the workspace)");
         }
         return e;
+    }
+
+    Executable executable(String tool) {
+        return executable(definition(tool));
     }
 
     private Optional<Executable> wrapper(String name) {
@@ -319,24 +277,20 @@ public final class BuildOperations {
         return sum.matches("[0-9a-fA-F]{64}");
     }
 
-    /** The cache folders the tool may write besides the workspace and the temp folder (AC-08). */
-    List<Path> caches(Tool tool) {
-        return switch (tool) {
-            case MAVEN -> List.of(home.resolve(".m2").resolve("repository"), home.resolve(".m2").resolve("wrapper"));
-            case GRADLE -> {
-                Path g = home.resolve(".gradle");
-                yield List.of(g.resolve("caches"), g.resolve("wrapper"), g.resolve("native"), g.resolve("jdks"), g.resolve("daemon"),
-                        g.resolve("notifications"), g.resolve(".tmp"));
-            }
-            case NPM -> List.of(home.resolve(".npm"));
-        };
+    /** The folders the tool may write besides the workspace and the temp folder (AC-08). */
+    List<Path> caches(ToolDefinition d) {
+        return d.writable().stream().map(home::resolve).toList();
     }
 
-    /** The environment for the tool: {@code PATH}, {@code JAVA_HOME} and the proxy settings (AC-06). */
-    Map<String, String> env(Tool tool, Executable exe, ChildSandbox.ProxyRoute route, Path tmp) {
+    List<Path> caches(String tool) {
+        return caches(definition(tool));
+    }
+
+    /** The environment for the tool: {@code PATH}, {@code JAVA_HOME}, the proxy settings and the definition's variables. */
+    Map<String, String> env(ToolDefinition d, Executable exe, ChildSandbox.ProxyRoute route, Path tmp) {
         Map<String, String> env = new LinkedHashMap<>();
         StringBuilder path = new StringBuilder();
-        if (javaHome != null && tool != Tool.NPM) {
+        if (javaHome != null && d.javaHome()) {
             env.put("JAVA_HOME", javaHome);
             path.append(Path.of(javaHome, "bin")).append(':');
         }
@@ -346,25 +300,35 @@ public final class BuildOperations {
         path.append(BASE_PATH);
         env.put("PATH", path.toString());
         String proxyUrl = "http://" + route.user() + ":" + route.password() + "@127.0.0.1:" + route.port();
-        switch (tool) {
-            case MAVEN, GRADLE -> env.put("JAVA_TOOL_OPTIONS", javaToolOptions(route, tmp));
+        switch (d.proxy()) {
+            case MAVEN_SETTINGS, JAVA_OPTIONS -> env.put("JAVA_TOOL_OPTIONS", javaToolOptions(route, tmp));
             case NPM -> {
                 env.put("npm_config_proxy", proxyUrl);
                 env.put("npm_config_https_proxy", proxyUrl);
-                env.put("npm_config_update_notifier", "false");
-                env.put("npm_config_fund", "false");
-                env.put("npm_config_audit", "false");
-                env.put("npm_config_color", "false");
-                env.put("npm_config_progress", "false");
-                if (offline) {
-                    env.put("npm_config_offline", "true");
-                }
             }
+            case ENV -> {
+                for (String k : List.of("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")) {
+                    env.put(k, proxyUrl);
+                }
+                env.put("NO_PROXY", "localhost,127.0.0.1");
+                env.put("no_proxy", "localhost,127.0.0.1");
+            }
+            case NONE -> {
+                // No network for this tool.
+            }
+        }
+        env.putAll(d.env());
+        if (offline) {
+            env.putAll(d.offlineEnv());
         }
         return env;
     }
 
-    /** Proxy system properties for Gradle and every JVM a build starts, and the private temp folder. */
+    Map<String, String> env(String tool, Executable exe, ChildSandbox.ProxyRoute route, Path tmp) {
+        return env(definition(tool), exe, route, tmp);
+    }
+
+    /** Proxy system properties for every JVM a build starts, and the private temp folder. */
     static String javaToolOptions(ChildSandbox.ProxyRoute route, Path tmp) {
         List<String> o = new ArrayList<>();
         o.add("-Djava.io.tmpdir=" + tmp);
@@ -410,17 +374,18 @@ public final class BuildOperations {
         return f;
     }
 
-    public ProcessResult run(Tool tool, ObjectNode req) {
+    public ProcessResult run(String tool, ObjectNode req) {
         check(tool, req);
+        ToolDefinition d = definition(tool);
         ChildSandbox sandbox = runner.sandbox();
         ChildSandbox.ProxyRoute route = sandbox.route();
         if (route == null) {
-            throw new OperationException(tool.api() + " needs the egress proxy, and this session has none");
+            throw new OperationException(tool + " needs the egress proxy, and this session has none");
         }
-        Executable exe = executable(tool);
-        Path settings = tool == Tool.MAVEN ? writeMavenSettings(route) : null;
-        List<String> argv = args(tool, req, settings);
-        List<Path> caches = caches(tool);
+        Executable exe = executable(d);
+        Path settings = d.proxy() == Proxy.MAVEN_SETTINGS ? writeMavenSettings(route) : null;
+        List<String> argv = args(d, req, settings);
+        List<Path> caches = caches(d);
         for (Path c : caches) {
             try {
                 Files.createDirectories(c);
@@ -428,8 +393,8 @@ public final class BuildOperations {
                 throw new UncheckedIOException("cannot create " + c, e);
             }
         }
-        Map<String, String> env = env(tool, exe, route, sandbox.policy().tmp());
-        ChildSandbox.Grants grants = grants(tool, caches);
+        Map<String, String> env = env(d, exe, route, sandbox.policy().tmp());
+        ChildSandbox.Grants grants = grants(d, caches);
         // Seatbelt now and then refuses a connect to the proxy port with EPERM (spec 019). The tools
         // don't retry that themselves, so the whole approved run is repeated.
         return runner.retryingProxyRefusals(exe.name(), CallTimeout.of(req, timeout, max),
@@ -437,29 +402,39 @@ public final class BuildOperations {
                 t -> runner.run(exe, argv, workspace.root(), t, env, grants));
     }
 
-    /** Gradle also gets loopback, for its daemon (D-050); the other tools reach only the proxy port. */
-    static ChildSandbox.Grants grants(Tool tool, List<Path> caches) {
-        return new ChildSandbox.Grants(caches, true, tool == Tool.GRADLE);
+    /** {@code loopback} (only in the user's own definitions, D-050) adds any loopback port; {@code proxy: none} gets no network. */
+    static ChildSandbox.Grants grants(ToolDefinition d, List<Path> caches) {
+        boolean network = d.proxy() != Proxy.NONE;
+        return new ChildSandbox.Grants(caches, network, network && d.loopback());
     }
 
-    /** Result as the JSON string {@code api.maven}, {@code api.gradle} and {@code api.npm} return. */
+    /** Result as the JSON string {@code api.tool} returns. */
     public static String toJson(ProcessResult r) {
         return GitOperations.toJson(r);
     }
 
-    /** The detail for permission prompts and saved rules: tool and op. */
-    public static ObjectNode detail(Tool tool, ObjectNode req) {
-        return Json.object().put("tool", tool.api()).put("op", tool.api() + " " + op(tool, req));
+    /**
+     * The detail for permission prompts and saved rules: the tool, where its definition came from and
+     * the operation, keyed with the resolved executable so "always" doesn't carry over to another program.
+     */
+    public ObjectNode detail(String tool, ObjectNode req) {
+        ToolDefinition d = definition(tool);
+        String op = op(d, req);
+        Executable exe = executable(d);
+        return Json.object().put("tool", tool).put("source", d.source().wire()).put("executable", exe.path().toString())
+                .put("op", tool + " " + op + " (" + exe.path() + ")");
     }
 
     /**
      * What the approval question shows (spec 023): the operation and the fields that change it, e.g.
-     * {@code maven package · skipTests, profiles dev}. "Always" still saves the operation alone.
+     * {@code maven package · skipTests, profiles dev}; a project's tool says so.
      */
-    public static String summary(Tool tool, ObjectNode req) {
-        StringBuilder b = new StringBuilder(tool.api()).append(' ').append(op(tool, req));
+    public String summary(String tool, ObjectNode req) {
+        ToolDefinition d = definition(tool);
+        String op = op(d, req);
+        StringBuilder b = new StringBuilder(tool).append(' ').append(op);
         List<String> parts = new ArrayList<>();
-        for (String f : List.of("module", "project", "tests", "skipTests", "profiles", "threads", "parallel", "continue", "omitDev", "script")) {
+        for (String f : d.fieldsOf(op)) {
             JsonNode n = req.get(f);
             if (n == null || n.isNull() || n.isBoolean() && !n.asBoolean()) {
                 continue;
@@ -469,7 +444,31 @@ public final class BuildOperations {
         if (!parts.isEmpty()) {
             b.append(" · ").append(String.join(", ", parts));
         }
+        if (d.source() == ToolDefinition.Source.PROJECT) {
+            b.append(" (the project's tool)");
+        }
         return b.toString();
+    }
+
+    /** {@code api.tools()}: every tool with its operations and fields, and whether it can run here. */
+    public String list() {
+        ArrayNode out = Json.array();
+        for (ToolDefinition d : tools.tools().values()) {
+            ObjectNode o = d.describe();
+            String reason = null;
+            if (!trusted) {
+                reason = "this project isn't trusted";
+            } else if (onPath.get(d.name()) == null && (d.wrapper() == null || !Files.exists(workspace.root().resolve(d.wrapper().file())))) {
+                reason = d.executable() + " was not found on PATH outside the workspace";
+            }
+            o.put("available", reason == null);
+            if (reason != null) {
+                o.put("reason", reason);
+            }
+            out.add(o);
+        }
+        tools.errors().forEach((n, e) -> out.add(Json.object().put("name", n).put("available", false).put("reason", e)));
+        return Json.write(out);
     }
 
     private Set<String> scripts() {
@@ -486,46 +485,16 @@ public final class BuildOperations {
         }
     }
 
-    private String folder(String module) {
-        Path real = workspace.resolve(module);
+    private String folder(String field, String value) {
+        Path real = workspace.resolve(value);
         if (!Files.isDirectory(real)) {
-            throw new OperationException("\"module\" must be a folder in the workspace: " + module);
+            throw new OperationException("\"" + field + "\" must be a folder in the workspace: " + value);
         }
         String rel = workspace.relative(real);
         if (rel.isEmpty() || rel.equals(".")) {
-            throw new OperationException("\"module\" must be a sub-folder; leave it out to build everything");
+            throw new OperationException("\"" + field + "\" must be a sub-folder; leave it out to build everything");
         }
         return rel.startsWith("-") ? "./" + rel : rel;
-    }
-
-    private static String matching(String v, String regex, String field) {
-        if (!v.matches(regex)) {
-            throw new OperationException("\"" + field + "\" has characters JHarness doesn't pass to build tools: " + v);
-        }
-        return v;
-    }
-
-    /** A true/false field; missing means false (spec 023). */
-    private static boolean flag(ObjectNode req, String f) {
-        JsonNode n = req.get(f);
-        if (n == null || n.isNull()) {
-            return false;
-        }
-        if (!n.isBoolean()) {
-            throw new OperationException("\"" + f + "\" must be true or false");
-        }
-        return n.asBoolean();
-    }
-
-    private static String text(ObjectNode req, String f) {
-        JsonNode n = req.get(f);
-        if (n == null || n.isNull()) {
-            return null;
-        }
-        if (!n.isTextual() || n.asText().isEmpty()) {
-            throw new OperationException("\"" + f + "\" must be a non-empty string");
-        }
-        return n.asText();
     }
 
     static String xml(String s) {
@@ -534,7 +503,6 @@ public final class BuildOperations {
 
     @Override
     public String toString() {
-        return "BuildOperations[" + workspace.root().getFileName() + ", trusted=" + trusted + ", tools=" + onPath.keySet().stream()
-                .map(t -> t.api().toLowerCase(Locale.ROOT)).toList() + "]";
+        return "BuildOperations[" + workspace.root().getFileName() + ", trusted=" + trusted + ", tools=" + onPath.keySet() + "]";
     }
 }

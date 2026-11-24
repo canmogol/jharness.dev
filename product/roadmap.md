@@ -81,7 +81,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Subagents via `api.spawnAgent` (spec 026)
 - [x] Background subagents, `/agents` and `/stop` (spec 027)
 - [ ] Follow a subagent live (`/follow sub-N`); later: switch to an agent, answer its questions and talk to it
-- [ ] Build tools as definition files in `~/.jharness/tools/` and trusted projects; `api.tool` and `api.tools()` (D-066, D-067)
+- [x] Build tools as definition files in `~/.jharness/tools/` and trusted projects; `api.tool` and `api.tools()` (spec 028)
 - [ ] JS hooks (pre-tool, post-tool, stop); no shell hooks
 - [ ] Slash commands (Markdown templates and JS)
 - [ ] MCP client (stdio, streamable HTTP), called from JS through `api.mcp`; stdio servers started through `ProcessRunner` in the OS sandbox

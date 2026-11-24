@@ -1,0 +1,7 @@
+{
+  "resources": [
+    {
+      "glob": "dev/jharness/process/tools/*.json"
+    }
+  ]
+}

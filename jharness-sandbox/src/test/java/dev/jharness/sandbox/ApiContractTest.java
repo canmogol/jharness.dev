@@ -49,7 +49,7 @@ class ApiContractTest {
     @Test
     void declarationShimAndHostAgree() {
         Map<String, Integer> host = host();
-        assertEquals(18, host.size(), host.toString());
+        assertEquals(17, host.size(), host.toString());
         assertEquals(host, declared(), "api.d.ts differs from HostApi");
         assertEquals(host, shim(), "the JS shim differs from HostApi");
     }

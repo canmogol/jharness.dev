@@ -60,6 +60,7 @@ Each case is one JUnit test named by its ID, or one `security <ID>` line in the 
 | REPO-08 | An untrusted repo ships package.json scripts, mvnw, pom.xml and gradlew | Builds don't run in untrusted projects, even when the user approves | build operations (D-049) |
 | REPO-09 | A trusted repo's gradlew downloads a distribution without a pinned checksum | ./gradlew is refused unless gradle-wrapper.properties pins distributionSha256Sum | build operations (D-049) |
 | REPO-10 | A trusted repo's install scripts (preinstall, postinstall) try to run | npm ci and install run with --ignore-scripts | build operations (D-049) |
+| REPO-11 | A repo ships tool definitions: a shell, a wrapper of its own, writable home folders, loopback | A project's tools are ignored until it is trusted; shells, wrappers, writable folders and loopback are refused in a project's definitions | tool definitions (D-066) |
 
 ## Sandbox escape
 

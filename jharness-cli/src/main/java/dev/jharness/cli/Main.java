@@ -15,6 +15,9 @@ import dev.jharness.config.Settings;
 import dev.jharness.llm.ReplayProvider;
 import dev.jharness.security.Prompter;
 import dev.jharness.security.TrustStore;
+import dev.jharness.process.ToolDefinitions;
+import java.util.List;
+import java.util.Map;
 
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -26,7 +29,7 @@ import picocli.CommandLine.Option;
  */
 @Command(name = "jharness", mixinStandardHelpOptions = true, version = "jharness " + Main.VERSION,
         description = "A terminal coding agent whose model acts by writing JavaScript in a sandbox.",
-        subcommands = LogCommand.class)
+        subcommands = {LogCommand.class, ToolsCommand.class})
 public final class Main implements Callable<Integer> {
 
     static final String VERSION = "0.1.0-SNAPSHOT";
@@ -147,6 +150,8 @@ public final class Main implements Callable<Integer> {
         m.out = TerminalSafe.stream(m.out);
         m.err = TerminalSafe.stream(m.err);
         CommandLine cl = new CommandLine(m);
+        // "jharness -p tools" is a prompt, not the tools command (spec 028).
+        cl.setAllowSubcommandsAsOptionParameters(true);
         cl.setOut(new java.io.PrintWriter(m.out, true));
         cl.setErr(new java.io.PrintWriter(m.err, true));
         return cl.execute(args);
@@ -234,8 +239,25 @@ public final class Main implements Callable<Integer> {
         return s;
     }
 
+    /** Records that a trusted project's tools were left out this session (D-066). */
+    private static void projectIgnored(Session s, List<String> tools, String reason) {
+        var body = dev.jharness.events.Json.object().put("reason", reason);
+        var t = body.putArray("tools");
+        tools.forEach(t::add);
+        s.bus().publish(dev.jharness.events.Origin.main(0), "tools.project_ignored", body);
+    }
+
     private int headless(Path h, Path ws, Settings.Layered settings, boolean trusted) throws ConfigException, IOException {
-        try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()).trusted(trusted).agent(agentDef))) {
+        // Headless runs can't ask: new or changed project tools are left out until confirmed in the UI (D-066).
+        List<String> changed = trusted ? ToolDefinitions.changed(ToolDefinitions.projectHashes(ws), TrustStore.load(h).confirmedTools(ws)) : List.of();
+        if (!changed.isEmpty()) {
+            err.println("jharness: the project's tools " + String.join(", ", changed) + " are new or changed since you confirmed them;"
+                    + " they are left out (start jharness in this folder to review them)");
+        }
+        try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()).trusted(trusted).agent(agentDef).projectTools(changed.isEmpty()))) {
+            if (!changed.isEmpty()) {
+                projectIgnored(s, changed, "headless runs can't ask about changed project tools");
+            }
             s.bus().subscribe(e -> {
                 if (e.type().equals("loop.result")) {
                     out.println();
@@ -274,12 +296,28 @@ public final class Main implements Callable<Integer> {
         try {
             Tui tui = new Tui(t, h.resolve(".jharness").resolve("history"));
             var saved = trust.trusted(ws);
-            boolean trusted = saved.orElseGet(() -> tui.askTrust(ws));
+            Map<String, String> hashes = ToolDefinitions.projectHashes(ws);
+            boolean trusted = saved.orElseGet(() -> tui.askTrust(ws, ToolDefinitions.describeProject(h, ws)));
+            boolean projectTools = true;
             if (saved.isEmpty()) {
-                trust.record(ws, trusted);
+                trust.record(ws, trusted, hashes);
+            } else if (trusted) {
+                Map<String, String> confirmed = trust.confirmedTools(ws);
+                List<String> changed = ToolDefinitions.changed(hashes, confirmed);
+                if (!changed.isEmpty()) {
+                    projectTools = tui.askProjectTools(ToolDefinitions.describeProject(h, ws).stream().filter(p -> changed.contains(p.name())).toList());
+                    if (projectTools) {
+                        trust.confirmTools(ws, hashes);
+                    }
+                } else if (!hashes.equals(confirmed)) {
+                    trust.confirmTools(ws, hashes);
+                }
             }
             Settings.Layered settings = layered(h, ws, trusted);
-            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()).trusted(trusted).agent(agentDef))) {
+            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()).trusted(trusted).agent(agentDef).projectTools(projectTools))) {
+                if (!projectTools) {
+                    projectIgnored(s, ToolDefinitions.changed(hashes, trust.confirmedTools(ws)), "the user didn't confirm the changed project tools");
+                }
                 if (saved.isEmpty()) {
                     s.bus().publish(dev.jharness.events.Origin.main(0), "project.trusted", dev.jharness.events.Json.object().put("trusted", trusted));
                 }

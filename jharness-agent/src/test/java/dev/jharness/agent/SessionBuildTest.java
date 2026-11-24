@@ -18,7 +18,7 @@ import dev.jharness.llm.ReplayProvider;
 import dev.jharness.process.Executables;
 import dev.jharness.security.PermissionGate;
 
-/** Spec 013 AC-03, AC-05: {@code api.npm} through a whole session, in trusted and untrusted projects. */
+/** Spec 013 AC-03, AC-05, spec 028: {@code api.tool("npm", …)} through a whole session, in trusted and untrusted projects. */
 class SessionBuildTest {
 
     @TempDir
@@ -29,7 +29,7 @@ class SessionBuildTest {
         Files.writeString(ws.resolve("package.json"), "{\"name\":\"t\",\"version\":\"1.0.0\",\"scripts\":{\"test\":\"node -e \\\"console.log('ran')\\\"\"}}");
         Path log;
         try (Session s = Session.open(tmp.resolve("home"), ws, Settings.defaults(), Session.Access.gate(PermissionGate.allowAll()).trusted(trusted),
-                (bus, turns) -> ReplayProvider.ofReplies(List.of("```js\nconst r = JSON.parse(api.npm({op: 'test'}));\nr.exitCode + ' ' + r.output\n```",
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("```js\nconst r = JSON.parse(api.tool('npm', {op: 'test'}));\nr.exitCode + ' ' + r.output\n```",
                         "done"), bus, turns))) {
             s.loop().turn("run the tests", d -> {});
             log = s.logPath();
@@ -60,7 +60,7 @@ class SessionBuildTest {
     @Test
     void untrustedProjectsCantBuild() throws Exception {
         List<JsonNode> events = session(false);
-        JsonNode call = events.stream().filter(e -> e.get("type").asText().equals("api.call") && e.get("api").asText().equals("npm"))
+        JsonNode call = events.stream().filter(e -> e.get("type").asText().equals("api.call") && e.get("api").asText().equals("tool"))
                 .findFirst().orElseThrow();
         assertEquals("error", call.get("status").asText());
         assertTrue(call.get("error").asText().contains("trust this project first"), call.toString());

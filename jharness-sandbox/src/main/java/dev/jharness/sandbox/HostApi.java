@@ -418,39 +418,35 @@ public final class HostApi {
         });
     }
 
+    /** {@code api.tool(name, request)} (spec 028, D-067): checked first, then approved, then run in the OS sandbox. */
     @HostAccess.Export
-    public String maven(String json) {
-        return build(BuildOperations.Tool.MAVEN, json);
-    }
-
-    @HostAccess.Export
-    public String gradle(String json) {
-        return build(BuildOperations.Tool.GRADLE, json);
-    }
-
-    @HostAccess.Export
-    public String npm(String json) {
-        return build(BuildOperations.Tool.NPM, json);
-    }
-
-    /** Maven, Gradle and npm (spec 013): checked first, then approved, then run in the OS sandbox. */
-    private String build(BuildOperations.Tool tool, String json) {
+    public String tool(String name, String json) {
         ObjectNode a;
         ObjectNode detail;
         String summary;
+        String tool = name == null ? "" : name;
         try {
             if (s.builds() == null) {
-                throw new IllegalArgumentException(tool.api() + " is not available in this session");
+                throw new IllegalArgumentException("tools are not available in this session");
             }
-            a = args(json);
+            if (tool.isBlank()) {
+                throw new IllegalArgumentException("api.tool needs a tool name first, such as api.tool(\"maven\", {op: \"test\"}); api.tools() lists them");
+            }
+            a = json != null && !json.startsWith("{") ? Json.object().put("op", json) : args(json);
             s.builds().check(tool, a);
-            detail = BuildOperations.detail(tool, a);
-            summary = BuildOperations.summary(tool, a);
+            detail = s.builds().detail(tool, a);
+            summary = s.builds().summary(tool, a);
         } catch (RuntimeException e) {
-            return reject(tool.api(), e);
+            return reject("tool", e);
         }
-        return call(tool.api(), Operation.Kind.BUILD, summary, detail,
+        return call("tool", Operation.Kind.BUILD, summary, detail,
                 () -> BuildOperations.toJson(outsideRunClock(() -> s.builds().run(tool, a))));
+    }
+
+    /** {@code api.tools()} (spec 028, D-067): the defined tools, their operations and fields, and whether each can run here. */
+    @HostAccess.Export
+    public String tools() {
+        return call("tools", Operation.Kind.READ, "list tools", Json.object(), () -> s.builds() == null ? "[]" : s.builds().list());
     }
 
     /** Process runs have their own timeout (D-028), so they don't count against the run's wall clock. */

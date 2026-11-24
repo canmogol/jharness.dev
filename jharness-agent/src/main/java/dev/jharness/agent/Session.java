@@ -1,6 +1,7 @@
 package dev.jharness.agent;
 
 import dev.jharness.process.BuildOperations;
+import dev.jharness.process.ToolDefinitions;
 import dev.jharness.process.ChildSandbox;
 import java.nio.file.Files;
 import java.util.Map;
@@ -58,6 +59,7 @@ public final class Session implements AutoCloseable {
     private Secrets secrets;
     private String profile;
     private AgentDefinition agent;
+    private ToolDefinitions tools;
     private SubagentRunner subagents;
     private Path home;
     private boolean trusted;
@@ -77,23 +79,28 @@ public final class Session implements AutoCloseable {
      * How the session decides permissions: the permission engine from settings with a prompter (the
      * normal case), or a fixed gate (tests).
      */
-    public record Access(PermissionGate gate, Prompter prompter, boolean trusted, AgentDefinition agent) {
+    public record Access(PermissionGate gate, Prompter prompter, boolean trusted, AgentDefinition agent, boolean projectTools) {
         public static Access prompter(Prompter p) {
-            return new Access(null, p, false, null);
+            return new Access(null, p, false, null, true);
         }
 
         public static Access gate(PermissionGate g) {
-            return new Access(g, null, false, null);
+            return new Access(g, null, false, null, true);
         }
 
         /** Whether the project is trusted (D-011); recorded in {@code session.started}. */
         public Access trusted(boolean t) {
-            return new Access(gate, prompter, t, agent);
+            return new Access(gate, prompter, t, agent, projectTools);
         }
 
         /** The custom agent to run as (spec 025), or null for the built-in one. */
         public Access agent(AgentDefinition a) {
-            return new Access(gate, prompter, trusted, a);
+            return new Access(gate, prompter, trusted, a, projectTools);
+        }
+
+        /** Whether a trusted project's own tools count; false when the user didn't confirm their changes (D-066). */
+        public Access projectTools(boolean use) {
+            return new Access(gate, prompter, trusted, agent, use);
         }
     }
 
@@ -158,7 +165,18 @@ public final class Session implements AutoCloseable {
         Optional<Executable> git = Executables.resolve("git", ws.root());
         GitOperations gitOps = git.map(g -> new GitOperations(runner, g, ws, settings.timeouts().process(), settings.timeouts().processMax(),
                 settings.offline(), tokens)).orElse(null);
-        BuildOperations builds = new BuildOperations(runner, ws, settings.timeouts(), access.trusted(), BuildOperations.findOnPath(ws.root()),
+        ToolDefinitions.seed(home);
+        ToolDefinitions tools = ToolDefinitions.load(home, ws.root(), access.trusted() && access.projectTools());
+        var toolsEvent = Json.object();
+        var names = toolsEvent.putArray("tools");
+        tools.tools().values().forEach(d -> names.addObject().put("name", d.name()).put("source", d.source().wire()));
+        if (!tools.errors().isEmpty()) {
+            var errs = toolsEvent.putObject("errors");
+            tools.errors().forEach(errs::put);
+        }
+        toolsEvent.put("projectTools", access.trusted() && access.projectTools());
+        bus.publish(turns.get(), "tools.loaded", toolsEvent);
+        BuildOperations builds = new BuildOperations(runner, ws, settings.timeouts(), access.trusted(), tools, BuildOperations.findOnPath(tools, ws.root()),
                 home, System.getenv("JAVA_HOME"), settings.offline());
         FilePolicy files = new FilePolicy(ws, settings.files().mounts(), settings.files().deny());
         Search search = Search.create(ws, runner, settings.timeouts(), files.denyList());
@@ -178,7 +196,8 @@ public final class Session implements AutoCloseable {
         String contextJson = ctx.ok() ? ctx.value() : null;
         String projectMd = SystemPrompt.readMemory(ws.root().resolve("JHARNESS.md"));
         String userMd = SystemPrompt.readMemory(home.resolve(".jharness").resolve("JHARNESS.md"));
-        String system = SystemPrompt.build(contextJson, projectMd, userMd, agent);
+        String toolsText = SystemPrompt.tools(builds.list());
+        String system = SystemPrompt.build(contextJson, projectMd, userMd, agent) + toolsText;
         if (agent != null && agent.helpers() != null) {
             isolate.useHelpers(agent.helpers());
         }
@@ -186,10 +205,11 @@ public final class Session implements AutoCloseable {
                 agent != null && agent.maxSteps() != null ? agent.maxSteps() : settings.agent().maxSteps(),
                 settings.timeouts().outputChars());
         loop.useCheckpoints(checkpoints);
-        subagents.bind(services, loop, contextJson, projectMd, userMd);
+        subagents.bind(services, loop, contextJson, projectMd, userMd, toolsText);
         loop.useNotes(subagents::drainFinished);
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
         s.agent = agent;
+        s.tools = tools;
         s.subagents = subagents;
         s.home = home;
         s.trusted = access.trusted();
@@ -282,6 +302,11 @@ public final class Session implements AutoCloseable {
         subagents.profile(p.name());
         bus.publish(turns.get(), "session.model_changed", Json.object().put("profile", p.name())
                 .put("provider", provider.provider()).put("model", provider.model()));
+    }
+
+    /** The session's tools (spec 028): the user's and, when used, the project's. */
+    public ToolDefinitions tools() {
+        return tools;
     }
 
     /** The custom agent this session runs as, or null for the built-in one (spec 025). */
