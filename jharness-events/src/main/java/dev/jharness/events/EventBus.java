@@ -34,14 +34,18 @@ public final class EventBus {
     }
 
     /** A new random session id. */
+    /** A session id (D-070): {@code s-}, the UTC start time to the second, and 4 random hex characters, such as {@code s-2026-11-24T105226Z-18a9}. */
     public static String newSessionId() {
-        byte[] b = new byte[6];
+        return newSessionId(java.time.Instant.now());
+    }
+
+    static final java.time.format.DateTimeFormatter ID_TIME =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HHmmss'Z'").withZone(java.time.ZoneOffset.UTC);
+
+    static String newSessionId(java.time.Instant at) {
+        byte[] b = new byte[2];
         new SecureRandom().nextBytes(b);
-        StringBuilder sb = new StringBuilder("s-").append(Long.toString(System.currentTimeMillis(), 36)).append('-');
-        for (byte x : b) {
-            sb.append(String.format("%02x", x));
-        }
-        return sb.toString();
+        return "s-" + ID_TIME.format(at) + "-" + String.format("%02x%02x", b[0], b[1]);
     }
 
     public String session() {

@@ -17,10 +17,17 @@ public final class SessionLogs {
     /** What a session argument may be when it isn't a path: no separators, so it can't leave the logs folder (AC-06). */
     public static final Pattern ARG = Pattern.compile("[A-Za-z0-9-]{1,64}");
 
-    private static final Pattern ID_TIME = Pattern.compile("s-([0-9a-z]+)-[0-9a-f]+");
+    /** A session id (D-070); logs with other names, such as the old base-36 ones, are ignored. */
+    public static final Pattern ID = Pattern.compile("s-(\\d{4}-\\d{2}-\\d{2}T\\d{6}Z)-[0-9a-f]{4}");
+    private static final java.time.format.DateTimeFormatter ID_TIME =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HHmmss'Z'").withZone(java.time.ZoneOffset.UTC);
 
-    /** A log file and when its session started. */
-    public record Entry(String id, Path file, Instant started) {}
+    /**
+     * A log file and when its session started.
+     *
+     * @param modified the file's last write, which orders sessions that started in the same second
+     */
+    public record Entry(String id, Path file, Instant started, Instant modified) {}
 
     /** The session argument names no log, or more than one. */
     public static final class LookupException extends Exception {
@@ -37,7 +44,7 @@ public final class SessionLogs {
 
     /** This workspace's logs, newest first. */
     public static List<Entry> project(Path home, Path workspace) throws IOException {
-        return entries(root(home).resolve(SessionLog.projectHash(workspace)));
+        return entries(root(home).resolve(SessionLog.projectFolder(workspace)));
     }
 
     /** Every project's logs, newest first. */
@@ -46,7 +53,8 @@ public final class SessionLogs {
         Path root = root(home);
         if (Files.isDirectory(root)) {
             try (Stream<Path> dirs = Files.list(root)) {
-                for (Path d : dirs.filter(Files::isDirectory).toList()) {
+                // Only project folders in the D-070 format; old hash-named folders are left alone.
+                for (Path d : dirs.filter(p -> Files.isDirectory(p) && SessionLog.FOLDER.matcher(p.getFileName().toString()).matches()).toList()) {
                     out.addAll(entries(d));
                 }
             }
@@ -55,7 +63,8 @@ public final class SessionLogs {
         return out;
     }
 
-    private static final Comparator<Entry> NEWEST_FIRST = Comparator.comparing(Entry::started).reversed().thenComparing(Entry::id);
+    private static final Comparator<Entry> NEWEST_FIRST = Comparator.comparing(Entry::started).thenComparing(Entry::modified).reversed()
+            .thenComparing(Entry::id);
 
     private static List<Entry> entries(Path dir) throws IOException {
         if (!Files.isDirectory(dir)) {
@@ -66,24 +75,14 @@ public final class SessionLogs {
             for (Path f : files.filter(p -> p.getFileName().toString().endsWith(".jsonl") && Files.isRegularFile(p)).toList()) {
                 String name = f.getFileName().toString();
                 String id = name.substring(0, name.length() - ".jsonl".length());
-                out.add(new Entry(id, f, started(id, f)));
+                Matcher m = ID.matcher(id);
+                if (m.matches()) {
+                    out.add(new Entry(id, f, ID_TIME.parse(m.group(1), Instant::from), Files.getLastModifiedTime(f).toInstant()));
+                }
             }
         }
         out.sort(NEWEST_FIRST);
         return out;
-    }
-
-    /** From the id's base-36 milliseconds, else the file's modification time. */
-    static Instant started(String id, Path f) throws IOException {
-        Matcher m = ID_TIME.matcher(id);
-        if (m.matches()) {
-            try {
-                return Instant.ofEpochMilli(Long.parseLong(m.group(1), 36));
-            } catch (NumberFormatException e) {
-                // Falls through to the file time.
-            }
-        }
-        return Files.getLastModifiedTime(f).toInstant();
     }
 
     /**

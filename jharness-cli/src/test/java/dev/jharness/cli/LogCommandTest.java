@@ -135,13 +135,13 @@ class LogCommandTest {
     @Test
     void cutsLongFieldsUnlessFull() throws Exception {
         String long1 = "x".repeat(300);
-        handLog("s-1-aaaaaaaaaaaa", event("2026-11-23T10:00:00Z", 1, "turn.started", "{\"prompt\":\"" + long1 + "\"}"),
+        handLog("s-2026-11-23T100001Z-aaa1", event("2026-11-23T10:00:00Z", 1, "turn.started", "{\"prompt\":\"" + long1 + "\"}"),
                 event("2026-11-23T10:00:01Z", 1, "custom.thing", "{\"n\":1}"));
-        assertEquals(0, log("s-1-aaaaaaaaaaaa"));
+        assertEquals(0, log("s-2026-11-23T100001Z-aaa1"));
         assertTrue(out().contains("x".repeat(LogFormat.CUT) + "…"), out());
         assertFalse(out().contains(long1), out());
         assertTrue(out().contains("custom.thing  {\"n\":1}"), "unknown types show their body: " + out());
-        assertEquals(0, log("s-1-aaaaaaaaaaaa", "--full"));
+        assertEquals(0, log("s-2026-11-23T100001Z-aaa1", "--full"));
         assertTrue(out().contains(long1), out());
     }
 
@@ -151,9 +151,9 @@ class LogCommandTest {
         String line = Json.write(Json.object().put("id", "e").put("ts", "2026-11-23T10:00:00Z").put("session", "s").put("agent", "main")
                 .put("turn", 1).put("source", "host").put("type", "model.completed").put("provider", "p").put("model", "m")
                 .put("stopReason", "end").put("text", hostile));
-        handLog("s-2-bbbbbbbbbbbb", line);
-        for (String[] args : List.of(new String[] {"s-2-bbbbbbbbbbbb"}, new String[] {"s-2-bbbbbbbbbbbb", "--full"},
-                new String[] {"s-2-bbbbbbbbbbbb", "--json"})) {
+        handLog("s-2026-11-23T100002Z-bbb2", line);
+        for (String[] args : List.of(new String[] {"s-2026-11-23T100002Z-bbb2"}, new String[] {"s-2026-11-23T100002Z-bbb2", "--full"},
+                new String[] {"s-2026-11-23T100002Z-bbb2", "--json"})) {
             assertEquals(0, log(args));
             String o = out();
             for (char c : o.toCharArray()) {
@@ -161,9 +161,9 @@ class LogCommandTest {
                         "raw character " + (int) c + " in " + String.join(" ", args) + ": " + o);
             }
         }
-        assertEquals(0, log("s-2-bbbbbbbbbbbb"));
+        assertEquals(0, log("s-2026-11-23T100002Z-bbb2"));
         assertTrue(out().contains("ok\\e]0;pwned\\x07\\x9b2J\\x7f\\u202emoc.txt\\nnext"), out());
-        assertEquals(0, log("s-2-bbbbbbbbbbbb", "--json"));
+        assertEquals(0, log("s-2026-11-23T100002Z-bbb2", "--json"));
         assertEquals(hostile, Json.parse(out().strip()).get("text").asText(), "--json stays valid JSON with the same text");
     }
 
@@ -172,29 +172,29 @@ class LogCommandTest {
     void filtersByAgentAndSource() throws Exception {
         String sub = event("2026-11-23T10:00:01Z", 1, "loop.code", "{\"step\":1,\"lines\":3}").replace("\"agent\":\"main\"", "\"agent\":\"sub-1\"");
         String guest = event("2026-11-23T10:00:02Z", 1, "agent.note", "{\"msg\":\"from js\"}").replace("\"source\":\"host\"", "\"source\":\"guest\"");
-        handLog("s-4-aaaaaaaaaaaa", event("2026-11-23T10:00:00Z", 1, "turn.started", "{\"prompt\":\"go\"}"), sub, guest);
-        assertEquals(0, log("s-4-aaaaaaaaaaaa", "--agent", "sub-1"));
+        handLog("s-2026-11-23T100004Z-aaa4", event("2026-11-23T10:00:00Z", 1, "turn.started", "{\"prompt\":\"go\"}"), sub, guest);
+        assertEquals(0, log("s-2026-11-23T100004Z-aaa4", "--agent", "sub-1"));
         assertTrue(out().contains("[sub-1]  loop.code") && !out().contains("turn.started") && !out().contains("agent.note"), out());
-        assertEquals(0, log("s-4-aaaaaaaaaaaa", "--agent", "main", "--agent", "sub-1"));
+        assertEquals(0, log("s-2026-11-23T100004Z-aaa4", "--agent", "main", "--agent", "sub-1"));
         assertTrue(out().contains("loop.code") && out().contains("turn.started"), out());
-        assertEquals(0, log("s-4-aaaaaaaaaaaa", "--source", "guest"));
+        assertEquals(0, log("s-2026-11-23T100004Z-aaa4", "--source", "guest"));
         assertTrue(out().contains("agent.note") && !out().contains("loop.code") && !out().contains("turn.started"), out());
-        assertEquals(0, log("s-4-aaaaaaaaaaaa", "--source", "host", "--agent", "main"));
+        assertEquals(0, log("s-2026-11-23T100004Z-aaa4", "--source", "host", "--agent", "main"));
         assertTrue(out().contains("turn.started") && !out().contains("loop.code") && !out().contains("agent.note"), out());
-        assertEquals(2, log("s-4-aaaaaaaaaaaa", "--source", "model"));
+        assertEquals(2, log("s-2026-11-23T100004Z-aaa4", "--source", "model"));
         assertTrue(err.toString().contains("--source must be host or guest"), err.toString());
     }
 
     @Test
     void badArgumentsAndLines() throws Exception {
-        handLog("s-3-aaaaaaaaaaaa", event("2026-11-23T10:00:00Z", 0, "session.started", "{\"workspace\":\"w\"}"), "{not json",
+        handLog("s-2026-11-23T100003Z-aaaa", event("2026-11-23T10:00:00Z", 0, "session.started", "{\"workspace\":\"w\"}"), "{not json",
                 event("2026-11-23T10:00:02Z", 1, "turn.started", "{\"prompt\":\"after\"}"));
-        handLog("s-3-abbbbbbbbbbb", event("2026-11-23T10:00:00Z", 0, "session.started", "{\"workspace\":\"w\"}"));
-        assertEquals(0, log("s-3-aa"));
+        handLog("s-2026-11-23T100003Z-abbb", event("2026-11-23T10:00:00Z", 0, "session.started", "{\"workspace\":\"w\"}"));
+        assertEquals(0, log("s-2026-11-23T100003Z-aa"));
         assertTrue(out().contains("line 2: not JSON") && out().contains("prompt=after"), out());
 
-        assertEquals(2, log("s-3-a"));
-        assertTrue(err.toString().contains("matches 2 sessions") && err.toString().contains("s-3-abbbbbbbbbbb"), err.toString());
+        assertEquals(2, log("s-2026-11-23T100003Z-a"));
+        assertTrue(err.toString().contains("matches 2 sessions") && err.toString().contains("s-2026-11-23T100003Z-abbb"), err.toString());
         assertEquals(2, log("s-9"));
         assertTrue(err.toString().contains("no session s-9"), err.toString());
         assertEquals(2, log("a;b"));

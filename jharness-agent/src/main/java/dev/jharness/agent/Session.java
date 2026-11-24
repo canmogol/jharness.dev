@@ -127,7 +127,11 @@ public final class Session implements AutoCloseable {
         // Before anything starts, so a missing secret leaves nothing running (spec 017).
         Secrets loaded = Secrets.load(home, System::getenv);
         Map<String, String> tokens = gitTokens(settings, loaded);
-        EventBus bus = new EventBus(EventBus.newSessionId());
+        String id = EventBus.newSessionId();
+        while (Files.exists(SessionLog.pathFor(home, ws.root(), id))) {
+            id = EventBus.newSessionId();
+        }
+        EventBus bus = new EventBus(id);
         SessionLog log = SessionLog.open(home, ws.root(), bus.session());
         bus.subscribe(log);
         TurnCounter turns = new TurnCounter("main");

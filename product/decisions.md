@@ -48,7 +48,7 @@ Last updated: 2026-11-24
 | D-035 | ModelJars in the native image: no-go for v0.1; local models through Ollama or llama.cpp; after v0.1, a Rust-backend model helper process | Accepted |
 | D-036 | Memory protection keys off by default in v0.1; `auto` (probe at startup) and `on` are opt-in | Accepted |
 | D-037 | The wall-clock watchdog escalates: context close, then engine close, then a recorded failure | Accepted |
-| D-038 | Session logs live in the user folder, not the project | Accepted |
+| D-038 | Session logs live in the user folder, not the project | Accepted; folder and file names changed by D-070 |
 | D-039 | Until the egress proxy (P2), git runs local operations only | Accepted |
 | D-040 | Permanent approvals are saved in the user folder per project, never in the repository | Accepted |
 | D-041 | Permission modes ask, accept-edits, plan and bypass; the file policy applies in every mode | Accepted |
@@ -80,6 +80,7 @@ Last updated: 2026-11-24
 | D-067 | `api.tool(name, request)` runs every defined tool and `api.tools()` lists them; `api.maven`, `api.gradle` and `api.npm` are removed | Accepted |
 | D-068 | git and `rg` stay in Java code, not tool definitions: per-operation approvals, use in untrusted projects, injection defences, secrets, undo and structured results need host code | Accepted |
 | D-069 | `/follow [NAME]` shows a running background subagent like the main loop (streamed reply, steps, diffs) until Esc or its end; it stays a view, and shared model clients name the subagent on its events | Accepted |
+| D-070 | Project folders under `sessions/`, `projects/` and `checkpoints/` are the workspace path as a slug plus 7 hex characters; session ids are the UTC start time plus 4 hex characters; old folders are left alone | Accepted |
 
 ---
 
@@ -551,7 +552,7 @@ With `auto` or `on`, agent engines allow experimental options, an exception to D
 
 ## D-038 — Session logs in the user folder
 
-**Decision.** Each session's JSONL log is `~/.jharness/sessions/<project-hash>/<session-id>.jsonl`, where `<project-hash>` is the first 16 hex characters of the SHA-256 of the workspace's real path. Folders are created with mode 0700 and log files with 0600.
+**Decision.** (Folder and file names since D-070: `sessions/SLUG-HASH/s-TIME-XXXX.jsonl`.) Each session's JSONL log is `~/.jharness/sessions/<project-hash>/<session-id>.jsonl`, where `<project-hash>` is the first 16 hex characters of the SHA-256 of the workspace's real path. Folders are created with mode 0700 and log files with 0600.
 
 **Why.** The repository stays clean, and an untrusted repository can't plant, read or replace session logs. Session logs can hold file contents and command output, so only the user may read them.
 
@@ -1048,6 +1049,25 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-070 — Readable session paths
+
+**Decision.**
+- The folder for a workspace under `~/.jharness/sessions/`, `~/.jharness/projects/` and `~/.jharness/checkpoints/` is `SLUG-HASH`:
+  - SLUG is the real path without its leading `/`, lower-cased, with each run of characters other than `a-z`, `0-9` and `.` turned into one `-`, trimmed of `-` and `.`, and cut to its last 80 characters when longer, since the end names the project (`root` if empty);
+  - HASH is the first 7 hex characters of the SHA-256 of the real path.
+  - For example `/Users/xyz/projects/jharness.dev` → `users-xyz-projects-jharness.dev-2787870`.
+- A session id is `s-` + the UTC start time as `yyyy-MM-ddTHHmmssZ` + `-` + 4 random hex characters, such as `s-2026-11-24T105226Z-18a9`. A taken name gets new random characters. Sessions that start in the same second are ordered by their last write.
+- The log is `sessions/FOLDER/SESSION.jsonl`, saved permissions `projects/FOLDER/permissions.json`, checkpoints `checkpoints/FOLDER/SESSION/`.
+- Old folders (16 hex characters) and old ids (base-36 time) are not moved, converted or deleted, and JHarness ignores them. Their saved permissions no longer apply. Trust and confirmed project tools are keyed by path and unaffected.
+
+**Why.** The user wants to find a project's logs, permissions and checkpoints by looking at the folder names. The short hash keeps paths that make the same slug (`/a/b` and `/a-b`) apart, and the time in the id makes `ls` sort sessions by start. The project is still in development, so there is no migration.
+
+**Rejected.** Keeping the hash names (unreadable). The slug alone (collisions). Migrating old folders (the user asked not to).
+
+**Source.** User request, 2026-11-24, accepted with the recommended details while the user was away (specifying 031-readable-session-paths). Changes the names in D-038, D-040 and D-044.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1128,6 +1148,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q72 | How does an agent know which tools it can run? | `api.tools()` returns each tool's operations, fields and whether it can run here; the system prompt lists them too; `api.tool(name, request)` runs one | One generic call replaces per-tool methods, so new tools need no new api | D-067 |
 | Q73 | Why aren't git and `rg` tool definitions too? | A definition only runs a program with checked arguments and returns its output; git and `rg` need host code for approvals per operation, untrusted projects, injection defences, secrets, undo and parsed results | Moving them would turn the format into a programming language, and a mistake in a file would become a security hole | D-068 |
 | Q74 | How does a user watch what a running subagent does? | `/follow sub-N` streams its reply and steps like the main loop; Esc stops watching and the subagent keeps running | `/agents sub-N` only printed past events | D-069 |
+| Q75 | How are session, permission and checkpoint folders named? | `users-xyz-projects-jharness.dev-2787870/s-2026-11-24T105226Z-18a9.jsonl`: the path as a slug with a short hash, and the start time | Easy to find by hand; the hash keeps paths with the same slug apart | D-070 |
 
 ---
 

@@ -46,7 +46,7 @@ public final class ProjectRules {
     }
 
     public static Path fileFor(Path home, Path workspace) {
-        return home.resolve(".jharness").resolve("projects").resolve(SessionLog.projectHash(workspace)).resolve("permissions.json");
+        return home.resolve(".jharness").resolve("projects").resolve(SessionLog.projectFolder(workspace)).resolve("permissions.json");
     }
 
     public static ProjectRules load(Path home, Path workspace) {
