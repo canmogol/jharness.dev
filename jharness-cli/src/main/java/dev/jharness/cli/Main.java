@@ -157,15 +157,49 @@ public final class Main implements Callable<Integer> {
     }
 
     static int run(Main m, String... args) {
+        return run(m, System.getenv(), null, args);
+    }
+
+    /**
+     * @param env for {@code NO_COLOR}
+     * @param ansi forces help colors on or off (tests); null for picocli's auto mode, colors only on a terminal
+     */
+    static int run(Main m, Map<String, String> env, CommandLine.Help.Ansi ansi, String... args) {
+        java.io.PrintStream rawOut = m.out;
+        java.io.PrintStream rawErr = m.err;
         // Model text, file text and exception messages reach the terminal escaped (spec 022).
         m.out = TerminalSafe.stream(m.out);
         m.err = TerminalSafe.stream(m.err);
         CommandLine cl = new CommandLine(m);
         // "jharness -p tools" is a prompt, not the tools command (spec 028).
         cl.setAllowSubcommandsAsOptionParameters(true);
-        cl.setOut(new java.io.PrintWriter(m.out, true));
-        cl.setErr(new java.io.PrintWriter(m.err, true));
+        // picocli's own help, version and usage-error output goes to the raw streams so its colors work (spec 044).
+        // That text is fixed in this code: option names, descriptions and the version, never an agent's name or
+        // description, a setting or a file. If help ever shows outside text, escape it with TerminalSafe.escape
+        // before it is added. Usage errors echo the arguments typed, so their message is escaped below.
+        cl.setOut(new java.io.PrintWriter(rawOut, true));
+        cl.setErr(new java.io.PrintWriter(rawErr, true));
+        cl.setColorScheme(CommandLine.Help.defaultColorScheme(helpAnsi(env, ansi)));
+        cl.setParameterExceptionHandler((ex, a) -> {
+            CommandLine c = ex.getCommandLine();
+            java.io.PrintWriter w = c.getErr();
+            w.println(c.getColorScheme().errorText(TerminalSafe.escape(String.valueOf(ex.getMessage()))));
+            if (!CommandLine.UnmatchedArgumentException.printSuggestions(ex, w)) {
+                c.usage(w, c.getColorScheme());
+            }
+            w.flush();
+            return c.getCommandSpec().exitCodeOnInvalidInput();
+        });
         return cl.execute(args);
+    }
+
+    /** Help colors: off with {@code NO_COLOR}, as in the TUI; otherwise picocli's auto mode (spec 044). */
+    static CommandLine.Help.Ansi helpAnsi(Map<String, String> env, CommandLine.Help.Ansi forced) {
+        if (forced != null) {
+            return forced;
+        }
+        String noColor = env.get("NO_COLOR");
+        return noColor != null && !noColor.isEmpty() ? CommandLine.Help.Ansi.OFF : CommandLine.Help.Ansi.AUTO;
     }
 
     @Override

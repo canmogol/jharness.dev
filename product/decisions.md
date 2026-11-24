@@ -70,7 +70,7 @@ Last updated: 2026-11-24
 | D-057 | A Maven, Gradle, npm or git network run that fails because the macOS sandbox refused its connection to the proxy port is run again, up to 3 runs in all, within the call's timeout, with a `process.retried` event | Accepted |
 | D-058 | Model requests that fail before anything reached the user are retried: 408, 409, 429, 5xx, failed connections and overloaded stream errors; `retry-after` or exponential back-off; `retries`, `retryMaxWait` and `responseTimeout` per profile; Esc ends a wait | Accepted |
 | D-059 | Debugging tools: `--debug` shows every event and the thinking and prints stack traces; `jharness log` lists and prints sessions with control characters escaped; host crashes write a local crash report (no event bodies, newest 20 kept, never sent) and exit 3; `model.response` logs status, request id and allow-listed headers | Accepted |
-| D-060 | Everything JHarness prints (TUI, `-p`, errors) escapes C0 controls except newline and tab, DEL, C1 controls and bidi controls and drops carriage returns; only its own styling reaches the terminal raw | Accepted |
+| D-060 | Everything JHarness prints (TUI, `-p`, errors) escapes C0 controls except newline and tab, DEL, C1 controls and bidi controls and drops carriage returns; only its own styling and picocli's fixed help text (colors on a terminal, off with `NO_COLOR`) reach the terminal raw | Accepted |
 | D-061 | Typed build parameters that only skip work, pick a project profile or change parallelism: Maven `install`, `skipTests`, `profiles`, `threads`; Gradle `skipTests`, `parallel`, `continue`; npm `omitDev`; the approval shows them, "always" keys on the operation | Accepted; amended by D-066 (the parameters live in the shipped definitions) |
 | D-062 | In the TUI, Tab on a lone `/` prints the `/help` text above the prompt; Tab after a partial `/command` completes it, listing matches with descriptions taken from the help text | Accepted |
 | D-063 | Custom agents: a folder with `agent.json` (description, model, tools, maxSteps, plan), `prompt.md` and `helpers.js`; chosen with `--agent` at start; they only narrow; project agents only in trusted projects | Accepted |
@@ -900,13 +900,13 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ## D-060 — Escape control characters in live output
 
-**Decision.** The TUI prints through one escaping writer; only `Styler` output (which escapes its input first) and the `modifyOtherKeys` sequences use the raw terminal writer. `jharness -p` wraps stdout and stderr the same way. C0 controls other than newline and tab, DEL, C1 controls and Unicode bidi controls show as `\e`, `\xNN` or `\uNNNN`; a carriage return is dropped. It is always on. The session log keeps the exact text.
+**Decision.** The TUI prints through one escaping writer; only `Styler` output (which escapes its input first) and the `modifyOtherKeys` sequences use the raw terminal writer. `jharness -p` wraps stdout and stderr the same way. The exception is picocli's own help, version and usage-error output (`--help`, `--version`, a bad option), which goes to the raw streams so its colors show (spec 044): its text is fixed in the code, and a usage error's message, which echoes the typed arguments, is escaped. Help colors follow picocli's auto mode (a terminal only) and are off when `NO_COLOR` is set. C0 controls other than newline and tab, DEL, C1 controls and Unicode bidi controls show as `\e`, `\xNN` or `\uNNNN`; a carriage return is dropped. It is always on. The session log keeps the exact text.
 
 **Why.** Model replies, file contents in diffs, tool and server error messages and approval questions are untrusted text. Printed raw, they can change the terminal title, clear the screen, move the cursor to rewrite an approval question or reorder text with bidi controls. Escaping at the writer covers every print; escaping in `Styler` keeps colors working.
 
 **Rejected.** Escaping at each print site (easy to miss one). Stripping instead of showing (hides that something was there). A setting to turn it off (no case needs raw control characters in a reply).
 
-**Source.** Follow-up from spec 021, which escaped only `jharness log`; the user asked for it as spec 022 before the Phase 2 gate run, 2026-11-23.
+**Source.** Follow-up from spec 021, which escaped only `jharness log`; the user asked for it as spec 022 before the Phase 2 gate run, 2026-11-23. Refined 2026-11-24 (spec 044): `jharness --help` printed its colors as literal `\e[33m` text, so picocli's own output was moved to the raw streams.
 
 ## D-061 — Typed build parameters
 
@@ -1429,6 +1429,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q85 | Should `/quit` and `/q` work, and can Tab complete command arguments? | Yes: aliases of `/exit`, not listed; built-ins win over command files; Tab lists and cycles each command's choices, and command files declare `args` | Fewer keystrokes; built-ins mean the same thing everywhere | D-079 |
 | Q86 | Should the TUI have a status line, and can users program it? | Yes: built-in items chosen by `ui.statusLine`; `~/.jharness/statusline.js` returns the whole line from a snapshot, sandboxed with no `api`; throttled refresh; failures fall back to the default | Key state at a glance; a new extension point that can't act | D-080 |
 | Q87 | How are sessions resumed and forked? | The conversation is saved after each turn in a state file next to the log; `--resume` continues the same session, `--fork` copies it into a new one; earlier turns can't be rewound | Exact resume without re-explaining; branching without losing work | D-081 |
+| Q88 | Should `jharness --help` keep picocli's colors? | Yes: picocli's help, version and usage errors use the raw streams, colored only on a terminal and not with `NO_COLOR`; usage errors escape the typed arguments; everything else stays escaped | The help was unreadable on a terminal | D-060 |
 
 ---
 
