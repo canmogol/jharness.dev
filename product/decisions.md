@@ -90,6 +90,7 @@ Last updated: 2026-11-24
 | D-077 | Token counting and compaction: each profile has a `contextWindow`; the model's own counts, else about 3.5 characters a token; at `agent.compactAt` (0.8) of the window minus the reply size, the model summarizes the older conversation; `/context` and `/compact`; turns in a summary can't be rewound | Accepted |
 | D-078 | Prompt caching and `@file` mentions: Claude requests mark the system prompt and the last message for the 5-minute prompt cache (`promptCache`, on by default); `inputTokens` counts the whole prompt; `@path` in a user prompt attaches a file or folder under the file policy, within a size budget | Accepted |
 | D-079 | Command aliases and argument completion: `/quit` and `/q` are aliases of `/exit`, not listed; built-in names and aliases win over command files, and the clash is reported; Tab after a command lists its choices and cycles through them; command files declare `args` | Accepted |
+| D-080 | Status line, a new extension point: a line under the input on real terminals with built-in items chosen by `ui.statusLine`; `~/.jharness/statusline.js` can return the whole line from a JSON snapshot, in an isolate with no `api`; refreshed on events, throttled; failures fall back to the default line | Accepted |
 
 ---
 
@@ -1288,6 +1289,29 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** The user's request for exit aliases and argument completion, 2026-11-24. Recommended options accepted while the user was away, specifying 041-command-aliases-and-completion.
 
+## D-080 — Status line
+
+**Decision.** The TUI shows a status line under the input, and users can program it. This is a new extension point, next to agents, hooks, tools and commands.
+
+- **Where.** At the bottom of a real terminal, as JLine's status area: a scroll region keeps it below the prompt and the output. Never on dumb terminals or in `-p`.
+- **Built-in items.** `model` (profile and model), `context` (percent of the window, `~` when estimated), `mode` (permission mode, `[plan]` in plan mode), `agents` (background subagents running and held on a question), `cache` (the last request's cache reads), `turn`, `workspace`. Items with nothing to say are left out; the rest are joined by ` · `.
+- **Setting.** `ui.statusLine`: `true` (the default, every item), `false` (no line), or a list of items in the order to show them.
+- **Script.** If `~/.jharness/statusline.js` exists (a regular file, up to 64 KB, not writable by others), its `status(s)` returns the whole line. It runs in its own isolate with the subagent sandbox limits and without `api`, and gets a JSON snapshot of the same values plus `line`, the default rendering. Only the user's home can define it, never a project. The result is cut at the first line break and 1,000 characters and escaped with `TerminalSafe`.
+- **Failures.** If the script throws, hits a limit, returns something other than a string, or the file can't be used, `statusline.failed` (reason, error) is recorded, the TUI says so once per distinct failure, and the default line shows in its place. A run over 1 second (10 seconds for the first, which warms the isolate up) turns the script off for the session.
+- **Refresh.** After events that change a value (turn start and end, model replies, compaction, model switch, plan mode, background subagents) and before each prompt, at most every 250 ms, never per streamed chunk. The values are kept on the host from those events, so a refresh takes no lock on the agent loop, reads no file and starts no process. The script's isolate reports to a private event bus, so refreshes don't fill the session log.
+- **Drawing.** While the prompt reads, the line is drawn through a JLine widget, under the line reader's lock; otherwise under the TUI's own lock, which streamed output and event lines also take. A resize between prompts resizes the area; during a prompt JLine does. The area is closed, and the scroll region reset, when the TUI ends.
+- **Events.** `statusline.ready` (from `default` or `script`, the items) and `statusline.failed`.
+
+**Why.** The values a user checks most often (context use, mode, background agents) take a command each today. A script with a snapshot covers personal layouts without new settings for each one. Running it like any other guest code, with no `api`, means a status line can't read files or reach the network. Values cached from events keep a refresh cheap and keep a slow loop from freezing the line.
+
+**Rejected.**
+- Shell commands for the status line, as in some other tools (no shell, constitution Article IV).
+- Giving the script `api` access (a status line has no reason to read or write).
+- Refreshing on every streamed chunk (flicker and cost).
+- A project status line (a cloned repo could put misleading text there).
+
+**Source.** The user's request for a default and a programmable status line, 2026-11-24. Recommended options accepted while the user was away, specifying 042-status-line.
+
 ---
 
 ## Questions and answers
@@ -1381,6 +1405,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q83 | How do long sessions keep working when the context fills? | Count tokens (the model's counts, else an estimate); at 80% of the window minus the reply size, the model summarizes the older conversation; `/context`, `/compact` | Works with any model and adds nothing to the binary | D-077 |
 | Q84 | How do prompt caching and `@file` mentions work? | Claude requests mark the system prompt and the last message for the 5-minute cache; `@path` attaches files and folders under the file policy within a size budget | Lower cost per step; files by name without a model step | D-078 |
 | Q85 | Should `/quit` and `/q` work, and can Tab complete command arguments? | Yes: aliases of `/exit`, not listed; built-ins win over command files; Tab lists and cycles each command's choices, and command files declare `args` | Fewer keystrokes; built-ins mean the same thing everywhere | D-079 |
+| Q86 | Should the TUI have a status line, and can users program it? | Yes: built-in items chosen by `ui.statusLine`; `~/.jharness/statusline.js` returns the whole line from a snapshot, sandboxed with no `api`; throttled refresh; failures fall back to the default | Key state at a glance; a new extension point that can't act | D-080 |
 
 ---
 

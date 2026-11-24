@@ -70,6 +70,8 @@ public final class Session implements AutoCloseable {
     private Path home;
     private boolean trusted;
     private FilePolicy files;
+    private PermissionEngine engine;
+    private String startMode;
 
     private Session(EventBus bus, SessionLog log, AgentIsolate isolate, AgentLoop loop, Workspace workspace, TurnCounter turns,
             Settings settings) {
@@ -262,6 +264,8 @@ public final class Session implements AutoCloseable {
         s.home = home;
         s.trusted = access.trusted();
         s.files = files;
+        s.engine = engine;
+        s.startMode = mode.name().toLowerCase().replace('_', '-');
         s.proxy = proxy;
         s.sessionDir = sessionDir;
         return s;
@@ -430,6 +434,12 @@ public final class Session implements AutoCloseable {
         return commands;
     }
 
+    /** The permission mode now: {@code ask}, {@code accept-edits}, {@code plan} or {@code bypass} (spec 042). */
+    public String permissionMode() {
+        PermissionEngine e = engine;
+        return e == null ? startMode : e.mode().name().toLowerCase().replace('_', '-');
+    }
+
     /** Whether plan mode is on (spec 036). */
     public boolean planMode() {
         return plans.planMode();
@@ -556,6 +566,11 @@ public final class Session implements AutoCloseable {
 
     public Path logPath() {
         return log.path();
+    }
+
+    /** The home folder whose {@code .jharness/} this session uses. */
+    public Path home() {
+        return home;
     }
 
     public Settings settings() {

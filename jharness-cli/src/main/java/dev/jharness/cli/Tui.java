@@ -17,6 +17,9 @@ import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.UserInterruptException;
 import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
+import org.jline.utils.AttributedString;
+import org.jline.utils.AttributedStyle;
+import org.jline.utils.Status;
 
 import dev.jharness.net.EgressProxy;
 import dev.jharness.net.NetworkRules;
@@ -413,9 +416,115 @@ final class Tui {
         // A command file named like a built-in is loaded now, so the clash shows at the start (spec 041 AC-02).
         session.commands(BUILT_IN).clashes().forEach(c -> raw.println(styler.error(TerminalSafe.escape("Command " + c.file()
                 + " is not used: /" + c.name() + " is a built-in command"))));
+        startStatus(session);
         out.flush();
+        try {
+            loop(session);
+        } finally {
+            stopStatus();
+        }
+        try {
+            reader.getHistory().save();
+        } catch (IOException e) {
+            out.println("could not save history: " + e.getMessage());
+        }
+        out.flush();
+    }
+
+    /** The status line (spec 042); null on dumb terminals, when {@code ui.statusLine} is off, and in {@code -p}. */
+    private StatusLine statusLine;
+    private Status status;
+    private volatile List<AttributedString> statusLines = List.of();
+
+    private void startStatus(Session session) {
+        List<String> items = session.settings().ui().statusLine();
+        if (terminal.getType().startsWith("dumb") || items.isEmpty()) {
+            return;
+        }
+        StatusScript script = null;
+        try {
+            script = StatusScript.load(session.home(), session.settings().sandbox());
+        } catch (IOException | RuntimeException e) {
+            String why = "~/.jharness/statusline.js " + e.getMessage();
+            session.bus().publish(dev.jharness.events.Origin.main(0), "statusline.failed",
+                    dev.jharness.events.Json.object().put("reason", "file").put("error", why));
+            raw.println(styler.error(TerminalSafe.escape("Status line script not used: " + why + "; showing the default line")));
+        }
+        status = Status.getStatus(terminal);
+        reader.getWidgets().put("jharness-status", () -> {
+            status.update(statusLines);
+            return true;
+        });
+        // When the prompt isn't reading, a resize is ours to handle; while it reads, JLine resizes the status itself.
+        terminal.handle(Terminal.Signal.WINCH, sig -> {
+            synchronized (this) {
+                if (status != null) {
+                    status.resize(terminal.getSize());
+                }
+            }
+            StatusLine l = statusLine;
+            if (l != null) {
+                l.request();
+            }
+        });
+        statusLine = new StatusLine(session, items, script, this::paintStatus, this::notice);
+    }
+
+    /** Draws the status line: through a widget while the prompt reads (JLine's lock), else under this TUI's lock. */
+    private void paintStatus(String text) {
+        AttributedString line = styler.color() ? new AttributedString(text, AttributedStyle.DEFAULT.faint()) : new AttributedString(text);
+        statusLines = List.of(line);
+        if (reader.isReading()) {
+            try {
+                reader.callWidget("jharness-status");
+                return;
+            } catch (IllegalStateException e) {
+                // The prompt just ended; draw it the other way.
+            }
+        }
+        synchronized (this) {
+            if (status != null) {
+                status.update(statusLines);
+                terminal.flush();
+            }
+        }
+    }
+
+    /** A line above the prompt, from another thread. */
+    private void notice(String text) {
+        String line = styler.error(TerminalSafe.escape(text));
+        if (reader.isReading()) {
+            reader.printAbove(line);
+        } else {
+            synchronized (this) {
+                raw.println(line);
+                raw.flush();
+            }
+        }
+    }
+
+    private void stopStatus() {
+        StatusLine l = statusLine;
+        statusLine = null;
+        if (l != null) {
+            l.close();
+        }
+        synchronized (this) {
+            if (status != null) {
+                status.close();
+                status = null;
+                terminal.flush();
+            }
+        }
+    }
+
+    private void loop(Session session) {
         while (true) {
             String line;
+            StatusLine sl = statusLine;
+            if (sl != null) {
+                sl.refreshNow();
+            }
             try {
                 line = readPrompt();
             } catch (UserInterruptException e) {
@@ -440,12 +549,6 @@ final class Tui {
             }
             out.flush();
         }
-        try {
-            reader.getHistory().save();
-        } catch (IOException e) {
-            out.println("could not save history: " + e.getMessage());
-        }
-        out.flush();
     }
 
     /** The {@code > } prompt, with modified keys reported only while it reads (spec 014 AC-01). */
@@ -571,7 +674,7 @@ final class Tui {
     }
 
     /** Prints whole lines of the streamed reply, styled; the rest waits for its newline (AC-02). */
-    private void stream(String delta) {
+    private synchronized void stream(String delta) {
         pending.append(delta);
         int nl;
         boolean printed = false;
@@ -1042,6 +1145,10 @@ final class Tui {
 
     /** Package-private for tests. Events come from any thread: background subagents run on their own (spec 027). */
     synchronized void onEvent(Event e) {
+        StatusLine sl = statusLine;
+        if (sl != null) {
+            sl.onEvent(e);
+        }
         // The subagent being followed is shown like the main loop: its reply streams, then its steps (spec 030).
         boolean followed = e.agent().equals(following);
         if (!followed && !e.agent().equals("main") && (background.contains(e.agent())

@@ -31,6 +31,8 @@ final class LogFormat {
             Map.entry("mcp.connected", List.of("server", "transport", "tools", "error")),
             Map.entry("mcp.called", List.of("server", "tool", "isError", "error")),
             Map.entry("command.shadowed", List.of("name", "file", "from")),
+            Map.entry("statusline.ready", List.of("from", "items")),
+            Map.entry("statusline.failed", List.of("reason", "error")),
             Map.entry("command.ran", List.of("name", "kind", "outcome", "error")),
             Map.entry("hook.ran", List.of("hook", "event", "outcome", "reason")),
             Map.entry("subagent.waiting", List.of("summary")),
