@@ -1,6 +1,12 @@
 # Changelog
 
-<!-- last-commit: 32e6708ec3548789c83e81e64347a63d5d975088 -->
+<!-- last-commit: 8db40129a32543a0d0b0d29406b2f2cbd34d3a35 -->
+
+## 2026-11-24 · 044 Colored help
+
+- Fix: `jharness --help` showed its colors as literal `\e[33m` text on a terminal. picocli's own help, version and usage-error output now goes to the raw streams, colored only on a terminal and not when `NO_COLOR` is set.
+- A usage error's message, which repeats the typed arguments, is still escaped; `-p` replies, errors and `jharness log` stay escaped as before.
+- Decision: D-060 refined (Q88).
 
 ## 2026-11-24 · 043 Resume and fork sessions
 
