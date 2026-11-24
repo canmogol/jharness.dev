@@ -178,6 +178,15 @@ jobs:
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json --type prompt.attached | tee "$tmp/at-log.jsonl"
           grep '"path":"notes.md"' "$tmp/at-log.jsonl" | grep -q '"mention":".env"'
           rm "$tmp/ws/notes.md" "$tmp/ws/.env"
+          # Resume and fork (spec 043): a headless run continues the last session with its conversation.
+          printf '%s\n' '{"reply":"Noted 7."}' > "$tmp/rs1.jsonl" && printf '%s\n' '{"reply":"It was 7."}' > "$tmp/rs2.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/rs1.jsonl" -p "remember 7"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/rs2.jsonl" --resume -p "what was it?" | tee "$tmp/rs.txt"
+          grep -q "It was 7." "$tmp/rs.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --type session. | tee "$tmp/rs-log.txt"
+          grep -q "session.resumed  from=s-.* fork=false turns=1 messages=2" "$tmp/rs-log.txt"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/rs2.jsonl" --fork -p "branch"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --type session.resumed | grep -q "fork=true turns=2 messages=4"
           # Action reviewer (spec 038): a fake System One server doubts a write, so bypass mode still refuses it.
           python3 -I jharness-agent/src/test/resources/fake_systemone_server.py "$tmp/so.port" 0.05 &
           so=$!

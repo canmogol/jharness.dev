@@ -53,6 +53,17 @@ public final class Main implements Callable<Integer> {
             description = "Run one prompt without the terminal UI and print the reply. Changes are denied, since no one can approve them.")
     String prompt;
 
+    @Option(names = "--resume", arity = "0..1", fallbackValue = "last", paramLabel = "ID",
+            description = "Continue a saved session of this folder: its id, the start of one, or none for the last one. Works with -p.")
+    String resume;
+
+    @Option(names = "--fork", arity = "0..1", fallbackValue = "last", paramLabel = "ID",
+            description = "Start a new session from a copy of a saved one (as --resume), leaving the saved one as it was.")
+    String fork;
+
+    /** The saved session to start from, found before anything opens (spec 043). */
+    private dev.jharness.agent.SessionState.Resume from;
+
     @Option(names = "--debug", description = "Show every event and the model's thinking as they happen; with -p, write events to stderr. Errors print their stack trace.")
     boolean debug;
 
@@ -168,6 +179,14 @@ public final class Main implements Callable<Integer> {
             return 2;
         }
         try {
+            if (resume != null && fork != null) {
+                err.println("jharness: use --resume or --fork, not both");
+                return 2;
+            }
+            if (resume != null || fork != null) {
+                from = new dev.jharness.agent.SessionState.Resume(
+                        dev.jharness.agent.SessionState.find(h, ws, resume != null ? resume : fork), fork != null);
+            }
             TrustStore trust = TrustStore.load(h);
             if (prompt != null) {
                 // Headless runs never ask: a folder not marked trusted is untrusted (D-043).
@@ -254,7 +273,7 @@ public final class Main implements Callable<Integer> {
             err.println("jharness: the project's tools " + String.join(", ", changed) + " are new or changed since you confirmed them;"
                     + " they are left out (start jharness in this folder to review them)");
         }
-        try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()).trusted(trusted).agent(agentDef).projectTools(changed.isEmpty()))) {
+        try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()).trusted(trusted).agent(agentDef).projectTools(changed.isEmpty()).resume(from))) {
             if (!changed.isEmpty()) {
                 projectIgnored(s, changed, "headless runs can't ask about changed project tools");
             }
@@ -333,7 +352,7 @@ public final class Main implements Callable<Integer> {
                 }
             }
             Settings.Layered settings = layered(h, ws, trusted);
-            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()).trusted(trusted).agent(agentDef).projectTools(projectTools).interactive(true))) {
+            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()).trusted(trusted).agent(agentDef).projectTools(projectTools).interactive(true).resume(from))) {
                 if (!projectTools) {
                     projectIgnored(s, ToolDefinitions.changed(hashes, trust.confirmedTools(ws)), "the user didn't confirm the changed project tools");
                 }

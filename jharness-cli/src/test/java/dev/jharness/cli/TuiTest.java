@@ -611,6 +611,28 @@ class TuiTest {
                 && e.get("reason").asText().equals("type")));
     }
 
+    /** Spec 043 AC-05: a resumed session says what it continues, and the model gets the earlier turns. */
+    @Test
+    void resumeShowsWhereItLeftOff() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws-res"));
+        Path home = tmp.resolve("home-res");
+        try (Session s = Session.open(home, ws, Settings.defaults(), Session.Access.prompter(op -> dev.jharness.security.Prompter.Answer.ONCE),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("Planned the shop."), bus, turns))) {
+            s.turn("plan the shop", d -> {});
+        }
+        var saved = dev.jharness.agent.SessionState.find(home, ws, null);
+        Tui tui = new Tui(terminal("/rewind 0\n/exit\n"), null);
+        try (Session session = Session.open(home, ws, Settings.defaults(),
+                Session.Access.prompter(tui.prompter()).resume(new dev.jharness.agent.SessionState.Resume(saved, false)),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("Resumed " + saved.session() + ": 1 turn, 2 messages; it began with \"plan the shop\"."), sc);
+        assertTrue(sc.contains("Last reply: Planned the shop."), sc);
+        assertTrue(sc.contains("before the session was resumed"), sc);
+    }
+
     /** Spec 024 AC-01, AC-02: "/" then Tab prints the help; "/mo" then Tab completes /model; other text keeps its Tab behavior. */
     @Test
     void slashTabPrintsTheHelpAndCompletesCommands() throws Exception {

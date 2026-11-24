@@ -123,7 +123,11 @@ jharness -p "explain src/"    # one prompt, no UI; changes are denied
 jharness --debug              # every event and the thinking shown; stack traces on errors
 jharness log                  # this folder's sessions, newest first
 jharness log last             # the newest session as a timeline
+jharness --resume             # continue this folder's last session (or --resume ID)
+jharness --fork ID            # a new session from a copy of a saved one
 ```
+
+After each turn, JHarness saves the conversation next to the session log (`<session-id>.state.json`, mode 0600). `--resume` continues the last session of the folder, or the one whose id (or the start of it) you give, in the same session and log; the model gets the earlier turns back. `--fork` starts a new session from a copy and leaves the saved one as it was. Both work with `-p`, and the UI says which session it continues and shows its last reply. Background subagents, the todo list and plan mode start fresh, and turns from before the resume can't be undone with `/undo` or `/rewind`, since their file checkpoints belong to the earlier run.
 
 In the UI, Shift+Enter, Alt+Enter or Ctrl-J starts a new line and Enter sends. Type `/` and press Tab to list the commands, or Tab after `/mo` to complete `/model`. After a command and a space, Tab lists its choices and Tab again cycles through them: `/events` levels, `/model` profiles, subagent names for `/agents`, `/follow`, `/stop` and `/switch`, turns for `/rewind`, and `/network` subcommands and the hosts in your rules. `/quit` and `/q` also leave. A turn runs up to 100 code steps; set `"agent": {"maxSteps": N}` (1 to 500) to change it. Every event goes to the session log printed at start (`tail -f` it); `/events all` or `"ui": {"events": "all"}` in settings also shows them inline. The log keeps each model reply, and its thinking text, whole on `model.completed`; `/thinking` or `"ui": {"thinking": "show"}` shows the thinking dim in the UI. `NO_COLOR=1` turns colors off.
 

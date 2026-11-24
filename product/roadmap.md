@@ -101,7 +101,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Prompt caching, `@file` mentions (spec 040)
 - [x] `/quit` and `/q` aliases; Tab completes command arguments (spec 041)
 - [x] Status line: built-in items and `~/.jharness/statusline.js` (spec 042)
-- [ ] Resume and fork sessions
+- [x] Resume and fork sessions (spec 043)
 - [ ] Headless mode with text, JSON and stream-JSON output
 - [ ] Read-only web session viewer on `127.0.0.1`, reading the same event stream as headless mode; no approvals from the browser; doesn't gate v0.1 (D-053)
 - [ ] Usage tracking (tokens, cost)

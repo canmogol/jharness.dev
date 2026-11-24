@@ -31,6 +31,11 @@ public final class TurnCounter implements Supplier<Origin> {
         return follows != null ? follows.current() : turn.incrementAndGet();
     }
 
+    /** A resumed session goes on from its last turn (spec 043). */
+    void startAt(int last) {
+        turn.set(last);
+    }
+
     public int current() {
         return follows != null ? follows.current() : turn.get();
     }

@@ -403,6 +403,18 @@ final class Tui {
                 + (session.agent() != null ? " · agent " + session.agent().name() : "")
                 + (session.offline() ? " · offline" : "") + " · /help for commands");
         raw.println(styler.dim("Session log: " + session.logPath()));
+        var r = session.resumed();
+        if (r != null) {
+            var st = r.state();
+            String last = st.conversation().stream().filter(m -> m.role().equals("assistant")).reduce((x, y) -> y)
+                    .map(m -> m.content().strip().replaceAll("\\s+", " ")).orElse("");
+            out.println((r.fork() ? "Forked from " : "Resumed ") + st.session() + ": " + st.turn() + (st.turn() == 1 ? " turn, " : " turns, ")
+                    + st.conversation().size() + " messages" + (st.firstPrompt() != null ? "; it began with \"" + cut(st.firstPrompt(), 80) + "\"" : "") + ".");
+            if (!last.isEmpty()) {
+                raw.println(styler.dim(TerminalSafe.escape("Last reply: " + cut(last, 300))));
+            }
+            out.println("Earlier turns can't be undone with /undo or /rewind here.");
+        }
         String reviewer = session.describeReviewer();
         if (reviewer != null) {
             out.println(reviewer);
@@ -707,6 +719,11 @@ final class Tui {
             return true;
         }
         return false;
+    }
+
+    private static String cut(String s, int max) {
+        String one = s.strip().replaceAll("\\s+", " ");
+        return one.length() <= max ? one : one.substring(0, max) + "…";
     }
 
     private static String modelName(Session s) {

@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,35 @@ class MainTest {
         assertEquals(0, run("--help"));
         assertTrue(out.toString().contains("--model"));
         assertFalse(out.toString().contains("--replay"), "test options are hidden");
+    }
+
+    /** Spec 043 AC-03, AC-04: -p with --resume goes on in the saved session; --fork copies it; errors say why. */
+    @Test
+    void resumeAndForkHeadless() throws Exception {
+        assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--resume", "-p", "go on"));
+        assertTrue(err.toString().contains("no session to resume"), err.toString());
+        Path r = replay("The number is 7.");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "remember 7"));
+        String id = dev.jharness.agent.SessionState.find(home, ws, null).session();
+        Path r2 = tmp.resolve("r2.jsonl");
+        Files.writeString(r2, "{\"reply\":\"You said 7.\"}\n");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r2.toString(), "--resume", "-p", "what number?"));
+        assertTrue(out.toString().contains("You said 7."), out.toString());
+        var st = dev.jharness.agent.SessionState.find(home, ws, id);
+        assertEquals(2, st.turn());
+        assertEquals(List.of("remember 7", "The number is 7.", "what number?", "You said 7."),
+                st.conversation().stream().map(dev.jharness.llm.ChatMessage::content).toList());
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r2.toString(), "--fork", id, "-p", "again"));
+        var f = dev.jharness.agent.SessionState.find(home, ws, "last");
+        assertNotEquals(id, f.session());
+        assertEquals(id, f.forkedFrom());
+        assertEquals(2, dev.jharness.agent.SessionState.find(home, ws, id).turn(), "the original is unchanged");
+        err.reset();
+        assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--resume", "--fork", "-p", "x"));
+        assertTrue(err.toString().contains("not both"), err.toString());
+        err.reset();
+        assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--resume", "s-nope", "-p", "x"));
+        assertTrue(err.toString().contains("no session s-nope"), err.toString());
     }
 
     @Test

@@ -75,6 +75,10 @@ public final class AgentLoop {
     private int compactedThrough;
     /** After a failed or unhelpful automatic compaction, the next one waits until the context has grown past this. */
     private int retryAbove;
+    /** Turns up to this one came from a resumed or forked session; their files can't be undone (spec 043). */
+    private int restoredThrough;
+    private volatile java.util.function.Consumer<Snapshot> stateSink;
+    private String firstPrompt;
 
     /** What {@code /context} shows. {@code estimated} is true when no model has counted the tokens yet. */
     public record ContextUsage(int tokens, int window, int reserve, double compactAt, boolean autoCompact, boolean estimated,
@@ -183,6 +187,9 @@ public final class AgentLoop {
             return "Nothing to compact yet.";
         }
         String r = compact("user", false);
+        if (r != null) {
+            saveState();
+        }
         return r != null ? r : "Not compacted; see the session log.";
     }
 
@@ -315,6 +322,10 @@ public final class AgentLoop {
 
     /** {@code /rewind N}: undoes every turn after turn {@code n}. */
     public synchronized Checkpoints.Restore rewind(int n, boolean force) {
+        if (n < restoredThrough) {
+            throw new IllegalArgumentException("turns up to " + restoredThrough + " are from before the session was resumed; /rewind can go back to turn "
+                    + restoredThrough + " at the earliest");
+        }
         if (n < compactedThrough) {
             throw new IllegalArgumentException("turns up to " + compactedThrough + " were compacted into a summary; /rewind can go back to turn "
                     + compactedThrough + " at the earliest");
@@ -332,6 +343,7 @@ public final class AgentLoop {
                 conversation.removeLast();
             }
             after.clear();
+            saveState();
             return new Checkpoints.Restore(true, r.restored(), r.conflicts(), r.notRestorable(), r.gitOps(), undone);
         }
         return r;
@@ -386,6 +398,9 @@ public final class AgentLoop {
 
     private TurnResult runTurn(String prompt, Mentions.Result attached, Consumer<String> onDelta) {
         bus.publish(turns.get(), "turn.started", Json.object().put("prompt", prompt));
+        if (firstPrompt == null) {
+            firstPrompt = prompt.length() > 200 ? prompt.substring(0, 200) : prompt;
+        }
         if (!attached.isEmpty()) {
             bus.publish(turns.get(), "prompt.attached", attached.event());
         }
@@ -497,6 +512,51 @@ public final class AgentLoop {
         return "[" + (text.length() - resultChars) + " characters cut]\n" + text.substring(text.length() - resultChars);
     }
 
+    /**
+     * The main conversation for {@code --resume} and {@code --fork} (spec 043).
+     *
+     * @param turn the last turn number
+     */
+    public record Snapshot(List<ChatMessage> conversation, int turn, int compactedThrough, String firstPrompt) {}
+
+    /** Called with a snapshot after each turn, compaction, undo and rewind; the session writes it to disk. */
+    public void useStateSink(java.util.function.Consumer<Snapshot> sink) {
+        stateSink = sink;
+    }
+
+    public synchronized Snapshot snapshot() {
+        return new Snapshot(List.copyOf(conversation), turns.current(), Math.max(compactedThrough, restoredThrough), firstPrompt);
+    }
+
+    /**
+     * Starts from a saved conversation (spec 043): the messages, the turn count, and a mark so turns before it
+     * aren't rewound, since their file checkpoints belong to the earlier run.
+     */
+    public synchronized void restore(Snapshot s) {
+        conversation.clear();
+        conversation.addAll(s.conversation());
+        liveTurns.clear();
+        turns.startAt(s.turn());
+        compactedThrough = s.compactedThrough();
+        restoredThrough = s.turn();
+        knownTokens = 0;
+        knownSize = 0;
+        retryAbove = 0;
+        firstPrompt = s.firstPrompt();
+    }
+
+    void saveState() {
+        var sink = stateSink;
+        if (sink == null) {
+            return;
+        }
+        try {
+            sink.accept(snapshot());
+        } catch (RuntimeException e) {
+            bus.publish(turns.get(), "session.state_failed", Json.object().put("error", String.valueOf(e.getMessage())));
+        }
+    }
+
     private TurnResult end(TurnResult r) {
         var done = Json.object().put("steps", r.steps()).put("stopReason", r.stopReason())
                 .put("contextTokens", tokensNow()).put("contextWindow", window());
@@ -504,6 +564,7 @@ public final class AgentLoop {
             done.put("error", r.error());
         }
         bus.publish(turns.get(), "turn.completed", done);
+        saveState();
         return r;
     }
 }
