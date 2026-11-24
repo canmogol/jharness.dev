@@ -1,6 +1,13 @@
 # Changelog
 
-<!-- last-commit: 06c56429e62950d4251f49a67e56d0210338025f -->
+<!-- last-commit: 46e3d5fc1621552419fe7571d21853a4e69ee12e -->
+
+## 2026-11-24 · 030 Follow a subagent
+
+- `/follow sub-1` shows a running background subagent the way the main loop is shown: its reply as the model writes it, its thinking when `/thinking` is on, then its steps, results and diffs. `/follow` alone picks the only running one.
+- Esc stops watching; the subagent keeps running, and `/stop` stops it. When it ends, its end line prints and the prompt returns.
+- In sessions without a model profile, such as replays, a subagent's model text is now labelled with its own name instead of the main agent's.
+- Decision: following a subagent (D-069).
 
 ## 2026-11-24 · 029 Prompt examples
 
