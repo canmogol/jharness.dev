@@ -51,6 +51,8 @@ final class Tui {
               /diff           show the last turn's file changes
               /undo           undo the last turn's file changes and remove it from the conversation
               /rewind N       undo every turn after turn N (add --force to overwrite your own edits)
+              /context        show how full the model's context is
+              /compact        summarize the conversation now to free context
               /events         show the event level and the session log file
               /events LEVEL   show none, steps or all events
               /thinking       show or hide the model's thinking
@@ -502,6 +504,22 @@ final class Tui {
                     c.forEach(out::println);
                 }
             }
+            case "/context" -> {
+                var c = session.loop().context();
+                out.println(String.format("Context: %s%,d of %,d tokens (%d%%)%s", c.estimated() ? "about " : "", c.tokens(), c.window(),
+                        (int) Math.round(100.0 * c.tokens() / c.window()),
+                        c.autoCompact() ? String.format(" · compacts at about %,d", c.threshold()) : " · automatic compaction is off"));
+                if (c.compactedThrough() > 0) {
+                    out.println("Turns up to " + c.compactedThrough() + " are kept as a summary.");
+                }
+            }
+            case "/compact" -> {
+                if (!busy(session, "/compact")) {
+                    out.println("Compacting…");
+                    out.flush();
+                    out.println(session.loop().compact());
+                }
+            }
             case "/diff" -> {
                 String d = session.loop().lastTurnDiff();
                 out.print(d.isEmpty() ? "No file changes in the last turn.\n" : d);
@@ -519,7 +537,11 @@ final class Tui {
                 if (a.length < 2 || !a[1].matches("[0-9]+")) {
                     out.println("Usage: /rewind N [--force]. Turns: " + session.loop().turns());
                 } else {
-                    out.println(session.loop().rewind(Integer.parseInt(a[1]), line.contains("--force")).message());
+                    try {
+                        out.println(session.loop().rewind(Integer.parseInt(a[1]), line.contains("--force")).message());
+                    } catch (IllegalArgumentException e) {
+                        out.println(e.getMessage());
+                    }
                 }
             }
             case "/model" -> {
@@ -1015,6 +1037,13 @@ final class Tui {
                     }
                 }
             }
+            case "context.compacted" -> {
+                if (e.body().get("by").asText().equals("auto")) {
+                    raw.println(styler.dim(String.format("▸ %scontext compacted: about %,d → %,d tokens", who, e.body().get("tokensBefore").asInt(),
+                            e.body().get("tokensAfter").asInt())));
+                }
+            }
+            case "context.compact_failed" -> raw.println(styler.error("▸ " + who + "compaction failed: " + e.body().get("error").asText()));
             case "review.verdict" -> {
                 if (e.body().get("outcome").asText().equals("deny")) {
                     raw.println(styler.error(String.format("▸ reviewer refused %s (confidence %.2f)", e.body().get("api").asText(),

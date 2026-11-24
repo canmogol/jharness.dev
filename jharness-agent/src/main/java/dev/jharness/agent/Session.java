@@ -238,6 +238,7 @@ public final class Session implements AutoCloseable {
                 agent != null && agent.maxSteps() != null ? agent.maxSteps() : settings.agent().maxSteps(),
                 settings.timeouts().outputChars());
         loop.useCheckpoints(checkpoints);
+        loop.useCompaction(settings.agent().autoCompact(), settings.agent().compactAt());
         if (hooks.any()) {
             loop.useStopHook(hooks);
         }

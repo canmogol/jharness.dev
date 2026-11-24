@@ -165,6 +165,12 @@ jobs:
           cat "$tmp/mcp-log.txt"
           grep -q "mcp.connected" "$tmp/mcp-log.txt"
           "$bin" log --home "$tmp/home-mcp" --cwd "$tmp/ws" last --json --type api.call | grep '"api":"mcp"' | grep -q '"status":"ok"'
+          # Compaction (spec 039): a reply that reports a nearly full context makes the next call summarize first.
+          printf '%s\n' '{"reply":"```js\n\"step done\"\n```","inputTokens":30000,"outputTokens":10}' '{"reply":"The user asked to compact; one step ran."}' '{"reply":"Compacted and done."}' > "$tmp/cmp.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/cmp.jsonl" -p "compact" | tee "$tmp/cmp.txt"
+          grep -q "Compacted and done." "$tmp/cmp.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --type context. | tee "$tmp/cmp-log.txt"
+          grep -q "context.compacted  by=auto" "$tmp/cmp-log.txt"
           # Action reviewer (spec 038): a fake System One server doubts a write, so bypass mode still refuses it.
           python3 -I jharness-agent/src/test/resources/fake_systemone_server.py "$tmp/so.port" 0.05 &
           so=$!

@@ -51,6 +51,9 @@ Model requests are retried per profile (D-058):
 | `retries` | 4 | 0 to 10 |
 | `retryMaxWait` | 60 s | 1 s to 10 min |
 | `responseTimeout` | 120 s | 5 s to 30 min |
+| `contextWindow` | 32,768 tokens (`openai-compatible`), 200,000 (`anthropic`) | 2,048 to 10,000,000; above `maxTokens` |
+
+Compaction (D-077): at `agent.compactAt` (0.8) of the window minus `maxTokens`, the model summarizes the older conversation in up to 2,048 tokens. Tokens are the model's own counts, else about 3.5 characters a token.
 
 ## Action reviewer (optional, D-031)
 

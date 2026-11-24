@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 /** The {@code model} and {@code models} sections: named profiles and the default (D-032). */
 public final class ModelProfiles {
 
-    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes", "retries", "retryMaxWait", "responseTimeout");
+    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes", "retries", "retryMaxWait", "responseTimeout", "contextWindow");
 
     private final String defaultName;
     private final Map<String, ModelProfile> profiles;
@@ -161,8 +161,20 @@ public final class ModelProfiles {
         if (apiKeyEnv != null && !apiKeyEnv.matches("[A-Za-z_][A-Za-z0-9_]*")) {
             throw new ConfigException(where + ".apiKeyEnv must be an environment variable name, not a key");
         }
+        int window = ModelProfile.defaultContextWindow(provider);
+        if (n.has("contextWindow")) {
+            JsonNode w = n.get("contextWindow");
+            if (!w.isIntegralNumber() || w.asLong() < ModelProfile.MIN_CONTEXT_WINDOW || w.asLong() > ModelProfile.MAX_CONTEXT_WINDOW) {
+                throw new ConfigException(where + ".contextWindow: expected a whole number of tokens from " + ModelProfile.MIN_CONTEXT_WINDOW
+                        + " to " + ModelProfile.MAX_CONTEXT_WINDOW);
+            }
+            window = w.asInt();
+        }
+        if (maxTokens >= window) {
+            throw new ConfigException(where + ".maxTokens (" + maxTokens + ") must be below contextWindow (" + window + ")");
+        }
         return new ModelProfile(name, provider, baseUrl.replaceAll("/+$", ""), model, apiKeyEnv, maxTokens, notes,
-                retries, retryMaxWait, responseTimeout);
+                retries, retryMaxWait, responseTimeout, window);
     }
 
     private static java.time.Duration duration(JsonNode n, String key, String where, java.time.Duration dflt,
