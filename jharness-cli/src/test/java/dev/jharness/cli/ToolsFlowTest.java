@@ -127,12 +127,51 @@ class ToolsFlowTest {
         assertTrue(toolsInLastSession().contains("go:project"));
     }
 
+    /** Spec 045: the header, then rows whose columns start where the header's do. */
+    private static void assertTableLines(String o) {
+        List<String> lines = o.lines().toList();
+        int h = -1;
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).startsWith("NAME ")) {
+                h = i;
+                break;
+            }
+        }
+        assertTrue(h >= 0, "a header: " + o);
+        String header = lines.get(h);
+        assertTrue(header.matches("NAME +SOURCE +EXECUTABLE +STATUS +OPERATIONS"), header);
+        int[] starts = {0, header.indexOf("SOURCE"), header.indexOf("EXECUTABLE"), header.indexOf("STATUS"), header.indexOf("OPERATIONS")};
+        int rows = 0;
+        for (int i = h + 1; i < lines.size() && !lines.get(i).isEmpty() && Character.isLowerCase(lines.get(i).charAt(0))
+                && lines.get(i).length() > starts[4]; i++) {
+            String l = lines.get(i);
+            for (int c = 1; c < starts.length; c++) {
+                assertEquals(' ', l.charAt(starts[c] - 1), "column " + c + " starts after a space: " + l);
+                assertNotEquals(' ', l.charAt(starts[c]), "column " + c + " starts at the header's column: " + l);
+            }
+            rows++;
+        }
+        assertTrue(rows >= 3, "rows for the shipped tools: " + o);
+    }
+
+    @Test
+    void textTableColumnsAreAsWideAsTheirLongestValue() {
+        var t = new TextTable("NAME", "STATUS", "OPERATIONS").row("go", "not found on PATH", "build, test").row("maven", "ok", "compile")
+                .row("e\u001bvil", "ok", "x");
+        assertEquals(List.of(
+                "NAME    STATUS             OPERATIONS",
+                "go      not found on PATH  build, test",
+                "maven   ok                 compile",
+                "e\\evil  ok                 x"), t.lines(), "the escaped value, 6 characters, sets the width");
+    }
+
     @Test
     void toolsCommand() throws Exception {
         assertEquals(0, run(null, "tools", "--home", home.toString(), "--cwd", ws.toString()));
         String o = out.toString();
         assertTrue(o.contains("Wrote the shipped tools to"), o);
-        assertTrue(o.contains("maven  user  mvn") && o.contains("compile, test, verify, package, install, clean"), o);
+        assertTableLines(o);
+        assertTrue(o.lines().anyMatch(l -> l.matches("maven +user +mvn +(ok|not found on PATH) +compile, test, verify, package, install, clean")), o);
         assertTrue(o.contains("they count once you trust the project"), o);
 
         assertEquals(0, run(null, "tools", "show", "maven", "--home", home.toString(), "--cwd", ws.toString()));
@@ -147,7 +186,8 @@ class ToolsFlowTest {
         assertTrue(out.toString().contains("shells and command runners") && out.toString().contains("bad.json: not valid JSON"), out.toString());
         assertTrue(out.toString().contains("2 tool file(s) have problems."), out.toString());
         assertEquals(0, run(null, "tools", "list", "--home", home.toString(), "--cwd", ws.toString()));
-        assertTrue(out.toString().contains("npm  broken: "), out.toString());
+        assertTrue(out.toString().lines().anyMatch(l -> l.matches("npm +broken")), out.toString());
+        assertTrue(out.toString().contains("npm is broken: "), out.toString());
 
         assertEquals(0, run(null, "tools", "reset", "npm", "--home", home.toString(), "--cwd", ws.toString()));
         assertEquals(ToolDefinitions.defaultText("npm"), Files.readString(npm));
@@ -158,7 +198,8 @@ class ToolsFlowTest {
         Files.delete(ws.resolve(".jharness/tools/bad.json"));
         TrustStore.load(home).record(ws, true, ToolDefinitions.projectHashes(ws));
         assertEquals(0, run(null, "tools", "--home", home.toString(), "--cwd", ws.toString()));
-        assertTrue(out.toString().contains("(differs from the shipped default)") && out.toString().contains("go  project  go"), out.toString());
+        assertTrue(out.toString().contains("Differs from the shipped default: maven (jharness tools reset NAME writes it again)."), out.toString());
+        assertTrue(out.toString().lines().anyMatch(l -> l.matches("go +project +go +(ok|not found on PATH) +.+")), out.toString());
         assertEquals(2, run(null, "tools", "frob", "--home", home.toString(), "--cwd", ws.toString()));
     }
 }

@@ -62,14 +62,26 @@ final class ToolsCommand implements Callable<Integer> {
                     out.println("No tools. Add NAME.json files to " + TerminalSafe.escape(ToolDefinitions.userFolder(h).toString())
                             + ", or run jharness tools reset to write the shipped ones.");
                 }
+                // One row per tool, columns as wide as their longest value (spec 045).
+                TextTable table = new TextTable("NAME", "SOURCE", "EXECUTABLE", "STATUS", "OPERATIONS");
+                List<String> differs = new java.util.ArrayList<>();
                 for (ToolDefinition d : t.tools().values()) {
                     String where = d.source() == ToolDefinition.Source.PROJECT ? "project" : "user";
                     boolean found = Executables.resolve(d.executable(), ws).isPresent();
-                    out.println(TerminalSafe.escape(d.name() + "  " + where + "  " + d.executable() + (found ? "" : " (not found on PATH)") + "  "
-                            + String.join(", ", d.operations().keySet())
-                            + (d.source() == ToolDefinition.Source.USER && ToolDefinitions.differsFromDefault(h, d.name()) ? "  (differs from the shipped default)" : "")));
+                    table.row(d.name(), where, d.executable(), found ? "ok" : "not found on PATH", String.join(", ", d.operations().keySet()));
+                    if (d.source() == ToolDefinition.Source.USER && ToolDefinitions.differsFromDefault(h, d.name())) {
+                        differs.add(d.name());
+                    }
                 }
-                t.errors().forEach((n, e) -> out.println(TerminalSafe.escape(n + "  broken: " + e)));
+                t.errors().keySet().forEach(n -> table.row(n, "", "", "broken", ""));
+                if (!t.tools().isEmpty() || !t.errors().isEmpty()) {
+                    table.lines().forEach(out::println);
+                }
+                if (!differs.isEmpty()) {
+                    out.println("Differs from the shipped default: " + TerminalSafe.escape(String.join(", ", differs))
+                            + " (jharness tools reset NAME writes it again).");
+                }
+                t.errors().forEach((n, e) -> out.println(TerminalSafe.escape(n + " is broken: " + e)));
                 if (!trusted && !ToolDefinitions.describeProject(h, ws).isEmpty()) {
                     out.println("This project defines tools in .jharness/tools/; they count once you trust the project.");
                 }
