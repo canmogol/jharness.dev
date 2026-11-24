@@ -58,6 +58,7 @@ public final class Session implements AutoCloseable {
     private Secrets secrets;
     private String profile;
     private AgentDefinition agent;
+    private SubagentRunner subagents;
     private Path home;
     private boolean trusted;
 
@@ -104,6 +105,7 @@ public final class Session implements AutoCloseable {
         Session s = open(home, workspace, settings, access, (bus, turns) -> ModelProviders.create(p, bus, turns, secrets));
         s.secrets = secrets;
         s.profile = p.name();
+        s.subagents.profile(p.name());
         return s;
     }
 
@@ -116,7 +118,8 @@ public final class Session implements AutoCloseable {
             throws IOException, ConfigException {
         Workspace ws = new Workspace(workspacePath);
         // Before anything starts, so a missing secret leaves nothing running (spec 017).
-        Map<String, String> tokens = gitTokens(settings, Secrets.load(home, System::getenv));
+        Secrets loaded = Secrets.load(home, System::getenv);
+        Map<String, String> tokens = gitTokens(settings, loaded);
         EventBus bus = new EventBus(EventBus.newSessionId());
         SessionLog log = SessionLog.open(home, ws.root(), bus.session());
         bus.subscribe(log);
@@ -168,11 +171,14 @@ public final class Session implements AutoCloseable {
         if (agent != null && agent.tools() != null) {
             gate = new ToolsGate(gate, agent.name(), agent.tools());
         }
-        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http);
+        SubagentRunner subagents = new SubagentRunner(home, ws.root(), access.trusted(), settings, loaded, bus, turns);
+        ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http, subagents);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
-        String system = SystemPrompt.build(ctx.ok() ? ctx.value() : null, SystemPrompt.readMemory(ws.root().resolve("JHARNESS.md")),
-                SystemPrompt.readMemory(home.resolve(".jharness").resolve("JHARNESS.md")), agent);
+        String contextJson = ctx.ok() ? ctx.value() : null;
+        String projectMd = SystemPrompt.readMemory(ws.root().resolve("JHARNESS.md"));
+        String userMd = SystemPrompt.readMemory(home.resolve(".jharness").resolve("JHARNESS.md"));
+        String system = SystemPrompt.build(contextJson, projectMd, userMd, agent);
         if (agent != null && agent.helpers() != null) {
             isolate.useHelpers(agent.helpers());
         }
@@ -180,8 +186,10 @@ public final class Session implements AutoCloseable {
                 agent != null && agent.maxSteps() != null ? agent.maxSteps() : settings.agent().maxSteps(),
                 settings.timeouts().outputChars());
         loop.useCheckpoints(checkpoints);
+        subagents.bind(services, loop, contextJson, projectMd, userMd);
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
         s.agent = agent;
+        s.subagents = subagents;
         s.home = home;
         s.trusted = access.trusted();
         s.proxy = proxy;
@@ -270,6 +278,7 @@ public final class Session implements AutoCloseable {
         ModelProvider provider = ModelProviders.create(p, bus, turns, s);
         loop.useProvider(provider);
         profile = p.name();
+        subagents.profile(p.name());
         bus.publish(turns.get(), "session.model_changed", Json.object().put("profile", p.name())
                 .put("provider", provider.provider()).put("model", provider.model()));
     }

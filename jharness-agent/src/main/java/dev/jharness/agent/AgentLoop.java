@@ -42,10 +42,16 @@ public final class AgentLoop {
     private Checkpoints checkpoints;
     private volatile boolean interrupted;
     private volatile Thread turnThread;
+    /** The subagent running inside this loop's current block, if any (spec 026). */
+    private volatile AgentLoop child;
 
     /** Esc (US-2.5): stops the model stream and the running block; the turn ends with {@code interrupted}. */
     public void interrupt() {
         interrupted = true;
+        AgentLoop c = child;
+        if (c != null) {
+            c.interrupt();
+        }
         ModelProvider p = provider;
         p.cancel();
         isolate.cancel();
@@ -53,6 +59,19 @@ public final class AgentLoop {
         if (t != null) {
             t.interrupt();
         }
+    }
+
+    /** Sets or clears the running subagent, which {@link #interrupt} stops too. */
+    void child(AgentLoop c) {
+        child = c;
+    }
+
+    int maxSteps() {
+        return maxSteps;
+    }
+
+    int resultChars() {
+        return resultChars;
     }
 
     public void useCheckpoints(Checkpoints c) {

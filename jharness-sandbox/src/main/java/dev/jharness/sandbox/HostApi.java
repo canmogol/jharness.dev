@@ -493,6 +493,58 @@ public final class HostApi {
         return call("fetch", r.kind(), "fetch " + r.uri(), r.detail(), () -> Json.write(outsideRunClock(() -> s.http().fetch(r))));
     }
 
+    /** {@code api.spawnAgent} (spec 026): runs a subagent on a task; its own api calls ask as usual. */
+    @HostAccess.Export
+    public String spawnAgent(String json) {
+        ObjectNode a;
+        String summary;
+        try {
+            if (s.subagents() == null) {
+                throw new IllegalArgumentException("spawnAgent is not available here (a subagent can't start other agents)");
+            }
+            a = args(json);
+            String task = optText(a, "task");
+            if (task == null || task.isBlank()) {
+                throw new IllegalArgumentException("spawnAgent needs a \"task\"");
+            }
+            String agent = optText(a, "agent");
+            String model = optText(a, "model");
+            String t = task.strip().replaceAll("\\s+", " ");
+            summary = "spawn " + (agent != null ? "agent " + agent : "a subagent") + (model != null ? " on " + model : "") + ": "
+                    + (t.length() > 80 ? t.substring(0, 80) + "…" : t);
+        } catch (RuntimeException e) {
+            return reject("spawnAgent", e);
+        }
+        ObjectNode detail = Json.object().put("agent", a.path("agent").asText("default"));
+        if (a.hasNonNull("model")) {
+            detail.put("model", a.path("model").asText());
+        }
+        return call("spawnAgent", Operation.Kind.AGENT, summary, detail, () -> {
+            try {
+                return outsideRunClock(() -> {
+                    try {
+                        return s.subagents().spawn(a);
+                    } catch (RuntimeException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
+            } catch (IllegalStateException e) {
+                throw e.getCause() instanceof Exception x ? x : e;
+            }
+        });
+    }
+
+    /** {@code api.models} (spec 026): the model profiles {@code spawnAgent} can run a subagent with. */
+    @HostAccess.Export
+    public String models() {
+        if (s.subagents() == null) {
+            return reject("models", new IllegalArgumentException("models is not available here (a subagent can't start other agents)"));
+        }
+        return call("models", Operation.Kind.READ, "list model profiles", Json.object(), () -> s.subagents().models());
+    }
+
     @HostAccess.Export
     public String emit(String json) {
         return call("emit", Operation.Kind.EMIT, "emit event", Json.object(),

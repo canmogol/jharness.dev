@@ -21,7 +21,9 @@ public record Operation(String api, Kind kind, String summary, ObjectNode detail
         /** An {@code api.http} GET or HEAD, or an {@code api.fetch} (spec 016): the network rules alone decide. */
         HTTP,
         /** An {@code api.http} POST, PUT, PATCH or DELETE (spec 016): it changes state somewhere else. */
-        HTTP_WRITE;
+        HTTP_WRITE,
+        /** An {@code api.spawnAgent} (spec 026): it changes nothing itself; the subagent's own calls are decided one by one. */
+        AGENT;
 
         /** True for kinds that change state and need approval by default (D-010). */
         public boolean changesState() {

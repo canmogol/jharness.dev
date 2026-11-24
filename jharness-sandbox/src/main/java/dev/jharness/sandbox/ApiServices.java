@@ -15,10 +15,17 @@ import dev.jharness.security.Workspace;
 /**
  * What the {@code api} facade needs from the host; {@code files} is the file policy (D-041). {@code git} is null when git is not installed;
  * {@code checkpoints} is null when changes are not checkpointed; {@code builds} is null when the session can't run build tools;
- * {@code http} is null when the session has no HTTP access (spec 016).
+ * {@code http} is null when the session has no HTTP access (spec 016); {@code subagents} is null where
+ * {@code api.spawnAgent} isn't available, such as inside a subagent (spec 026).
  */
 public record ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search,
-        GitOperations git, Checkpoints checkpoints, BuildOperations builds, HttpOperations http) {
+        GitOperations git, Checkpoints checkpoints, BuildOperations builds, HttpOperations http, Subagents subagents) {
+
+    /** Without subagents. */
+    public ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search, GitOperations git,
+            Checkpoints checkpoints, BuildOperations builds, HttpOperations http) {
+        this(files, gate, bus, origin, search, git, checkpoints, builds, http, null);
+    }
 
     /** Without checkpoints and build tools (tests and the smoke binary). */
     public ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search, GitOperations git) {

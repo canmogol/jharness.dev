@@ -81,6 +81,16 @@
           "parameterTypes": [
             "java.lang.String"
           ]
+        },
+        {
+          "name": "spawnAgent",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "models",
+          "parameterTypes": []
         }
       ]
     }

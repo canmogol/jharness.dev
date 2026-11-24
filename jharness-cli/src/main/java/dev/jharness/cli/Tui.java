@@ -477,11 +477,29 @@ final class Tui {
         }
         flushPending();
         boolean steps = !events.equals("none");
+        // A subagent's lines say whose they are (spec 026).
+        String who = e.agent().equals("main") ? "" : "[" + e.agent() + "] ";
         switch (e.type()) {
+            case "subagent.started" -> {
+                if (steps) {
+                    String task = e.body().get("task").asText().strip().replaceAll("\\s+", " ");
+                    String agent = e.body().get("customAgent").asText();
+                    out.println();
+                    raw.println(styler.step("▸ " + who + "started" + (agent.equals("default") ? "" : " as " + agent) + ": "
+                            + (task.length() > 100 ? task.substring(0, 100) + "…" : task)));
+                }
+            }
+            case "subagent.completed" -> {
+                if (steps) {
+                    String stop = e.body().get("stopReason").asText();
+                    String text = "▸ " + who + stop + " after " + e.body().get("steps").asInt() + " steps";
+                    raw.println(stop.equals("done") ? styler.step(text) : styler.error(text));
+                }
+            }
             case "loop.code" -> {
                 if (steps) {
                     out.println();
-                    raw.println(styler.step("▸ step " + e.body().get("step").asInt() + ": running " + e.body().get("lines").asInt() + " lines"));
+                    raw.println(styler.step("▸ " + who + "step " + e.body().get("step").asInt() + ": running " + e.body().get("lines").asInt() + " lines"));
                 }
             }
             case "file.changed" -> {
@@ -499,7 +517,7 @@ final class Tui {
                 String status = e.body().get("status").asText();
                 String limit = e.body().has("limit") ? " (" + e.body().get("limit").asText() + ")" : "";
                 if (steps) {
-                    String text = "▸ step " + e.body().get("step").asInt() + ": " + status + limit;
+                    String text = "▸ " + who + "step " + e.body().get("step").asInt() + ": " + status + limit;
                     raw.println(status.equals("ok") ? styler.step(text) : styler.error(text));
                 }
                 if (e.body().has("error")) {
