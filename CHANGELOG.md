@@ -1,6 +1,26 @@
 # Changelog
 
-<!-- last-commit: 928352517c561f0bf9c8bb02195fc4a80f85b680 -->
+<!-- last-commit: c18d20c11203bf114a1253b634501a50d8549078 -->
+
+## 2026-11-24 · 027 Background subagents
+
+- `api.spawnAgent({task, background: true})` returns `{agent, status: "running"}` at once; the subagent runs on its own thread. At most `agent.subagentsRunning` run at once (default 4, 1 to 16).
+- `api.waitAgent(name)` collects a result (default wait 10 minutes, at most 1 hour; a timeout returns `status: "running"`), `api.agents()` lists the session's subagents and `api.stopAgent(name)` stops one. Replies the main agent doesn't collect come at the start of its next prompt, once each (`subagent.delivered`).
+- A background subagent never asks: a change that needs approval is denied with a reason, unless a saved rule or the permission mode allows it. Questions that come while no turn runs, such as network questions, are denied the same way.
+- Esc stops the turn but not background subagents; closing the session, including the end of `-p`, stops them (`stopReason: "stopped"`). `/undo` and `/rewind` wait until none is running.
+- The UI shows a background subagent's start and end lines, above the prompt while you type. `/agents` lists the subagents, `/agents NAME` shows one's last 20 events, and `/stop NAME` or `/stop all` stops them.
+- `jharness log --agent NAME` (repeatable; `main` is the main agent) and `--source host|guest` filter the timeline.
+- Decision: background subagents (D-065).
+
+## 2026-11-24 · 026 Subagents
+
+- `api.spawnAgent({task, agent, model, maxSteps})`, or a task string, runs a subagent and returns `{agent, reply, stopReason, steps}`. It starts with only the task, in its own isolate with the `subagent` sandbox limits, and its prompt says it must end with a complete reply.
+- It goes through the session's permission gate, so approvals, plan mode and the main agent's `tools` apply. A custom agent named in `agent` narrows it further with its `tools`, `plan`, `maxSteps` and `helpers.js`.
+- `model` names a model profile; it wins over the custom agent's `model`, which wins over the session's. `api.models()` lists the profiles (name, provider, model id, notes) and the current one, never base URLs or key variable names.
+- A subagent can't start subagents. `agent.subagentsPerTurn` caps them per turn of the main agent (default 10, 1 to 1000); `agent.subagentMaxSteps` sets their step limit (default 100, 1 to 500), never above `agent.maxSteps`.
+- Esc stops a running subagent with the turn. Its events carry `sub-N` and the main agent's turn, so `/diff` and `/undo` include its changes. `subagent.started` and `subagent.completed` frame each run; the UI and `jharness log` show `[sub-1]` on its lines.
+- CI's native step runs a subagent and calls `api.models()`.
+- Decision: subagents (D-064).
 
 ## 2026-11-23 · 025 Custom agents
 
