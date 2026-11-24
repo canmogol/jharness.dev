@@ -31,7 +31,7 @@ class SessionLogTest {
             }
             bus.publishGuest(Origin.main(1), "{\"type\":\"agent.done\"}");
 
-            Path expected = home.resolve(".jharness/sessions").resolve(SessionLog.projectHash(ws)).resolve(bus.session() + ".jsonl");
+            Path expected = home.resolve(".jharness/sessions").resolve(SessionLog.projectFolder(ws)).resolve(bus.session() + ".jsonl");
             assertEquals(expected, log.path());
             var back = SessionLog.read(log.path());
             assertEquals(published.size(), back.size());
@@ -67,12 +67,36 @@ class SessionLogTest {
         }
     }
 
+    /** Spec 031 AC-01, AC-06: the folder is the real path as a slug plus 7 hex characters. */
     @Test
-    void projectHashUsesRealPath() throws Exception {
+    void projectFolderIsAReadableSlugOfTheRealPath() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws"));
         Path link = Files.createSymbolicLink(tmp.resolve("link"), ws);
-        assertEquals(SessionLog.projectHash(ws), SessionLog.projectHash(link));
-        assertEquals(16, SessionLog.projectHash(ws).length());
+        assertEquals(SessionLog.projectFolder(ws), SessionLog.projectFolder(link), "the real path");
+        String f = SessionLog.folderFor("/Users/xyz/projects/jharness.dev");
+        assertTrue(f.matches("users-xyz-projects-jharness\\.dev-[0-9a-f]{7}"), f);
+        assertTrue(SessionLog.FOLDER.matcher(f).matches());
+        assertTrue(SessionLog.folderFor("/home/dev/My Project (2)/ünïcode").matches("home-dev-my-project-2-n-code-[0-9a-f]{7}"),
+                SessionLog.folderFor("/home/dev/My Project (2)/ünïcode"));
+        assertTrue(SessionLog.folderFor("/").matches("root-[0-9a-f]{7}"));
+        assertTrue(SessionLog.folderFor("/.hidden/-x-/").matches("hidden-x-[0-9a-f]{7}"), SessionLog.folderFor("/.hidden/-x-/"));
+        String longOne = SessionLog.folderFor("/" + "abcdefghij/".repeat(20) + "my-app");
+        assertTrue(longOne.length() <= 80 + 8 && SessionLog.FOLDER.matcher(longOne).matches(), longOne);
+        assertTrue(longOne.matches("[a-z-]*-my-app-[0-9a-f]{7}") && !longOne.startsWith("-"), "a long path keeps its end: " + longOne);
+        assertNotEquals(SessionLog.folderFor("/a/b"), SessionLog.folderFor("/a-b"), "same slug, different hash");
+        assertTrue(SessionLog.folderFor("/a/b").startsWith("a-b-") && SessionLog.folderFor("/a-b").startsWith("a-b-"));
+        assertEquals(SessionLog.folderFor("/a/b"), SessionLog.folderFor("/a/b"), "stable");
+    }
+
+    /** Spec 031 AC-02. */
+    @Test
+    void sessionIdsAreTheStartTimeAndFourHexCharacters() {
+        String id = EventBus.newSessionId(java.time.Instant.parse("2026-11-24T10:52:26.789Z"));
+        assertTrue(id.matches("s-2026-11-24T105226Z-[0-9a-f]{4}"), id);
+        assertTrue(SessionLogs.ID.matcher(EventBus.newSessionId()).matches());
+        assertTrue(SessionLogs.ARG.matcher(id).matches());
+        assertTrue(EventBus.newSessionId(java.time.Instant.parse("2026-11-24T10:52:26Z"))
+                .compareTo(EventBus.newSessionId(java.time.Instant.parse("2026-12-01T00:00:00Z"))) < 0, "ids sort by time");
     }
 
     @Test

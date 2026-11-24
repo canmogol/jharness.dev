@@ -1,6 +1,6 @@
 # Spec 031 — Readable session paths
 
-Status: Draft · Phase: P3 · Created: 2026-11-24
+Status: Done · Phase: P3 · Created: 2026-11-24
 
 ## Summary
 
@@ -24,8 +24,8 @@ Session logs, saved permissions and checkpoints live under folders named by a 16
 
 | ID | Criterion |
 | --- | --- |
-| AC-01 | The project folder name is `SLUG-HASH`. SLUG is the workspace's real path without its leading `/`, lower-cased, with every run of characters other than `a-z`, `0-9` and `.` replaced by one `-`, with `-` and `.` trimmed from both ends, and cut to at most 80 characters (`root` when it would be empty). HASH is the first 7 hex characters of the SHA-256 of the real path. Example: `/Users/xyz/projects/jharness.dev` gives `users-xyz-projects-jharness.dev-` plus 7 hex characters. |
-| AC-02 | A session id is `s-` + its UTC start time as `yyyy-MM-ddTHHmmssZ` + `-` + 4 lowercase hex characters from `SecureRandom`, such as `s-2026-11-24T105226Z-18a9`. If a log with that name already exists, new random characters are drawn. Sorting ids by name sorts sessions by start time. |
+| AC-01 | The project folder name is `SLUG-HASH`. SLUG is the workspace's real path without its leading `/`, lower-cased, with every run of characters other than `a-z`, `0-9` and `.` replaced by one `-`, with `-` and `.` trimmed from both ends, and, when longer than 80 characters, cut to its last 80 (the end names the project; `root` when it would be empty). HASH is the first 7 hex characters of the SHA-256 of the real path. Example: `/Users/xyz/projects/jharness.dev` gives `users-xyz-projects-jharness.dev-` plus 7 hex characters. |
+| AC-02 | A session id is `s-` + its UTC start time as `yyyy-MM-ddTHHmmssZ` + `-` + 4 lowercase hex characters from `SecureRandom`, such as `s-2026-11-24T105226Z-18a9`. If a log with that name already exists, new random characters are drawn. Sorting ids by name sorts sessions by start time; sessions from the same second are ordered by their last write. |
 | AC-03 | The session log is `~/.jharness/sessions/FOLDER/SESSION.jsonl`, saved permissions are `~/.jharness/projects/FOLDER/permissions.json` and checkpoints are `~/.jharness/checkpoints/FOLDER/SESSION/`, all using the one folder name from AC-01. The envelope's `session` field is the new id. |
 | AC-04 | `jharness log` lists, resolves (id, unique prefix, `last`, path) and shows sessions by the new names, and takes the start time from the id. `jharness log --all` lists every project folder in the new format. Folders and files in the old format (16 hex characters, or base-36 ids) are ignored, not migrated or deleted. |
 | AC-05 | Saved permissions from old folders no longer apply, so JHarness asks again once. Trust (`trusted.json`, keyed by real path) and tool hashes are unchanged. |

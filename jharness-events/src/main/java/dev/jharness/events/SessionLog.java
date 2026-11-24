@@ -22,7 +22,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Appends every event but the live stream chunks ({@link #LIVE_ONLY}, D-046) as one JSON line to
- * {@code <home>/.jharness/sessions/<project-hash>/<session-id>.jsonl} (D-038). Folders are 0700 and the
+ * {@code <home>/.jharness/sessions/<project-folder>/<session-id>.jsonl} (D-038, D-070). Folders are 0700 and the
  * file 0600. Each line is written and forced to the file before {@link #accept} returns.
  */
 public final class SessionLog implements Consumer<Event>, AutoCloseable {
@@ -42,21 +42,43 @@ public final class SessionLog implements Consumer<Event>, AutoCloseable {
         this.out = out;
     }
 
-    /** First 16 hex characters of the SHA-256 of the workspace's real path. */
-    public static String projectHash(Path workspace) {
+    /** Longest slug part of a project folder name. */
+    static final int SLUG_CHARS = 80;
+    /** A project folder name: a slug, '-', and 7 hex characters. */
+    public static final java.util.regex.Pattern FOLDER = java.util.regex.Pattern.compile("[a-z0-9.-]{1,80}-[0-9a-f]{7}");
+
+    /**
+     * The folder for a workspace under {@code sessions/}, {@code projects/} and {@code checkpoints/} (D-070):
+     * its real path as a lower-case slug, then the first 7 hex characters of the path's SHA-256, such as
+     * {@code users-xyz-projects-jharness.dev-2787870}.
+     */
+    public static String projectFolder(Path workspace) {
         try {
-            String real = workspace.toRealPath().toString();
-            byte[] d = MessageDigest.getInstance("SHA-256").digest(real.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(d).substring(0, 16);
+            return folderFor(workspace.toRealPath().toString());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    static String folderFor(String real) {
+        String slug = real.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9.]+", "-").replaceAll("^[-.]+|[-.]+$", "");
+        if (slug.length() > SLUG_CHARS) {
+            // The end of a path names the project, so a long slug keeps its last characters.
+            slug = slug.substring(slug.length() - SLUG_CHARS).replaceAll("^[-.]+", "");
+        }
+        if (slug.isEmpty()) {
+            slug = "root";
+        }
+        try {
+            byte[] d = MessageDigest.getInstance("SHA-256").digest(real.getBytes(StandardCharsets.UTF_8));
+            return slug + "-" + HexFormat.of().formatHex(d).substring(0, 7);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
     }
 
     public static Path pathFor(Path home, Path workspace, String session) {
-        return home.resolve(".jharness").resolve("sessions").resolve(projectHash(workspace)).resolve(session + ".jsonl");
+        return home.resolve(".jharness").resolve("sessions").resolve(projectFolder(workspace)).resolve(session + ".jsonl");
     }
 
     public static SessionLog open(Path home, Path workspace, String session) throws IOException {

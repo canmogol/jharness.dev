@@ -1,6 +1,6 @@
 # Plan 031 — Readable session paths
 
-Spec: `spec.md` · Status: Draft · Created: 2026-11-24
+Spec: `spec.md` · Status: Done · Created: 2026-11-24
 
 ## Approach
 
@@ -10,7 +10,7 @@ Spec: `spec.md` · Status: Draft · Created: 2026-11-24
 - `SessionLogs`:
   - The time pattern becomes `s-(\d{4}-\d{2}-\d{2}T\d{6}Z)-[0-9a-f]{4}`.
   - Entries whose names don't match are skipped, and so are folders that don't end in `-` plus 7 hex characters.
-  - "Newest first" sorts by the parsed time, then by name.
+  - "Newest first" sorts by the parsed time, then by the file's last write, then by name.
 - Tests:
   - `SessionLogTest`: the slug rules, including upper case, spaces, unicode, a long path, the root, and two paths with the same slug.
   - `SessionLogsTest` and `LogCommandTest` with the new names; old names are ignored.
@@ -36,7 +36,7 @@ Spec: `spec.md` · Status: Draft · Created: 2026-11-24
 
 ## Checks
 
-- [ ] `mvn install` on Linux
+- [x] `mvn install` on Linux
 - [ ] `mvn install` on macOS
 - [ ] Native `jharness` checks on Linux
 - [ ] CI on all targets

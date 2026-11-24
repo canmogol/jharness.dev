@@ -80,7 +80,7 @@ public final class Checkpoints {
     }
 
     public static Path rootFor(Path home, Path workspace, String session) {
-        return home.resolve(".jharness").resolve("checkpoints").resolve(SessionLog.projectHash(workspace)).resolve(session);
+        return home.resolve(".jharness").resolve("checkpoints").resolve(SessionLog.projectFolder(workspace)).resolve(session);
     }
 
     private static String sha(byte[] b) {
