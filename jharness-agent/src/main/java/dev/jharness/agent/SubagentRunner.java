@@ -117,6 +117,9 @@ final class SubagentRunner implements Subagents {
         volatile boolean stopped;
         volatile boolean collected;
         volatile Thread thread;
+        /** Kept after the task so the user can talk to the subagent (spec 032); closed with the session or when too many are open. */
+        volatile AgentIsolate isolate;
+        volatile boolean open = true;
 
         Run(String name, String task, String customAgent, String model, boolean background, int maxSteps) {
             this.name = name;
@@ -152,7 +155,16 @@ final class SubagentRunner implements Subagents {
     }
 
     /** For {@code /agents} and {@code api.agents}: one row per subagent, oldest first. */
-    record Info(String name, String task, String customAgent, String model, boolean background, String status, int steps, long durationMs) {}
+    record Info(String name, String task, String customAgent, String model, boolean background, String status, int steps, long durationMs,
+            boolean open) {}
+
+    /** Subagents kept open for talking when idle; the oldest idle one beyond this is closed. */
+    static final int MAX_OPEN = 16;
+    /** Put before a message the user types to a subagent, so it knows who is asking now. */
+    static final String FROM_USER = "The user is talking to you directly now (not the agent that gave you the task). They say:\n\n";
+
+    /** The subagent the user switched to (spec 032): its questions are asked, not denied as unattended. */
+    private volatile String attended;
 
     private final List<Run> runs = new CopyOnWriteArrayList<>();
 
@@ -232,7 +244,7 @@ final class SubagentRunner implements Subagents {
         if (background) {
             // Decisions run on the isolate's thread; marking it there makes any question UNATTENDED (AC-04).
             PermissionGate next = gate;
-            gate = op -> Unattended.run(name, () -> next.decide(op));
+            gate = op -> name.equals(attended) ? next.decide(op) : Unattended.run(name, () -> next.decide(op));
         }
         ApiServices services = new ApiServices(p.files(), gate, bus, turns, p.search(), p.git(), p.checkpoints(), p.builds(), p.http(), null);
         ModelProvider provider = provider(model, def, turns, parent);
@@ -271,7 +283,9 @@ final class SubagentRunner implements Subagents {
     private String execute(Run run, AgentDefinition def, ApiServices services, ModelProvider provider, String system, TurnCounter turns,
             AgentLoop parent) {
         TurnResult r;
-        try (AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create(run.name, "subagent")) {
+        AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create(run.name, "subagent");
+        run.isolate = isolate;
+        try {
             if (def != null && def.helpers() != null) {
                 isolate.useHelpers(def.helpers());
             }
@@ -290,8 +304,13 @@ final class SubagentRunner implements Subagents {
                     parent.child(null);
                 }
             }
+        } catch (RuntimeException | Error e) {
+            close(run);
+            throw e;
         }
-        return finish(run, turns, r);
+        String json = finish(run, turns, r);
+        closeExtra();
+        return json;
     }
 
     private String finish(Run run, TurnCounter turns, TurnResult r) {
@@ -384,9 +403,81 @@ final class SubagentRunner implements Subagents {
     List<Info> list() {
         List<Info> out = new ArrayList<>();
         for (Run r : runs) {
-            out.add(new Info(r.name, r.task, r.customAgent, r.model, r.background, r.status, r.stepsSoFar(), r.elapsedMs()));
+            out.add(new Info(r.name, r.task, r.customAgent, r.model, r.background, r.status, r.stepsSoFar(), r.elapsedMs(), r.open));
         }
         return out;
+    }
+
+    /**
+     * The user's message to a subagent (spec 032): a new turn in its own conversation, on the caller's
+     * thread. The subagent must be open and not running.
+     */
+    TurnResult talk(String name, String message, java.util.function.Consumer<String> onDelta) {
+        Run run = find(name);
+        if (!run.open || run.loop == null) {
+            throw new IllegalArgumentException(name + " is closed; you can't talk to it any more");
+        }
+        if (run.running()) {
+            throw new IllegalArgumentException(name + " is still running its turn");
+        }
+        run.status = "running";
+        run.stopped = false;
+        // The user took the conversation over; the main agent isn't handed this reply.
+        run.collected = true;
+        AgentLoop loop = run.loop;
+        loop.resume();
+        TurnResult r;
+        try {
+            r = loop.turn(FROM_USER + message, onDelta);
+        } finally {
+            run.status = "done";
+        }
+        run.status = r.stopReason();
+        run.steps += r.steps();
+        run.reply = r.reply() == null ? "" : r.reply();
+        return r;
+    }
+
+    /** Esc while the user talks to a subagent: stops its current turn only. */
+    void interrupt(String name) {
+        for (Run r : runs) {
+            AgentLoop l = r.loop;
+            if (r.name.equals(name) && l != null) {
+                l.interrupt();
+            }
+        }
+    }
+
+    /** The subagent the user switched to, or null for none; only its questions reach the user (spec 032). */
+    void attend(String name) {
+        attended = name;
+    }
+
+    boolean isOpen(String name) {
+        return runs.stream().anyMatch(r -> r.name.equals(name) && r.open && r.loop != null);
+    }
+
+    /** Closes the oldest idle subagents beyond {@link #MAX_OPEN}; the one the user is talking to stays. */
+    private synchronized void closeExtra() {
+        List<Run> idle = runs.stream().filter(r -> r.open && !r.running() && !r.name.equals(attended)).toList();
+        for (int i = 0; i < idle.size() - MAX_OPEN; i++) {
+            close(idle.get(i));
+        }
+    }
+
+    private static void close(Run run) {
+        run.open = false;
+        AgentIsolate i = run.isolate;
+        run.isolate = null;
+        if (i != null) {
+            i.close();
+        }
+    }
+
+    /** Session close: stops the running subagents, then closes every open one. */
+    void closeAll() {
+        stopAll();
+        runs.forEach(SubagentRunner::close);
     }
 
     /** The background subagents still running. */

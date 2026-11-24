@@ -331,12 +331,32 @@ public final class Session implements AutoCloseable {
     /** {@code /agents}: this session's subagents, oldest first (spec 027). */
     public List<Subagent> subagents() {
         return subagents.list().stream().map(i -> new Subagent(i.name(), i.task(), i.customAgent(), i.model(), i.background(), i.status(),
-                i.steps(), i.durationMs())).toList();
+                i.steps(), i.durationMs(), i.open())).toList();
     }
 
     /** One subagent for {@code /agents}; {@code status} is {@code running} or how it ended. */
     public record Subagent(String name, String task, String customAgent, String model, boolean background, String status, int steps,
-            long durationMs) {}
+            long durationMs, boolean open) {}
+
+    /** {@code /switch NAME} then a message (spec 032): a turn in that subagent's conversation. */
+    public TurnResult talk(String name, String message, java.util.function.Consumer<String> onDelta) {
+        return subagents.talk(name, message, onDelta);
+    }
+
+    /** Esc while talking to a subagent: stops its turn. */
+    public void interruptSubagent(String name) {
+        subagents.interrupt(name);
+    }
+
+    /** The subagent whose questions reach the user, or null (spec 032). */
+    public void attend(String name) {
+        subagents.attend(name);
+    }
+
+    /** Whether the user can switch to and talk to this subagent. */
+    public boolean subagentOpen(String name) {
+        return subagents.isOpen(name);
+    }
 
     /** The background subagents still running; {@code /undo} and {@code /rewind} wait for them (spec 027). */
     public List<String> runningSubagents() {
@@ -375,7 +395,7 @@ public final class Session implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        subagents.stopAll();
+        subagents.closeAll();
         isolate.close();
         if (proxy != null) {
             HttpClients.stopProxy(proxy.address());

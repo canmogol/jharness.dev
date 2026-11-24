@@ -73,6 +73,11 @@ public final class AgentLoop {
         interrupt();
     }
 
+    /** Lets a stopped subagent take new turns when the user talks to it (spec 032). */
+    void resume() {
+        cancelled = false;
+    }
+
     int stepsNow() {
         return stepsNow;
     }
