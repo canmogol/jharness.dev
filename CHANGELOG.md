@@ -1,6 +1,24 @@
 # Changelog
 
-<!-- last-commit: cb5755738b71e40906e4249d26f1767102b87d37 -->
+<!-- last-commit: fa5a1399892753462ed79bfdef1585301740bd24 -->
+
+## 2026-11-24 · 042 Status line
+
+- On real terminals a status line sits under the input: model, context use (`41% of 200K`), permission mode or `[plan]`, running and held background subagents, the last request's cache reads, the turn and the workspace. Never on dumb terminals or in `-p`.
+- `ui.statusLine` is `true` (every item), `false`, or a list of items in the order to show them.
+- `~/.jharness/statusline.js` can return the whole line from `status(s)`, a JSON snapshot of the same values plus the default `line`. It runs in its own isolate with the subagent limits and no `api`; the output is escaped.
+- If the script throws, hits a limit or returns something that isn't a string, `statusline.failed` is recorded, the TUI says so once and the default line shows; a run over 1 s turns the script off for the session.
+- The line refreshes after the events that change it and before each prompt, at most every 250 ms, never per streamed chunk, from values cached on the host. It is drawn under JLine's lock while the prompt reads and under the TUI's lock otherwise, so streamed output and resizes don't garble it.
+- The TUI pseudo-terminal check runs a `statusline.js` in the native binary.
+- Decision: status line, a new extension point (D-080, Q86).
+
+## 2026-11-24 · 041 Command aliases and argument completion
+
+- `/quit` and `/q` do what `/exit` does; the help and Tab list `/exit` alone.
+- A command file named like a built-in command or alias is not used; `command.shadowed` records it and the TUI says so at the start.
+- After a command and a space, Tab lists its choices and Tab again cycles through them: `/events` levels, `/model` profiles, subagents for `/agents`, `/follow`, `/stop` (plus `all`) and `/switch` (plus `main`), `/rewind` turns and `--force`, and `/network` subcommands, rule targets for `remove` and `--project`.
+- Command files declare choices for Tab with `args: a, b` in a template's front matter or `const args = [...]` in a script.
+- Decision: command aliases and argument completion (D-079, Q85).
 
 ## 2026-11-24 · 040 Prompt caching and `@file` mentions
 
