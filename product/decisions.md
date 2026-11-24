@@ -78,6 +78,7 @@ Last updated: 2026-11-24
 | D-065 | Background subagents: `spawnAgent({background: true})`, `api.waitAgent`, `api.agents`, `api.stopAgent`; at most 4 running (configurable); they never ask (questions denied as unattended); uncollected replies come with the next prompt; Esc leaves them running, closing the session stops them; `/agents`, `/stop`, `jharness log --agent/--source` | Accepted |
 | D-066 | Build tools are JSON definition files in `~/.jharness/tools/` (seeded on first run from `examples/.jharness/tools/`) and a trusted project's `.jharness/tools/`; typed fields map to fixed arguments; git and `rg` stay in code | Accepted |
 | D-067 | `api.tool(name, request)` runs every defined tool and `api.tools()` lists them; `api.maven`, `api.gradle` and `api.npm` are removed | Accepted |
+| D-068 | git and `rg` stay in Java code, not tool definitions: per-operation approvals, use in untrusted projects, injection defences, secrets, undo and structured results need host code | Accepted |
 
 ---
 
@@ -1006,6 +1007,29 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 ---
 
+## D-068 — git and `rg` stay in Java code
+
+**Decision.** git (`api.git`) and `rg` (behind `api.grep` and `api.listFiles`) stay host code. They are not tool definitions, and D-066's format won't grow to cover them.
+
+**Why.** A definition only runs a program with checked arguments and returns its output. git and `rg` need more, and each part is a security or reliability rule:
+
+| Needs host code | git | `rg` |
+| --- | --- | --- |
+| Approval per operation | `status`, `diff`, `log` run without asking; `add`, `commit` ask; `pull`, `push`, `clone` ask and plan mode denies them. A definition has one kind: every run asks. | — |
+| Untrusted projects | Reading git works before the project is trusted; definitions need trust. | `api.grep` and `api.listFiles` work before trust. |
+| Injection defences | Paths after `--`, checked refs, hardened config through the environment (no system config, no prompts, proxy without argv). A user's file could drop any of them. | The file deny list is passed as exclusions, so secrets never show up; a file could drop them. |
+| Secrets | Each host's token is injected only for that host and shown as `***` in output and logs. | — |
+| Undo | git writes are recorded in checkpoints for `/undo` and `/rewind`. | — |
+| Structured results | — | Output is parsed into `{matches: [{path, line, text}]}`, capped, with a Java fallback when `rg` is missing. |
+
+Covering these in JSON would need per-operation kinds, secret injection, output masking and parsers: a programming language in a settings file, where every mistake is a hole. Restricting git is already possible with plan mode, a custom agent's `tools`, or by answering no.
+
+**Rejected.** git and `rg` as definitions (above). A git definition beside the built-in one (two ways to run git, one of them weaker).
+
+**Source.** User question in the review of spec 028, 2026-11-24: "write why we left git and rg in the Java code, and why they are not just tools."
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1084,6 +1108,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q70 | How does a user see, follow and stop running agents, and tell their events apart? | Background subagents with `/agents`, `/agents NAME` and `/stop NAME\|all`; every event names its agent (`main`, `sub-N`) and its source (`host` or `guest`), and `jharness log` filters by both | Parallel work stays visible and stoppable without stopping the main agent | D-065 |
 | Q71 | Can users change, add and remove build tools without changing Java code? | Yes: tools are JSON definition files, seeded into `~/.jharness/tools/` and editable there; trusted projects can add their own | Lets a user tighten Maven or add Go without a release, under the same typed-argument and sandbox rules | D-066 |
 | Q72 | How does an agent know which tools it can run? | `api.tools()` returns each tool's operations, fields and whether it can run here; the system prompt lists them too; `api.tool(name, request)` runs one | One generic call replaces per-tool methods, so new tools need no new api | D-067 |
+| Q73 | Why aren't git and `rg` tool definitions too? | A definition only runs a program with checked arguments and returns its output; git and `rg` need host code for approvals per operation, untrusted projects, injection defences, secrets, undo and parsed results | Moving them would turn the format into a programming language, and a mistake in a file would become a security hole | D-068 |
 
 ---
 

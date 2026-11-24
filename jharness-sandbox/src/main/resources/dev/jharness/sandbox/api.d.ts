@@ -116,7 +116,7 @@ type ToolsJson = string;
 
 /**
  * task: what the subagent should do, as you would tell a colleague; it doesn't see this conversation.
- * agent: a custom agent from .jharness/agents or ~/.jharness/agents to run as. maxSteps: its step limit (default 30).
+ * agent: a custom agent from .jharness/agents or ~/.jharness/agents to run as. maxSteps: its step limit (default 100, the user can change it).
  */
 interface SpawnRequest {
   task: string;
