@@ -29,6 +29,8 @@ import dev.jharness.sandbox.IsolateManager;
 import dev.jharness.sandbox.Subagents;
 import dev.jharness.security.Decision;
 import dev.jharness.security.PermissionGate;
+import dev.jharness.security.Operation;
+import dev.jharness.security.Prompter;
 import dev.jharness.security.Unattended;
 
 /**
@@ -120,6 +122,11 @@ final class SubagentRunner implements Subagents {
         /** Kept after the task so the user can talk to the subagent (spec 032); closed with the session or when too many are open. */
         volatile AgentIsolate isolate;
         volatile boolean open = true;
+        /** The question it is waiting on for the user (spec 033), or null. */
+        volatile String waiting;
+
+        /** Wakes a question it holds, so a stop doesn't wait for the time limit. */
+        volatile Runnable wake = () -> {};
 
         Run(String name, String task, String customAgent, String model, boolean background, int maxSteps) {
             this.name = name;
@@ -147,6 +154,7 @@ final class SubagentRunner implements Subagents {
         /** Stops the run: its loop now, or before its first step. */
         void stop() {
             stopped = true;
+            wake.run();
             AgentLoop l = loop;
             if (l != null) {
                 l.cancel();
@@ -165,6 +173,48 @@ final class SubagentRunner implements Subagents {
 
     /** The subagent the user switched to (spec 032): its questions are asked, not denied as unattended. */
     private volatile String attended;
+    /** Whether someone could answer a held question (an interactive session) and settings say wait (spec 033). */
+    private volatile boolean holdQuestions;
+    private final Object attention = new Object();
+    /** Tests: a shorter wait than settings allow. */
+    volatile java.time.Duration questionWait;
+
+    /** Interactive sessions hold background questions when {@code agent.backgroundQuestions} is wait (D-072). */
+    void holdQuestions(boolean interactive) {
+        holdQuestions = interactive && settings.agent().backgroundQuestions().equals("wait");
+    }
+
+    /**
+     * A background subagent's question (spec 033): it waits until the user switches to the subagent, then
+     * is asked; or, after {@code agent.backgroundQuestionWait} or when the subagent is stopped, refused.
+     */
+    private Prompter.Answer await(String agent, Operation op, Prompter real) {
+        Run run = find(agent);
+        if (agent.equals(attended)) {
+            return real.ask(op);
+        }
+        run.waiting = op.summary();
+        bus.publish(new dev.jharness.events.Origin(agent, parentTurns.current()), "subagent.waiting",
+                Json.object().put("api", op.api()).put("summary", op.summary()));
+        java.time.Duration limit = questionWait != null ? questionWait : settings.agent().backgroundQuestionWait();
+        long deadline = System.nanoTime() + limit.toNanos();
+        String outcome;
+        try {
+            synchronized (attention) {
+                while (!agent.equals(attended) && !run.stopped && System.nanoTime() < deadline) {
+                    attention.wait(Math.max(1, Math.min(1000, (deadline - System.nanoTime()) / 1_000_000)));
+                }
+            }
+            outcome = agent.equals(attended) ? "asked" : run.stopped ? "stopped" : "timeout";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            outcome = "stopped";
+        } finally {
+            run.waiting = null;
+        }
+        bus.publish(new dev.jharness.events.Origin(agent, parentTurns.current()), "subagent.wait_ended", Json.object().put("outcome", outcome));
+        return outcome.equals("asked") ? real.ask(op) : Prompter.Answer.UNATTENDED;
+    }
 
     private final List<Run> runs = new CopyOnWriteArrayList<>();
 
@@ -244,12 +294,18 @@ final class SubagentRunner implements Subagents {
         if (background) {
             // Decisions run on the isolate's thread; marking it there makes any question UNATTENDED (AC-04).
             PermissionGate next = gate;
-            gate = op -> name.equals(attended) ? next.decide(op) : Unattended.run(name, () -> next.decide(op));
+            gate = op -> name.equals(attended) ? next.decide(op)
+                    : Unattended.run(name, holdQuestions ? this::await : null, () -> next.decide(op));
         }
         ApiServices services = new ApiServices(p.files(), gate, bus, turns, p.search(), p.git(), p.checkpoints(), p.builds(), p.http(), null);
         ModelProvider provider = provider(model, def, turns, parent);
         String system = SystemPrompt.build(context, projectMd, userMd, def) + toolsText + NOTE;
         Run run = new Run(name, task, def == null ? "default" : def.name(), modelName(model, def), background, steps);
+        run.wake = () -> {
+            synchronized (attention) {
+                attention.notifyAll();
+            }
+        };
         runs.add(run);
         bus.publish(turns.get(), "subagent.started", Json.object().put("task", task.length() > 2000 ? task.substring(0, 2000) + "…" : task)
                 .put("customAgent", run.customAgent).put("model", run.model).put("maxSteps", steps).put("background", background));
@@ -403,7 +459,8 @@ final class SubagentRunner implements Subagents {
     List<Info> list() {
         List<Info> out = new ArrayList<>();
         for (Run r : runs) {
-            out.add(new Info(r.name, r.task, r.customAgent, r.model, r.background, r.status, r.stepsSoFar(), r.elapsedMs(), r.open));
+            out.add(new Info(r.name, r.task, r.customAgent, r.model, r.background, r.waiting != null && r.running() ? "waiting" : r.status,
+                    r.stepsSoFar(), r.elapsedMs(), r.open));
         }
         return out;
     }
@@ -451,6 +508,9 @@ final class SubagentRunner implements Subagents {
     /** The subagent the user switched to, or null for none; only its questions reach the user (spec 032). */
     void attend(String name) {
         attended = name;
+        synchronized (attention) {
+            attention.notifyAll();
+        }
     }
 
     boolean isOpen(String name) {

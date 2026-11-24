@@ -29,6 +29,7 @@ class BackgroundSubagentTest {
     final Map<String, ReplayProvider> subs = new ConcurrentHashMap<>();
     final AtomicInteger asked = new AtomicInteger();
     Settings settings = Settings.defaults();
+    boolean interactive;
 
     private Session open(List<String> mainReplies, Map<String, List<String>> subReplies) throws Exception {
         Path home = Files.createDirectories(tmp.resolve("home"));
@@ -37,7 +38,7 @@ class BackgroundSubagentTest {
         Session s = Session.open(home, ws, settings, Session.Access.prompter(op -> {
             asked.incrementAndGet();
             return Prompter.Answer.ONCE;
-        }), (bus, turns) -> main = ReplayProvider.ofReplies(mainReplies, bus, turns));
+        }).interactive(interactive), (bus, turns) -> main = ReplayProvider.ofReplies(mainReplies, bus, turns));
         s.runner().testProviders = t -> subs.computeIfAbsent(t.agent(),
                 n -> ReplayProvider.ofReplies(subReplies.getOrDefault(n, List.of("no reply")), s.bus(), t));
         return s;
@@ -134,7 +135,7 @@ class BackgroundSubagentTest {
                 Map.of("sub-1", List.of(js("api.writeFile('a.txt', 'x')"), "Could not write.")))) {
             s.loop().turn("go", d -> {});
             String subResult = subs.get("sub-1").requests().get(1).messages().getLast().content();
-            assertTrue(subResult.contains("no one can answer while this runs in the background"), subResult);
+            assertTrue(subResult.contains("no one answered while this ran in the background"), subResult);
         }
         assertEquals(0, asked.get(), "the user was never asked");
         assertEquals("old", Files.readString(ws.resolve("a.txt")));
@@ -247,7 +248,7 @@ class BackgroundSubagentTest {
             s.attend(null);
             s.talk("sub-1", "now red", d -> {});
             String denied = subs.get("sub-1").requests().get(4).messages().getLast().content();
-            assertTrue(denied.contains("no one can answer while this runs in the background"), "unattended again: " + denied);
+            assertTrue(denied.contains("no one answered while this ran in the background"), "unattended again: " + denied);
             assertEquals(1, asked.get());
             assertEquals("done", s.subagents().getFirst().status());
             assertTrue(assertThrows(IllegalArgumentException.class, () -> s.talk("sub-9", "x", d -> {})).getMessage().contains("no subagent sub-9"));
@@ -264,5 +265,73 @@ class BackgroundSubagentTest {
             assertTrue(s.subagentOpen("sub-2") && s.subagentOpen("sub-" + n));
             assertTrue(assertThrows(IllegalArgumentException.class, () -> s.talk("sub-1", "x", d -> {})).getMessage().contains("closed"));
         }
+    }
+
+    private static void waitFor(java.util.function.BooleanSupplier c) throws InterruptedException {
+        long end = System.currentTimeMillis() + 20_000;
+        while (!c.getAsBoolean() && System.currentTimeMillis() < end) {
+            Thread.sleep(20);
+        }
+        assertTrue(c.getAsBoolean(), "condition reached");
+    }
+
+    /** Spec 033: in an interactive session a background question waits until the user switches to the subagent. */
+    @Test
+    void aHeldQuestionIsAskedWhenTheUserSwitches() throws Exception {
+        interactive = true;
+        Path log;
+        try (Session s = open(List.of(js("api.spawnAgent({task: 'write', background: true}); 'started'"), "Started."),
+                Map.of("sub-1", List.of(js("api.writeFile('a.txt', 'x')"), "Wrote it.")))) {
+            s.loop().turn("go", d -> {});
+            waitFor(() -> s.subagents().getFirst().status().equals("waiting"));
+            assertEquals(0, asked.get(), "not asked while no one is switched to it");
+            assertEquals("old", Files.readString(ws.resolve("a.txt")));
+            s.attend("sub-1");
+            waitFor(() -> s.runningSubagents().isEmpty());
+            assertEquals(1, asked.get());
+            assertEquals("x", Files.readString(ws.resolve("a.txt")));
+            log = s.logPath();
+        }
+        List<JsonNode> events = SessionLog.read(log);
+        assertEquals("write a.txt (1 bytes)", of(events, "subagent.waiting").getFirst().get("summary").asText());
+        assertEquals("asked", of(events, "subagent.wait_ended").getFirst().get("outcome").asText());
+    }
+
+    @Test
+    void aHeldQuestionIsDeniedAfterTheWaitOrWhenStopped() throws Exception {
+        interactive = true;
+        Path log;
+        try (Session s = open(List.of(js("api.spawnAgent({task: 'a', background: true}); 'started'"), "Started.",
+                js("api.spawnAgent({task: 'b', background: true}); 'started'"), "Started again."),
+                Map.of("sub-1", List.of(js("api.writeFile('a.txt', 'x')"), "Gave up."), "sub-2", List.of(js("api.writeFile('a.txt', 'y')"), "never")))) {
+            s.runner().questionWait = java.time.Duration.ofMillis(300);
+            s.loop().turn("go", d -> {});
+            waitFor(() -> s.runningSubagents().isEmpty());
+            String r = subs.get("sub-1").requests().get(1).messages().getLast().content();
+            assertTrue(r.contains("no one answered while this ran in the background"), r);
+            s.runner().questionWait = java.time.Duration.ofMinutes(5);
+            s.loop().turn("again", d -> {});
+            waitFor(() -> s.subagents().get(1).status().equals("waiting"));
+            long t0 = System.nanoTime();
+            assertTrue(s.stopSubagent("sub-2"));
+            assertTrue(System.nanoTime() - t0 < 4_000_000_000L, "a stop wakes the held question");
+            log = s.logPath();
+        }
+        assertEquals(0, asked.get());
+        assertEquals(List.of("timeout", "stopped"), of(SessionLog.read(log), "subagent.wait_ended").stream().map(e -> e.get("outcome").asText()).toList());
+    }
+
+    @Test
+    void denyModeAndHeadlessSessionsNeverWait() throws Exception {
+        interactive = true;
+        settings = Settings.parse("{\"agent\": {\"backgroundQuestions\": \"deny\"}}", "s");
+        try (Session s = open(List.of(js("JSON.parse(api.waitAgent(JSON.parse(api.spawnAgent({task: 'w', background: true})).agent)).reply"), "done"),
+                Map.of("sub-1", List.of(js("api.writeFile('a.txt', 'x')"), "Denied.")))) {
+            s.loop().turn("go", d -> {});
+            assertTrue(resultOf(1).contains("Denied."), resultOf(1));
+        }
+        assertThrows(dev.jharness.config.ConfigException.class, () -> Settings.parse("{\"agent\": {\"backgroundQuestions\": \"ask\"}}", "s"));
+        assertThrows(dev.jharness.config.ConfigException.class, () -> Settings.parse("{\"agent\": {\"backgroundQuestionWait\": \"2s\"}}", "s"));
+        assertEquals(java.time.Duration.ofMinutes(10), Settings.defaults().agent().backgroundQuestionWait());
     }
 }

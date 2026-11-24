@@ -79,28 +79,34 @@ public final class Session implements AutoCloseable {
      * How the session decides permissions: the permission engine from settings with a prompter (the
      * normal case), or a fixed gate (tests).
      */
-    public record Access(PermissionGate gate, Prompter prompter, boolean trusted, AgentDefinition agent, boolean projectTools) {
+    public record Access(PermissionGate gate, Prompter prompter, boolean trusted, AgentDefinition agent, boolean projectTools,
+            boolean interactive) {
         public static Access prompter(Prompter p) {
-            return new Access(null, p, false, null, true);
+            return new Access(null, p, false, null, true, false);
         }
 
         public static Access gate(PermissionGate g) {
-            return new Access(g, null, false, null, true);
+            return new Access(g, null, false, null, true, false);
         }
 
         /** Whether the project is trusted (D-011); recorded in {@code session.started}. */
         public Access trusted(boolean t) {
-            return new Access(gate, prompter, t, agent, projectTools);
+            return new Access(gate, prompter, t, agent, projectTools, interactive);
         }
 
         /** The custom agent to run as (spec 025), or null for the built-in one. */
         public Access agent(AgentDefinition a) {
-            return new Access(gate, prompter, trusted, a, projectTools);
+            return new Access(gate, prompter, trusted, a, projectTools, interactive);
         }
 
         /** Whether a trusted project's own tools count; false when the user didn't confirm their changes (D-066). */
         public Access projectTools(boolean use) {
-            return new Access(gate, prompter, trusted, agent, use);
+            return new Access(gate, prompter, trusted, agent, use, interactive);
+        }
+
+        /** A person can switch to a subagent to answer a held question (the terminal UI, spec 033). */
+        public Access interactive(boolean i) {
+            return new Access(gate, prompter, trusted, agent, projectTools, i);
         }
     }
 
@@ -211,6 +217,7 @@ public final class Session implements AutoCloseable {
         loop.useCheckpoints(checkpoints);
         subagents.bind(services, loop, contextJson, projectMd, userMd, toolsText);
         loop.useNotes(subagents::drainFinished);
+        subagents.holdQuestions(access.interactive());
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
         s.agent = agent;
         s.tools = tools;

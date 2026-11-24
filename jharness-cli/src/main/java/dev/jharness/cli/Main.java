@@ -314,7 +314,7 @@ public final class Main implements Callable<Integer> {
                 }
             }
             Settings.Layered settings = layered(h, ws, trusted);
-            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()).trusted(trusted).agent(agentDef).projectTools(projectTools))) {
+            try (Session s = open(h, ws, settings, Session.Access.prompter(tui.prompter()).trusted(trusted).agent(agentDef).projectTools(projectTools).interactive(true))) {
                 if (!projectTools) {
                     projectIgnored(s, ToolDefinitions.changed(hashes, trust.confirmedTools(ws)), "the user didn't confirm the changed project tools");
                 }

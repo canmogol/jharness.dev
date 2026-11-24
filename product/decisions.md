@@ -75,13 +75,14 @@ Last updated: 2026-11-24
 | D-062 | In the TUI, Tab on a lone `/` prints the `/help` text above the prompt; Tab after a partial `/command` completes it, listing matches with descriptions taken from the help text | Accepted |
 | D-063 | Custom agents: a folder with `agent.json` (description, model, tools, maxSteps, plan), `prompt.md` and `helpers.js`; chosen with `--agent` at start; they only narrow; project agents only in trusted projects | Accepted |
 | D-064 | `api.spawnAgent` runs a subagent: fresh conversation with the task, own isolate (`subagent` profile), the session's gate narrowed by a custom agent, optional model profile; depth one, 10 per turn and 100 steps by default (configurable); `api.models()` lists profiles; returns its final reply | Accepted |
-| D-065 | Background subagents: `spawnAgent({background: true})`, `api.waitAgent`, `api.agents`, `api.stopAgent`; at most 4 running (configurable); they never ask (questions denied as unattended); uncollected replies come with the next prompt; Esc leaves them running, closing the session stops them; `/agents`, `/stop`, `jharness log --agent/--source` | Accepted |
+| D-065 | Background subagents: `spawnAgent({background: true})`, `api.waitAgent`, `api.agents`, `api.stopAgent`; at most 4 running (configurable); they never ask (questions denied as unattended); uncollected replies come with the next prompt; Esc leaves them running, closing the session stops them; `/agents`, `/stop`, `jharness log --agent/--source` | Accepted; questions held in interactive sessions since D-072 |
 | D-066 | Build tools are JSON definition files in `~/.jharness/tools/` (seeded on first run from `examples/.jharness/tools/`) and a trusted project's `.jharness/tools/`; typed fields map to fixed arguments; git and `rg` stay in code | Accepted |
 | D-067 | `api.tool(name, request)` runs every defined tool and `api.tools()` lists them; `api.maven`, `api.gradle` and `api.npm` are removed | Accepted |
 | D-068 | git and `rg` stay in Java code, not tool definitions: per-operation approvals, use in untrusted projects, injection defences, secrets, undo and structured results need host code | Accepted |
 | D-069 | `/follow [NAME]` shows a running background subagent like the main loop (streamed reply, steps, diffs) until Esc or its end; it stays a view, and shared model clients name the subagent on its events | Accepted |
 | D-070 | Project folders under `sessions/`, `projects/` and `checkpoints/` are the workspace path as a slug plus 7 hex characters; session ids are the UTC start time plus 4 hex characters; old folders are left alone | Accepted |
 | D-071 | `/switch NAME` makes the prompt talk to a subagent: new turns in its own conversation, its questions asked instead of denied, Esc stops its turn; subagents stay open after their task (at most 16 idle); `/switch main` goes back | Accepted |
+| D-072 | In an interactive session a background subagent's question waits (up to `agent.backgroundQuestionWait`, 10 min) with a notice; `/switch` asks it; `agent.backgroundQuestions: deny` and `-p` deny at once | Accepted |
 
 ---
 
@@ -1086,6 +1087,23 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-072 — Held background questions
+
+**Decision.**
+- In an interactive session, a background subagent's approval question no longer fails at once. Its call waits, and only that subagent pauses; its block clock doesn't run.
+- JHarness prints one notice above the prompt: `▸ [sub-2] is waiting for you: write a.txt (/switch sub-2 to answer)`. `/agents` and `api.agents()` show its status as `waiting`. The events `subagent.waiting` (`api`, `summary`) and `subagent.wait_ended` (`outcome`: `asked`, `timeout`, `stopped`) record it.
+- `/switch NAME` asks the held question at once, as a normal approval prompt (D-071).
+- If no one switches within `agent.backgroundQuestionWait` (10s to 1h, default 10m), or the subagent is stopped, the question is denied as before.
+- `agent.backgroundQuestions: "deny"` keeps D-065's immediate denial. `-p` and other sessions without a terminal deny at once. Network questions that reach the proxy while no turn runs are still denied.
+
+**Why.** A background subagent that needed one approval failed its task. Holding the question until the user looks, with a time limit, gets the work done without questions popping up over the user's typing or waiting forever, the two reasons D-065 gave for denying.
+
+**Rejected.** Asking at once above the prompt (prompts over typing, D-065). Waiting without a limit (a forgotten subagent would hang). Holding network questions too (the proxy can't tell which agent opened the connection).
+
+**Source.** User question in the review of spec 032, 2026-11-24. Recommended options accepted while the user was away, specifying 033-held-questions. Changes D-065's "never asks" for interactive sessions.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1168,6 +1186,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q74 | How does a user watch what a running subagent does? | `/follow sub-N` streams its reply and steps like the main loop; Esc stops watching and the subagent keeps running | `/agents sub-N` only printed past events | D-069 |
 | Q75 | How are session, permission and checkpoint folders named? | `users-xyz-projects-jharness.dev-2787870/s-2026-11-24T105226Z-18a9.jsonl`: the path as a slug with a short hash, and the start time | Easy to find by hand; the hash keeps paths with the same slug apart | D-070 |
 | Q76 | How does the user answer a subagent's questions and talk to it? | `/switch sub-N`: the prompt becomes `sub-N>`, messages are new turns in its conversation, and its approvals are asked while you are switched to it | Background subagents can finish work that needs approval without the main agent in between | D-071 |
+| Q77 | Can a background subagent's question reach the user instead of being denied? | Yes: it waits with a notice above the prompt, `/agents` shows `waiting`, and `/switch NAME` asks it; after 10 minutes it is denied | Background work that needs one approval no longer fails, without questions popping up over the user's typing | D-072 |
 
 ---
 
