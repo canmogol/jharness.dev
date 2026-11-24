@@ -139,7 +139,7 @@ jobs:
           # Tool definitions (spec 028): the shipped files come from the binary, and api.tools() lists them.
           test -f "$tmp/home/.jharness/tools/maven.json"
           "$bin" tools --home "$tmp/home" --cwd "$tmp/ws" | tee "$tmp/tools.txt"
-          grep -q "^maven  user  mvn" "$tmp/tools.txt"
+          grep -Eq "^maven +user +mvn +(ok|not found on PATH) +compile" "$tmp/tools.txt"
           rm "$tmp/home/.jharness/tools/npm.json"
           "$bin" tools reset npm --home "$tmp/home" --cwd "$tmp/ws"
           "$bin" tools check --home "$tmp/home" --cwd "$tmp/ws"
@@ -187,6 +187,13 @@ jobs:
           grep -q "session.resumed  from=s-.* fork=false turns=1 messages=2" "$tmp/rs-log.txt"
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/rs2.jsonl" --fork -p "branch"
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --type session.resumed | grep -q "fork=true turns=2 messages=4"
+          # Headless output (spec 047): one result object with json; every event then the result with stream-json; --mode.
+          printf '%s\n' '{"reply":"```js\napi.writeFile(\"out.txt\", \"x\")\n```"}' '{"reply":"Wrote out.txt."}' > "$tmp/hj.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/hj.jsonl" --output json -p "write" > "$tmp/hj.json"
+          python3 -I -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["type"]=="result" and r["exitCode"]==0 and r["denied"][0]["api"]=="writeFile", r' "$tmp/hj.json"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/hj.jsonl" --output stream-json --mode accept-edits -p "write" > "$tmp/hs.jsonl"
+          python3 -I -c 'import json,sys; l=[json.loads(x) for x in open(sys.argv[1])]; assert l[0]["type"]=="session.started" and l[-1]["type"]=="result" and l[-1]["filesChanged"]==["out.txt"], l[-1]' "$tmp/hs.jsonl"
+          test "$(cat "$tmp/ws/out.txt")" = "x" && rm "$tmp/ws/out.txt"
           # Action reviewer (spec 038): a fake System One server doubts a write, so bypass mode still refuses it.
           python3 -I jharness-agent/src/test/resources/fake_systemone_server.py "$tmp/so.port" 0.05 &
           so=$!

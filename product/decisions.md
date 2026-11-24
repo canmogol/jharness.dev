@@ -92,6 +92,7 @@ Last updated: 2026-11-24
 | D-079 | Command aliases and argument completion: `/quit` and `/q` are aliases of `/exit`, not listed; built-in names and aliases win over command files, and the clash is reported; Tab after a command lists its choices and cycles through them; command files declare `args` | Accepted |
 | D-080 | Status line, a new extension point: a line under the input on real terminals with built-in items chosen by `ui.statusLine`; `~/.jharness/statusline.js` can return the whole line from a JSON snapshot, in an isolate with no `api`; refreshed on events, throttled; failures fall back to the default line | Accepted |
 | D-081 | Resume and fork: the main conversation is saved after each turn, compaction, undo and rewind as `<session-id>.state.json` (0600, atomic) next to the log; `--resume [ID]` continues the same session and log, `--fork [ID]` starts a new session from a copy; earlier turns can't be rewound | Accepted |
+| D-082 | Headless output: `-p --output text|json|stream-json`; json is one result object (reply, stop reason, usage, files changed, denied actions); stream-json is every event as a JSON line then the result; exit 0 done, 1 failed or stopped early, 2 bad input; `--mode` sets the permission mode | Accepted |
 
 ---
 
@@ -1334,6 +1335,26 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** Roadmap item "Resume and fork sessions"; US-2.7. Recommended options accepted while the user was away, specifying 043-resume-and-fork-sessions, 2026-11-24.
 
+## D-082 — Headless output and `--mode`
+
+**Decision.** `jharness -p` serves scripts and CI (US-5.1, US-5.2).
+
+- **`--output text`** (the default): the reply as it streams, as before.
+- **`--output json`**: nothing until the turn ends, then one line: `{"type": "result", session, stopReason, reply, steps, error?, exitCode, durationMs, usage: {requests, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}, filesChanged, denied: [{agent, api, summary, reason}], subagents}`. Usage counts every agent's model requests.
+- **`--output stream-json`**: every event as a JSON line, the envelope included, as it happens: the events from opening the session (from the session log, this run only), then each live one, streamed `model.delta` chunks too. The result object is the last line. This is the stream the web viewer reads (D-053).
+- **Escaping.** Output is JSON escaped with `\u` for control and bidi characters, so it is valid JSON and safe on a terminal (D-060). Errors still go to stderr as text.
+- **Exit codes**, in every output mode: 0 when the turn ended `done`; 1 when it failed or stopped early (`error`, `max_steps`, `interrupted`); 2 for bad flags or settings, with a result object (`session: null`) on stdout in the JSON modes. Before this, a turn stopped at `max_steps` exited 0.
+- **`--mode ask|accept-edits|plan|bypass`** sets `permissions.mode` in the session layer, so it wins over the user's and the project's settings, in the UI and with `-p`. With `-p` nothing can be asked, so whatever the mode leaves to ask is denied and listed in `denied`.
+
+**Why.** CI needs one parseable answer and a meaningful exit code; tools that show progress need the events as they happen. Reusing the event envelope means one format for the log, `--debug`, stream-json and the viewer. A mode flag lets a pipeline allow edits without changing settings files.
+
+**Rejected.**
+- A separate headless event format (a second schema to keep in step).
+- Rule flags such as `--allow writeFile` (the modes cover CI's needs; rules files already exist).
+- Keeping exit 0 for `max_steps` (a pipeline would treat an unfinished task as success).
+
+**Source.** Roadmap item "Headless mode with text, JSON and stream-JSON output"; US-5.1 and US-5.2. Recommended options accepted while the user was away, specifying 047-headless-output, 2026-11-24.
+
 ---
 
 ## Questions and answers
@@ -1432,6 +1453,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q88 | Should `jharness --help` keep picocli's colors? | Yes: picocli's help, version and usage errors use the raw streams, colored only on a terminal and not with `NO_COLOR`; usage errors escape the typed arguments; everything else stays escaped | The help was unreadable on a terminal | D-060 |
 | Q89 | How should `jharness tools` list the tools? | A table: `NAME SOURCE EXECUTABLE STATUS OPERATIONS`, columns as wide as their longest value, escaped values; edited and broken files noted below | The rows didn't line up and had no headers | D-066 |
 | Q90 | Should `/help` list the commands in alphabetical order? | Yes: commands A to Z with their forms; keys and `@PATH` in their own section at the end; Tab completion follows the same order | Easier to find a command | D-062 |
+| Q91 | What does headless mode print, and how does CI set the permission mode? | `--output text`, `json` (one result object) or `stream-json` (every event, then the result); exit 0, 1 or 2; `--mode` for the session | Pipelines get one parseable answer and a meaningful exit code | D-082 |
 
 ---
 
