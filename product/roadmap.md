@@ -89,7 +89,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Slash commands (Markdown templates and JS) (spec 035)
 - [x] MCP client (stdio, streamable HTTP), called from JS through `api.mcp`; stdio servers started through `ProcessRunner` in the OS sandbox (spec 037)
 - [x] Todo list and plan mode (spec 036)
-- [ ] Optional action reviewer: Kev, Jev or own model; only tightens; fails to ask (D-031)
+- [ ] Optional action reviewer: a System One API decision model (Jev, or a local equivalent such as Laya); only tightens; fails to ask (D-031)
 
 **Gate:** one custom agent and one hook ship as working examples.
 

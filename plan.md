@@ -61,7 +61,7 @@ Maven multi-module build. Dependencies flow downward.
 | --- | --- | --- |
 | `jharness-events` | Event envelope, types, validation, bus, JSONL session log | — |
 | `jharness-config` | Settings layers (user, project, session), project trust, permission rules, network rules | events |
-| `jharness-security` | Permission engine, file policy, optional action reviewer client (Kev, Jev, own model) | config |
+| `jharness-security` | Permission engine, file policy, optional action reviewer client (System One API: Jev or a local equivalent such as Laya) | config |
 | `jharness-proxy` | Egress proxy: rules-file parser, rule matching, DNS pinning, CONNECT and plain-HTTP forwarding, per-session credentials | config, events |
 | `jharness-process` | `ProcessRunner`, typed git / Maven / Gradle / npm / rg operations, OS sandbox launchers | security |
 | `jharness-sandbox` | Isolate manager, `api` facade, limits, watchdog, `api.d.ts` generation | security, process |
