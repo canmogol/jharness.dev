@@ -28,7 +28,7 @@ Last updated: 2026-11-18
 | JSON | Jackson tree model | No DTO binding, so little reflection config |
 | Diff | java-diff-utils | Edit previews and patches |
 | Search | `rg` (ripgrep) through `ProcessRunner`; Java NIO glob + regex when `rg` isn't installed | Read-only; `--pre`, `--search-zip` and `--follow` blocked (D-027) |
-| MCP | MCP Java SDK, or our own client if it fails under Native Image | stdio and streamable HTTP |
+| MCP | Our own thin client (`jharness-mcp`, D-076) | stdio and streamable HTTP |
 | Storage | JSONL session logs, JSON settings under `~/.jharness/` | No native database library |
 | Tests | JUnit 5, jqwik (property-based), the plugin's `nativeTest` | Security suites run on JVM and native |
 

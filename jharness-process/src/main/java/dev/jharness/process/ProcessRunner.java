@@ -166,6 +166,103 @@ public final class ProcessRunner {
         return r;
     }
 
+    /**
+     * A long-running child with its stdin and stdout as pipes, such as a stdio MCP server (spec 037, D-076);
+     * stderr keeps its last 4 KB for error messages.
+     */
+    public final class Live implements AutoCloseable {
+        private final Process process;
+        private final String name;
+        private final StringBuilder err = new StringBuilder();
+        private final long t0 = System.nanoTime();
+
+        Live(Process process, String name) {
+            this.process = process;
+            this.name = name;
+            Thread.ofPlatform().daemon().name("stderr-" + name).start(() -> {
+                try (var in = process.getErrorStream()) {
+                    byte[] b = new byte[1024];
+                    int n;
+                    while ((n = in.read(b)) > 0) {
+                        synchronized (err) {
+                            err.append(new String(b, 0, n, StandardCharsets.UTF_8));
+                            if (err.length() > 4096) {
+                                err.delete(0, err.length() - 4096);
+                            }
+                        }
+                    }
+                } catch (IOException e) {
+                    // The process ended.
+                }
+            });
+        }
+
+        public java.io.OutputStream stdin() {
+            return process.getOutputStream();
+        }
+
+        public java.io.InputStream stdout() {
+            return process.getInputStream();
+        }
+
+        public boolean alive() {
+            return process.isAlive();
+        }
+
+        /** The last 4 KB the process wrote to stderr. */
+        public String stderr() {
+            synchronized (err) {
+                return err.toString();
+            }
+        }
+
+        @Override
+        public void close() {
+            if (process.isAlive()) {
+                killTree(process);
+            }
+            bus.publish(origin.get(), "process.completed", Json.object().put("executable", name)
+                    .put("exitCode", process.isAlive() ? -1 : process.exitValue()).put("durationMs", (System.nanoTime() - t0) / 1_000_000)
+                    .put("timedOut", false).put("output", "").put("outputTruncated", false));
+        }
+    }
+
+    /** Starts {@code exe} in the OS sandbox with pipes, for a process that keeps running (spec 037). */
+    public Live start(Executable exe, List<String> args, Path cwd, Map<String, String> env, ChildSandbox.Grants grants) {
+        if (!sandbox.available()) {
+            throw new OperationException("cannot run " + exe.name() + ": no OS sandbox (" + sandbox.reason() + ")");
+        }
+        checkArgs(args);
+        checkEnv(env);
+        exe.verify();
+        List<String> argv = new ArrayList<>(args.size() + 1);
+        argv.add(exe.path().toString());
+        argv.addAll(args);
+        ProcessBuilder pb = new ProcessBuilder(sandbox.wrap(argv, cwd, grants)).directory(cwd.toFile());
+        Map<String, String> e = pb.environment();
+        e.clear();
+        e.put("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        String home = System.getProperty("user.home");
+        if (home != null) {
+            e.put("HOME", home);
+        }
+        e.put("LANG", "C.UTF-8");
+        e.put("LC_ALL", "C.UTF-8");
+        e.putAll(env);
+        e.putAll(sandbox.env());
+        var started = Json.object().put("executable", exe.name()).put("path", exe.path().toString())
+                .put("cwd", cwd.toString()).put("sandbox", sandbox.mechanism().wire()).put("network", grants.network())
+                .put("loopback", grants.loopback());
+        var argsJson = started.putArray("args");
+        args.forEach(argsJson::add);
+        bus.publish(origin.get(), "process.started", started);
+        try {
+            return new Live(pb.start(), exe.name());
+        } catch (IOException ex) {
+            throw new UncheckedIOException("cannot start " + exe.name() + ": " + ex.getMessage(), ex);
+        }
+    }
+
     /** Runs of a process whose proxy connection the sandbox refused, first run included (spec 019, D-057). */
     public static final int PROXY_ATTEMPTS = 3;
 

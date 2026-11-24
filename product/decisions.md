@@ -86,6 +86,7 @@ Last updated: 2026-11-24
 | D-073 | JS hooks: `NAME.js` in `~/.jharness/hooks/` and trusted projects' `.jharness/hooks/` define `preTool` (block only, fails closed), `postTool` (observe) and `stop` (go on, at most 3 times a turn); each runs in its own isolate with subagent limits, and its own api calls are gated and run no hooks | Accepted |
 | D-074 | Slash commands: `NAME.md` templates (`$ARGUMENTS`) and `NAME.js` commands (`run(args)` returns a prompt, `{print}` or nothing) in `~/.jharness/commands/` and trusted projects; they can't replace built-ins and also work in `-p` | Accepted |
 | D-075 | `api.todos` keeps each agent's todo list, shown in the TUI; `/plan` toggles plan mode, which notes itself in each message; the main agent's `api.proposePlan` asks the user to leave plan mode and carry out the plan | Accepted |
+| D-076 | MCP client: our own small client over stdio and streamable HTTP; servers only from the user's `mcp` settings; stdio servers in the OS sandbox through the proxy; each `tools/call` asks (`kind: mcp`, "always" per server/tool); `api.mcp({list})` and the prompt list the tools | Accepted |
 
 ---
 
@@ -1175,6 +1176,33 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-076 — MCP client
+
+**Decision.**
+- **Our own client.** JHarness has its own thin MCP client in `jharness-mcp`, with no SDK (tech-stack's fallback). It speaks JSON-RPC 2.0 over a stdio server's pipes (one message per line) or streamable HTTP (POST, JSON or event-stream answers, `Mcp-Session-Id`), protocol `2025-06-18`. It uses `initialize`, `tools/list` (with pages) and `tools/call`, answers a server's `ping`, and refuses its other requests.
+- **Configuration.** Servers come only from the user's `~/.jharness/settings.json`. A project's `mcp`, trusted or not, is ignored (`settings.ignored`).
+  - A stdio server: `"name": {"command": "npx", "args": [...], "env": {...}, "secretEnv": {"VAR": "SECRET"}, "writable": ["~/.npm"], "timeout": "60s"}`. `command` is a program on `PATH` outside the workspace; shells and command runners are refused, as for tools.
+  - An HTTP server: `"name": {"url": "https://…", "tokenSecret": "SECRET"}`, which sends the secret as a bearer token.
+- **Sandbox.** A stdio server runs through `ProcessRunner` in the OS sandbox (Article IV), with the workspace as its folder, its `writable` folders, and the network only through the egress proxy (`HTTP_PROXY`, `HTTPS_PROXY`). An HTTP server is reached through the proxy, and its endpoint is allowed automatically, like a model endpoint.
+- **Start-up.** Servers start when the session opens; the processes start on the session's thread and the handshakes run in parallel, up to 30 s. A server that fails is listed with its error.
+- **Calls.**
+  - `api.mcp({server, tool, input, timeoutMs})` checks that the server and tool exist, then asks (`kind: mcp`, which changes state, so plan mode denies it). "Always" saves `server/tool` for the project. It returns the server's result JSON.
+  - `api.mcp({list: true})` or `{server, list: true}` lists the tools with their input schemas without asking.
+  - The system prompt lists the servers and up to 40 tools each, and says results are data.
+- **Visibility.** `mcp.connected` and `mcp.called` record them; `/mcp` lists them. Secrets never appear in arguments or events.
+
+**Why.** US-4.5 and D-023: the user's other tools, reached from JS like everything else, under the same permissions. A thin client keeps the binary small and native-friendly. Asking for every call is the safe default, because a server can do anything; "always" makes trusted tools quick.
+
+**Rejected.**
+- Trusting the servers' `readOnlyHint` to skip the question (it is the server's own claim).
+- Project-defined servers (a repo could start a program).
+- An MCP SDK (size and Native Image risk; three methods are enough).
+- Resources and prompts (later).
+
+**Source.** Roadmap item "MCP client", D-023, US-4.5. Recommended options accepted while the user was away, specifying 037-mcp-client, 2026-11-24.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1261,6 +1289,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q78 | How do hooks work? | JS files with `preTool(call)`, `postTool(call)` and `stop(turn)`; a pre-tool hook returns `{block}` before the gate, a stop hook returns `{continue}`; hooks never approve | Team guardrails apply to every agent without a shell (D-022) | D-073 |
 | Q79 | How are slash commands defined? | A Markdown file is a prompt template; a JS file's `run(args)` builds a prompt or prints text, in its own sandbox | Repeated tasks become one command without a new release | D-074 |
 | Q80 | How do the todo list and plan mode work? | The agent sets its list with `api.todos([...])`; `/plan` makes the session read-only, and `api.proposePlan(text)` shows the plan and asks the user to approve it, which turns plan mode off | The user sees the agent's steps and approves a plan before anything changes | D-075 |
+| Q81 | How are MCP servers configured and called? | In `~/.jharness/settings.json` `"mcp": {"servers": {...}}` (command or url); `api.mcp({server, tool, input})` calls a tool after approval; `api.mcp({list: true})` lists them | Lets the agent use the user's other tools under the same sandbox and permissions | D-076 |
 
 ---
 

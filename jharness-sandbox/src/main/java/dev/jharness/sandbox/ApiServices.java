@@ -21,23 +21,29 @@ import dev.jharness.security.Workspace;
  */
 public record ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search,
         GitOperations git, Checkpoints checkpoints, BuildOperations builds, HttpOperations http, Subagents subagents, Hooks hooks,
-        Planning planning) {
+        Planning planning, dev.jharness.mcp.McpServers mcp) {
+
+    /** Without MCP servers. */
+    public ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search, GitOperations git,
+            Checkpoints checkpoints, BuildOperations builds, HttpOperations http, Subagents subagents, Hooks hooks, Planning planning) {
+        this(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, hooks, planning, null);
+    }
 
     /** Without the todo list and plan mode. */
     public ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search, GitOperations git,
             Checkpoints checkpoints, BuildOperations builds, HttpOperations http, Subagents subagents, Hooks hooks) {
-        this(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, hooks, null);
+        this(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, hooks, null, null);
     }
 
     /** Without hooks. */
     public ApiServices(FilePolicy files, PermissionGate gate, EventBus bus, Supplier<Origin> origin, Search search, GitOperations git,
             Checkpoints checkpoints, BuildOperations builds, HttpOperations http, Subagents subagents) {
-        this(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, null, null);
+        this(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, null, null, null);
     }
 
     /** The same services with these hooks (null for none). */
     public ApiServices withHooks(Hooks h) {
-        return new ApiServices(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, h, planning);
+        return new ApiServices(files, gate, bus, origin, search, git, checkpoints, builds, http, subagents, h, planning, mcp);
     }
 
     /** Without subagents. */

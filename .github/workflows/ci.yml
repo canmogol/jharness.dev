@@ -156,6 +156,15 @@ jobs:
           grep -q "hook.ran  hook=guard event=preTool outcome=block" "$tmp/hk-log.txt"
           test ! -e "$tmp/ws/package-lock.json"
           rm "$tmp/home/.jharness/hooks/guard.js"
+          # MCP (spec 037): a stdio server in the OS sandbox, listed through api.mcp in the native binary.
+          mkdir -p "$tmp/home-mcp/.jharness"
+          printf '{"mcp": {"servers": {"fake": {"command": "python3", "args": ["-I", "%s"]}}}}' "$PWD/jharness-agent/src/test/resources/fake_mcp_server.py" > "$tmp/home-mcp/.jharness/settings.json"
+          printf '%s\n' '{"reply":"```js\nJSON.parse(api.mcp({list: true}))[0].tools.map(t => t.name).join(\",\")\n```"}' '{"reply":"Listed MCP tools."}' > "$tmp/mcp.jsonl"
+          "$bin" --home "$tmp/home-mcp" --cwd "$tmp/ws" --replay "$tmp/mcp.jsonl" -p "mcp" | tee "$tmp/mcp.txt"
+          "$bin" log --home "$tmp/home-mcp" --cwd "$tmp/ws" last --type mcp. > "$tmp/mcp-log.txt"
+          cat "$tmp/mcp-log.txt"
+          grep -q "mcp.connected" "$tmp/mcp-log.txt"
+          "$bin" log --home "$tmp/home-mcp" --cwd "$tmp/ws" last --json --type api.call | grep '"api":"mcp"' | grep -q '"status":"ok"'
 
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check

@@ -15,5 +15,6 @@
     <dependency><groupId>dev.jharness</groupId><artifactId>jharness-sandbox</artifactId></dependency>
     <dependency><groupId>dev.jharness</groupId><artifactId>jharness-llm</artifactId></dependency>
     <dependency><groupId>dev.jharness</groupId><artifactId>jharness-net</artifactId></dependency>
+    <dependency><groupId>dev.jharness</groupId><artifactId>jharness-mcp</artifactId></dependency>
   </dependencies>
 </project>

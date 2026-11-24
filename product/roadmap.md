@@ -87,7 +87,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Prompt examples for small models, each run by a test against a test project; why git and `rg` stay in Java (spec 029)
 - [x] JS hooks (pre-tool, post-tool, stop); no shell hooks (spec 034; `examples/.jharness/hooks/guard.js` is the gate's hook example)
 - [x] Slash commands (Markdown templates and JS) (spec 035)
-- [ ] MCP client (stdio, streamable HTTP), called from JS through `api.mcp`; stdio servers started through `ProcessRunner` in the OS sandbox
+- [x] MCP client (stdio, streamable HTTP), called from JS through `api.mcp`; stdio servers started through `ProcessRunner` in the OS sandbox (spec 037)
 - [x] Todo list and plan mode (spec 036)
 - [ ] Optional action reviewer: Kev, Jev or own model; only tightens; fails to ask (D-031)
 

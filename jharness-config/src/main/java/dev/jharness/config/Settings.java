@@ -23,14 +23,16 @@ import dev.jharness.events.Json;
  * keys and bad values throw {@link ConfigException}, which stops start-up.
  */
 public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts timeouts, AgentSettings agent,
-        PermissionSettings permissions, FileSettings files, UiSettings ui, HttpSettings http, GitSettings git, boolean offline) {
+        PermissionSettings permissions, FileSettings files, UiSettings ui, HttpSettings http, GitSettings git, boolean offline,
+        McpSettings mcp) {
 
-    private static final Set<String> TOP = Set.of("model", "models", "sandbox", "timeouts", "agent", "permissions", "files", "ui", "http", "git", "offline");
+    private static final Set<String> TOP = Set.of("model", "models", "sandbox", "timeouts", "agent", "permissions", "files", "ui", "http", "git", "offline",
+            "mcp");
 
     public static Settings defaults() {
         return new Settings(ModelProfiles.empty(), SandboxSettings.defaults(), Timeouts.defaults(), AgentSettings.defaults(),
                 PermissionSettings.defaults(), FileSettings.defaults(), UiSettings.defaults(), HttpSettings.defaults(),
-                GitSettings.defaults(), false);
+                GitSettings.defaults(), false, McpSettings.defaults());
     }
 
     public static Path userFile(Path home) {
@@ -72,7 +74,7 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
     static Settings parse(ObjectNode root, String source, boolean complete) throws ConfigException {
         for (Map.Entry<String, JsonNode> e : root.properties()) {
             if (!TOP.contains(e.getKey())) {
-                throw new ConfigException(source + ": unknown key \"" + e.getKey() + "\" (known: model, models, sandbox, timeouts, agent, permissions, files, ui, http, git, offline)");
+                throw new ConfigException(source + ": unknown key \"" + e.getKey() + "\" (known: model, models, sandbox, timeouts, agent, permissions, files, ui, http, git, offline, mcp)");
             }
         }
         JsonNode offline = root.get("offline");
@@ -89,7 +91,8 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
                 UiSettings.parse(root.get("ui"), source),
                 HttpSettings.parse(root.get("http"), source),
                 GitSettings.parse(root.get("git"), source),
-                offline != null && offline.asBoolean());
+                offline != null && offline.asBoolean(),
+                McpSettings.parse(root.get("mcp"), source));
     }
 
     // --- Layers (D-043) ------------------------------------------------------------------------
@@ -115,10 +118,13 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
         ObjectNode project = read(pf);
         parse(user, uf.toString(), false);
         List<String> ignored = new ArrayList<>();
-        if (project.has("git")) {
-            project = project.deepCopy();
-            project.remove("git");
-            ignored.add("git");
+        // A project never sets git tokens or MCP servers: they start programs and send secrets (D-055, D-076).
+        for (String userOnly : List.of("git", "mcp")) {
+            if (project.has(userOnly)) {
+                project = project.deepCopy();
+                project.remove(userOnly);
+                ignored.add(userOnly);
+            }
         }
         if (!trusted) {
             project = untrusted(project, ignored);

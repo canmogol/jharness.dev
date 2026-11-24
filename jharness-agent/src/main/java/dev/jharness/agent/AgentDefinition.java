@@ -36,7 +36,7 @@ public record AgentDefinition(String name, String source, Path dir, String descr
 
     /** The {@code api} methods an agent may list in {@code tools}; {@code readContext} is always allowed. */
     public static final Set<String> API = Set.of("readContext", "readFile", "writeFile", "editFile", "listFiles", "grep", "git",
-            "tool", "tools", "todos", "proposePlan", "http", "fetch", "emit", "spawnAgent", "models", "waitAgent", "agents", "stopAgent");
+            "tool", "tools", "mcp", "todos", "proposePlan", "http", "fetch", "emit", "spawnAgent", "models", "waitAgent", "agents", "stopAgent");
 
     static final Set<String> KEYS = Set.of("description", "model", "tools", "maxSteps", "plan");
 

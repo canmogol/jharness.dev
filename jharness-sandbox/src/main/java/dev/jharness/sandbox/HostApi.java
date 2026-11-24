@@ -121,7 +121,7 @@ public final class HostApi {
 
     private static String message(Exception e) {
         if (e instanceof Workspace.PathException || e instanceof OperationException || e instanceof EventException
-                || e instanceof IllegalArgumentException || e instanceof HttpException) {
+                || e instanceof IllegalArgumentException || e instanceof HttpException || e instanceof dev.jharness.mcp.McpClient.McpException) {
             return e.getMessage();
         }
         if (e instanceof java.nio.file.NoSuchFileException n) {
@@ -630,6 +630,70 @@ public final class HostApi {
         } catch (IllegalStateException e) {
             throw e.getCause() instanceof Exception x ? x : e;
         }
+    }
+
+    /**
+     * {@code api.mcp(request)} (spec 037, D-023, D-076): {@code {server, tool, input, timeoutMs}} calls a tool
+     * after approval; {@code {list: true}} or {@code {server, list: true}} lists the tools without asking.
+     */
+    @HostAccess.Export
+    public String mcp(String json) {
+        ObjectNode a;
+        try {
+            if (s.mcp() == null || !s.mcp().any()) {
+                throw new IllegalArgumentException("no MCP servers are set up (add them to \"mcp\" in ~/.jharness/settings.json)");
+            }
+            a = args(json);
+            for (var it = a.fieldNames(); it.hasNext(); ) {
+                String f = it.next();
+                if (!java.util.Set.of("server", "tool", "input", "timeoutMs", "list").contains(f)) {
+                    throw new IllegalArgumentException("api.mcp does not take \"" + f + "\" (takes: input, list, server, timeoutMs, tool)");
+                }
+            }
+        } catch (RuntimeException e) {
+            return reject("mcp", e);
+        }
+        String server = optText(a, "server");
+        String tool = optText(a, "tool");
+        if (a.path("list").asBoolean(false) || tool == null) {
+            if (tool == null && !a.path("list").asBoolean(false)) {
+                return reject("mcp", new IllegalArgumentException("api.mcp needs a \"tool\", or {list: true} to see the tools"));
+            }
+            try {
+                s.mcp().list(server);
+            } catch (RuntimeException e) {
+                return reject("mcp", e);
+            }
+            return call("mcp", Operation.Kind.READ, "list MCP tools" + (server == null ? "" : " of " + server), Json.object(),
+                    () -> Json.write(s.mcp().list(server)));
+        }
+        java.time.Duration timeout;
+        JsonNode input = a.get("input");
+        try {
+            if (server == null) {
+                throw new IllegalArgumentException("api.mcp needs a \"server\"");
+            }
+            if (input != null && !input.isNull() && !input.isObject()) {
+                throw new IllegalArgumentException("\"input\" must be an object of the tool's arguments");
+            }
+            s.mcp().check(server, tool);
+            timeout = a.has("timeoutMs") ? java.time.Duration.ofMillis(timeoutMs(a)) : null;
+        } catch (RuntimeException e) {
+            return reject("mcp", e);
+        }
+        String shown = input == null || input.isNull() ? "" : Json.write(input);
+        String summary = "mcp " + server + "/" + tool + (shown.isEmpty() || shown.equals("{}") ? "" : " " + (shown.length() > 80 ? shown.substring(0, 80) + "…" : shown));
+        ObjectNode detail = Json.object().put("server", server).put("tool", tool).put("op", server + "/" + tool);
+        detail.set("input", input == null ? Json.object() : input);
+        return call("mcp", Operation.Kind.MCP, summary, detail, () -> agentCall(() -> Json.write(s.mcp().call(server, tool, input, timeout))));
+    }
+
+    private static long timeoutMs(ObjectNode a) {
+        JsonNode t = a.get("timeoutMs");
+        if (!t.isIntegralNumber() || t.asLong() < 1 || t.asLong() > 600_000) {
+            throw new IllegalArgumentException("\"timeoutMs\" must be a whole number from 1 to 600000");
+        }
+        return t.asLong();
     }
 
     /** {@code api.todos(list?)} (spec 036): sets or reads this agent's todo list. */
