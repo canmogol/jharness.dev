@@ -64,11 +64,23 @@ final class Tui {
               Shift+Enter, Alt+Enter, Ctrl-J  new line; Enter sends
               Esc             stop the running turn
               /help           show this help (or type / and press Tab)
-              /exit           quit (or Ctrl-D)
+              /exit           quit (also /quit, /q, or Ctrl-D)
             """;
 
     /** Each command in {@link #HELP} and its first description line, for Tab completion (spec 024). */
     static final java.util.SequencedMap<String, String> COMMANDS = commands();
+
+    /** Other names of built-in commands (spec 041); not listed in the help or completed. */
+    static final Map<String, String> ALIASES = Map.of("/quit", "/exit", "/q", "/exit");
+
+    /** Every name a built-in answers to, which a command file can't take (spec 041). */
+    static final java.util.Set<String> BUILT_IN = builtIn();
+
+    private static java.util.Set<String> builtIn() {
+        var s = new java.util.TreeSet<String>(COMMANDS.keySet());
+        s.addAll(ALIASES.keySet());
+        return java.util.Collections.unmodifiableSet(s);
+    }
 
     private static java.util.SequencedMap<String, String> commands() {
         var m = new java.util.LinkedHashMap<String, String>();
@@ -126,6 +138,8 @@ final class Tui {
         if (historyFile != null) {
             b.variable(LineReader.HISTORY_FILE, historyFile);
         }
+        // Tab lists the choices; Tab again cycles through them, highlighted (spec 041 AC-03).
+        b.option(LineReader.Option.AUTO_LIST, true).option(LineReader.Option.AUTO_MENU, true).option(LineReader.Option.MENU_COMPLETE, false);
         this.reader = b.build();
         this.raw = terminal.writer();
         this.out = new PrintWriter(new TerminalSafe.SafeWriter(raw), false);
@@ -146,15 +160,110 @@ final class Tui {
             }
             return;
         }
-        if (line.wordIndex() != 0 || !line.word().startsWith("/")) {
+        if (line.wordIndex() > 0) {
+            // A command's arguments (spec 041): its fixed choices, or names from the session.
+            List<String> words = line.words();
+            String cmd = ALIASES.getOrDefault(words.getFirst(), words.getFirst());
+            List<String> choices = argChoices(cmd, words.subList(1, line.wordIndex()), current);
+            for (int i = 0; i < choices.size(); i++) {
+                String c = choices.get(i);
+                out.add(new org.jline.reader.Candidate(c, c, null, null, null, null, true, i));
+            }
+            return;
+        }
+        if (!line.word().startsWith("/")) {
             return;
         }
         COMMANDS.forEach((name, desc) -> out.add(new org.jline.reader.Candidate(name, name, null, desc, null, null, true)));
         Session s = current;
         if (s != null) {
-            s.commands(COMMANDS.keySet()).commands().values().forEach(c -> out.add(
+            s.commands(BUILT_IN).commands().values().forEach(c -> out.add(
                     new org.jline.reader.Candidate("/" + c.name(), "/" + c.name(), null, c.description(), null, null, true)));
         }
+    }
+
+    /**
+     * The choices for the next argument of a command (spec 041 AC-03 to AC-05), in order.
+     *
+     * @param before the arguments already typed before the one being completed
+     * @param s the running session, or null
+     */
+    static List<String> argChoices(String cmd, List<String> before, Session s) {
+        int n = before.size();
+        if (!cmd.startsWith("/")) {
+            return List.of();
+        }
+        switch (cmd) {
+            case "/events" -> {
+                return n == 0 ? List.copyOf(UiSettings.EVENT_LEVELS) : List.of();
+            }
+            case "/model" -> {
+                return n == 0 && s != null ? List.copyOf(s.models().all().keySet()) : List.of();
+            }
+            case "/agents", "/follow" -> {
+                return n == 0 ? subagentNames(s) : List.of();
+            }
+            case "/stop" -> {
+                return n == 0 ? plus(subagentNames(s), "all") : List.of();
+            }
+            case "/switch" -> {
+                return n == 0 ? java.util.stream.Stream.concat(java.util.stream.Stream.of("main"), subagentNames(s).stream()).toList() : List.of();
+            }
+            case "/rewind" -> {
+                if (n == 0) {
+                    return s == null ? List.of() : s.loop().turns().stream().map(String::valueOf).toList();
+                }
+                return n == 1 ? List.of("--force") : List.of();
+            }
+            case "/network" -> {
+                if (n == 0) {
+                    return List.of("allow", "deny", "remove", "reload");
+                }
+                String sub = before.getFirst();
+                if (sub.equals("remove") && n == 1) {
+                    return ruleTargets(s);
+                }
+                if (List.of("allow", "deny", "remove").contains(sub) && n == 2 && !before.contains("--project")) {
+                    return List.of("--project");
+                }
+                return List.of();
+            }
+            default -> {
+                if (COMMANDS.containsKey(cmd) || s == null || n > 0) {
+                    return List.of();
+                }
+                var c = s.commands(BUILT_IN).get(cmd.substring(1));
+                return c == null ? List.of() : c.args();
+            }
+        }
+    }
+
+    private static List<String> subagentNames(Session s) {
+        return s == null ? List.of() : s.subagents().stream().map(Session.Subagent::name).toList();
+    }
+
+    private static List<String> plus(List<String> a, String b) {
+        var out = new java.util.ArrayList<String>(a);
+        out.add(b);
+        return List.copyOf(out);
+    }
+
+    /** The hosts, suffixes and ranges named in both rules files, for {@code /network remove}. */
+    private static List<String> ruleTargets(Session s) {
+        EgressProxy p = s == null ? null : s.proxy();
+        if (p == null) {
+            return List.of();
+        }
+        var out = new java.util.LinkedHashSet<String>();
+        for (RulesFile f : List.of(p.rules().general(), p.rules().project())) {
+            for (Rule r : f.rules()) {
+                String[] w = r.line().split("\\s+", 2);
+                if (w.length == 2) {
+                    out.add(w[1]);
+                }
+            }
+        }
+        return List.copyOf(out);
     }
 
     /** The running session, for Tab completion of the user's own commands. */
@@ -301,6 +410,9 @@ final class Tui {
         }
         session.tools().errors().forEach((n, err) -> raw.println(styler.error("Tool " + n + " is unavailable: " + err)));
         session.describeHooks().stream().filter(l -> l.contains("  broken: ")).forEach(l -> raw.println(styler.error("Hook " + l)));
+        // A command file named like a built-in is loaded now, so the clash shows at the start (spec 041 AC-02).
+        session.commands(BUILT_IN).clashes().forEach(c -> raw.println(styler.error(TerminalSafe.escape("Command " + c.file()
+                + " is not used: /" + c.name() + " is a built-in command"))));
         out.flush();
         while (true) {
             String line;
@@ -501,13 +613,14 @@ final class Tui {
     /** @return false to quit */
     boolean command(Session session, String line) {
         String[] parts = line.split("\\s+", 2);
+        parts[0] = ALIASES.getOrDefault(parts[0], parts[0]);
         switch (parts[0]) {
-            case "/exit", "/quit" -> {
+            case "/exit" -> {
                 return false;
             }
             case "/help" -> {
                 out.print(HELP);
-                List<String> c = session.commands(COMMANDS.keySet()).describe();
+                List<String> c = session.commands(BUILT_IN).describe();
                 if (!c.isEmpty()) {
                     out.println("Your commands:");
                     c.forEach(out::println);
@@ -626,12 +739,12 @@ final class Tui {
                 }
             }
             case "/commands" -> {
-                List<String> c = session.commands(COMMANDS.keySet()).describe();
+                List<String> c = session.commands(BUILT_IN).describe();
                 if (c.isEmpty()) {
                     out.println("No slash commands. Add NAME.md (a prompt; $ARGUMENTS is what you type after it) or NAME.js (run(args)) to ~/.jharness/commands/.");
                 }
                 c.forEach(out::println);
-                session.commands(COMMANDS.keySet()).errors().forEach((f, err) -> raw.println(styler.error(f + ": " + err)));
+                session.commands(BUILT_IN).errors().forEach((f, err) -> raw.println(styler.error(f + ": " + err)));
             }
             default -> {
                 if (!custom(session, parts[0].substring(1), parts.length > 1 ? parts[1].strip() : "")) {
@@ -650,7 +763,7 @@ final class Tui {
      * @return false if there is no such command
      */
     private boolean custom(Session session, String name, String args) {
-        var runner = session.commands(COMMANDS.keySet());
+        var runner = session.commands(BUILT_IN);
         if (runner.get(name) == null) {
             return false;
         }
