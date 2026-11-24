@@ -52,6 +52,8 @@ public final class AgentIsolate implements AutoCloseable {
                 git: (q) => call('git', [s(q)]),
                 tool: (name, q) => call('tool', [t(name), s(q)]),
                 tools: () => call('tools', []),
+                todos: (list) => call('todos', [list === undefined ? undefined : s(list)]),
+                proposePlan: (text) => call('proposePlan', [t(text)]),
                 http: (q) => call('http', [s(typeof q === 'string' ? {url: q} : q)]),
                 fetch: (q) => call('fetch', [s(typeof q === 'string' ? {url: q} : q)]),
                 emit: (e) => call('emit', [s(e)]),

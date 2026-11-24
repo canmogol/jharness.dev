@@ -50,6 +50,10 @@ public final class EventTypes {
         HOST.put("subagent.delivered", List.of("agents"));
         HOST.put("subagent.waiting", List.of("api", "summary"));
         HOST.put("subagent.wait_ended", List.of("outcome"));
+        HOST.put("todo.updated", List.of("items"));
+        HOST.put("plan.mode", List.of("plan", "mode"));
+        HOST.put("plan.proposed", List.of("plan"));
+        HOST.put("plan.decided", List.of("approved"));
         HOST.put("commands.loaded", List.of("commands"));
         HOST.put("command.ran", List.of("name", "from", "kind", "outcome"));
         HOST.put("hooks.loaded", List.of("hooks"));

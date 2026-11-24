@@ -62,6 +62,7 @@ public final class Session implements AutoCloseable {
     private ToolDefinitions tools;
     private HookRunner hooks;
     private ApiServices services;
+    private PlanState plans;
     private volatile CommandRunner commands;
     private SubagentRunner subagents;
     private Path home;
@@ -194,9 +195,11 @@ public final class Session implements AutoCloseable {
         FilePolicy files = new FilePolicy(ws, settings.files().mounts(), settings.files().deny());
         Search search = Search.create(ws, runner, settings.timeouts(), files.denyList());
         PermissionMode mode = agent != null && agent.plan() ? PermissionMode.PLAN : PermissionMode.of(settings.permissions().mode());
-        PermissionGate gate = access.gate() != null ? access.gate()
+        PermissionEngine engine = access.gate() != null ? null
                 : new PermissionEngine(mode, ProjectRules.load(home, ws.root()),
                         dev.jharness.security.Unattended.guard(access.prompter()), bus, turns);
+        PermissionGate gate = access.gate() != null ? access.gate() : engine;
+        PlanState plans = new PlanState(bus, engine, access.prompter(), agent != null && agent.plan());
         Checkpoints checkpoints = new Checkpoints(Checkpoints.rootFor(home, ws.root(), bus.session()), bus, turns);
         var http = new dev.jharness.net.http.HttpOperations(bus, turns, settings.http(), settings.timeouts());
         if (agent != null && agent.tools() != null) {
@@ -206,7 +209,7 @@ public final class Session implements AutoCloseable {
         ApiServices base = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http, null);
         HookRunner hooks = HookRunner.load(home, ws.root(), access.trusted(), settings, bus, turns, base);
         ApiServices services = new ApiServices(files, gate, bus, turns, search, gitOps, checkpoints, builds, http, subagents,
-                hooks.any() ? hooks : null);
+                hooks.any() ? hooks : null, plans);
         AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create("main", "main");
         RunResult ctx = isolate.run("api.readContext()", services);
         String contextJson = ctx.ok() ? ctx.value() : null;
@@ -225,13 +228,18 @@ public final class Session implements AutoCloseable {
             loop.useStopHook(hooks);
         }
         subagents.bind(services, loop, contextJson, projectMd, userMd, toolsText);
-        loop.useNotes(subagents::drainFinished);
+        loop.useNotes(() -> {
+            String plan = plans.note();
+            String done = subagents.drainFinished();
+            return plan.isEmpty() ? done : done.isEmpty() ? plan : plan + "\n\n" + done;
+        });
         subagents.holdQuestions(access.interactive());
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
         s.agent = agent;
         s.tools = tools;
         s.hooks = hooks;
         s.services = services;
+        s.plans = plans;
         s.subagents = subagents;
         s.home = home;
         s.trusted = access.trusted();
@@ -334,6 +342,23 @@ public final class Session implements AutoCloseable {
             commands = CommandRunner.load(home, workspace.root(), trusted, builtIn, settings, bus, turns, services);
         }
         return commands;
+    }
+
+    /** Whether plan mode is on (spec 036). */
+    public boolean planMode() {
+        return plans.planMode();
+    }
+
+    /** {@code /plan}: turns plan mode on or off; returns the new state. */
+    public boolean togglePlanMode() {
+        return plans.toggle();
+    }
+
+    /** {@code /todos}: an agent's todo list as {@code [status, text]} pairs. */
+    public List<String[]> todos(String agent) {
+        List<String[]> out = new java.util.ArrayList<>();
+        plans.list(agent).forEach(i -> out.add(new String[] {i.get("status").asText(), i.get("text").asText()}));
+        return out;
     }
 
     /** The project's hook files, for the trust question (spec 034). */

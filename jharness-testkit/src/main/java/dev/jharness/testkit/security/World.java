@@ -201,7 +201,7 @@ public final class World implements AutoCloseable {
         List<String> runs = new ArrayList<>();
         for (ChatRequest q : replay[0].requests()) {
             ChatMessage m = q.messages().getLast();
-            if (m.role().equals("user") && !m.content().startsWith("task ")) {
+            if (m.role().equals("user") && m.content().startsWith("Result of your code:")) {
                 runs.add(m.content());
             }
         }

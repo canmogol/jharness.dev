@@ -56,6 +56,29 @@ final class TerminalPrompter implements Prompter {
             raw.flush();
             shownPath = op.detail().path("path").asText(null);
         }
+        if (op.api().equals("proposePlan")) {
+            // Spec 036: the plan itself was shown from its event.
+            while (true) {
+                String line;
+                try {
+                    line = reader.readLine("Leave plan mode and carry out this plan? [y] yes  [n] no, keep planning: ");
+                } catch (UserInterruptException | EndOfFileException e) {
+                    return Answer.DENY;
+                }
+                switch (line.strip().toLowerCase()) {
+                    case "y", "yes" -> {
+                        return Answer.ONCE;
+                    }
+                    case "n", "no" -> {
+                        return Answer.DENY;
+                    }
+                    default -> {
+                        out.println("Please answer y or n.");
+                        out.flush();
+                    }
+                }
+            }
+        }
         out.println("Allow " + op.api() + ": " + op.summary() + "?");
         out.flush();
         while (true) {

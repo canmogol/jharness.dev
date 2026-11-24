@@ -45,6 +45,8 @@ final class Tui {
               /follow [NAME]  watch a background subagent live, like the main loop (Esc stops watching)
               /switch NAME    talk to a subagent: your messages and its questions go to it (/switch main goes back)
               /stop NAME|all  stop a running background subagent, or all of them
+              /plan           turn plan mode on or off (read-only; the agent proposes a plan for you to approve)
+              /todos          show the agent's todo list
               /diff           show the last turn's file changes
               /undo           undo the last turn's file changes and remove it from the conversation
               /rewind N       undo every turn after turn N (add --force to overwrite your own edits)
@@ -327,7 +329,9 @@ final class Tui {
         }
         try {
             String t = talking;
-            return reader.readLine(t == null ? "> " : t + "> ");
+            Session s = current;
+            String plan = s != null && s.planMode() ? "[plan] " : "";
+            return reader.readLine(plan + (t == null ? "> " : t + "> "));
         } finally {
             if (keys) {
                 raw.print(MODIFY_KEYS_OFF);
@@ -540,6 +544,23 @@ final class Tui {
             case "/follow" -> follow(session, parts.length > 1 ? parts[1].strip() : "");
             case "/switch" -> switchTo(session, parts.length > 1 ? parts[1].strip() : "");
             case "/network" -> network(session, parts.length > 1 ? parts[1].strip() : "");
+            case "/plan" -> {
+                try {
+                    boolean on = session.togglePlanMode();
+                    out.println(on ? "Plan mode is on: the agent can read but not change anything, and proposes a plan for you to approve."
+                            : "Plan mode is off.");
+                } catch (IllegalStateException e) {
+                    out.println(e.getMessage());
+                }
+            }
+            case "/todos" -> {
+                String who = talking == null ? "main" : talking;
+                List<String[]> items = session.todos(who);
+                if (items.isEmpty()) {
+                    out.println("No todo list" + (who.equals("main") ? "" : " for " + who) + " yet.");
+                }
+                todoLines(items).forEach(l -> raw.println(l));
+            }
             case "/hooks" -> {
                 List<String> h = session.describeHooks();
                 if (h.isEmpty()) {
@@ -951,6 +972,24 @@ final class Tui {
                     raw.println(styler.error("  " + (line > 0 ? "line " + line + ": " : "") + e.body().get("error").asText()));
                 }
             }
+            case "todo.updated" -> {
+                List<String[]> items = new java.util.ArrayList<>();
+                e.body().get("items").forEach(i -> items.add(new String[] {i.get("status").asText(), i.get("text").asText()}));
+                long done = items.stream().filter(i -> i[0].equals("done")).count();
+                out.println();
+                raw.println(styler.step("▸ " + who + "todos (" + done + "/" + items.size() + " done)"));
+                todoLines(items).forEach(l -> raw.println(l));
+            }
+            case "plan.proposed" -> {
+                out.println();
+                raw.println(styler.step("▸ Plan:"));
+                styler.reset();
+                for (String l : e.body().get("plan").asText().split("\n", -1)) {
+                    raw.println(styler.line(l));
+                }
+            }
+            case "plan.mode" -> raw.println(styler.dim("▸ plan mode " + (e.body().get("plan").asBoolean() ? "on" : "off")
+                    + (e.body().path("by").asText().equals("plan") ? ": the plan was approved" : "")));
             case "hook.ran" -> {
                 String outcome = e.body().get("outcome").asText();
                 String hook = e.body().get("hook").asText();
@@ -980,6 +1019,22 @@ final class Tui {
             raw.println(styler.dim("· " + e.type() + " " + e.body()));
         }
         out.flush();
+    }
+
+    /** A todo list as lines: done, in progress and pending marks (spec 036). */
+    private List<String> todoLines(List<String[]> items) {
+        List<String> out = new java.util.ArrayList<>();
+        for (String[] i : items) {
+            String mark = switch (i[0]) {
+                case "done" -> "✓";
+                case "in_progress" -> "▸";
+                default -> "☐";
+            };
+            String line = "  " + mark + " " + i[1];
+            // Styler escapes what it styles (spec 022); the plain line is escaped here.
+            out.add(i[0].equals("done") ? styler.dim(line) : i[0].equals("in_progress") ? styler.step(line) : TerminalSafe.escape(line));
+        }
+        return out;
     }
 
     /** A held question (spec 033): the notice that it waits, and the line when no one answered in time. */

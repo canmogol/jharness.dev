@@ -70,6 +70,18 @@
           "parameterTypes": []
         },
         {
+          "name": "todos",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "proposePlan",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
           "name": "fetch",
           "parameterTypes": [
             "java.lang.String"

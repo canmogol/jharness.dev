@@ -632,6 +632,31 @@ public final class HostApi {
         }
     }
 
+    /** {@code api.todos(list?)} (spec 036): sets or reads this agent's todo list. */
+    @HostAccess.Export
+    public String todos(String json) {
+        if (s.planning() == null) {
+            return reject("todos", new IllegalArgumentException("todos is not available in this session"));
+        }
+        String agent = s.origin().get().agent();
+        return call("todos", Operation.Kind.SESSION, json == null ? "read the todo list" : "update the todo list", Json.object(),
+                () -> s.planning().todos(agent, json));
+    }
+
+    /** {@code api.proposePlan(text)} (spec 036): in plan mode, asks the user to approve the plan. */
+    @HostAccess.Export
+    public String proposePlan(String text) {
+        if (s.planning() == null) {
+            return reject("proposePlan", new IllegalArgumentException("proposePlan is not available here (only the main agent plans)"));
+        }
+        if (text == null || text.isBlank()) {
+            return reject("proposePlan", new IllegalArgumentException("proposePlan needs the plan as text"));
+        }
+        String agent = s.origin().get().agent();
+        return call("proposePlan", Operation.Kind.SESSION, "propose a plan", Json.object(),
+                () -> outsideRunClock(() -> s.planning().proposePlan(agent, text)));
+    }
+
     @HostAccess.Export
     public String emit(String json) {
         return call("emit", Operation.Kind.EMIT, "emit event", Json.object(),
