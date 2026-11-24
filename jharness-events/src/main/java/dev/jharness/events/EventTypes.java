@@ -48,6 +48,8 @@ public final class EventTypes {
         HOST.put("subagent.started", List.of("task", "customAgent", "maxSteps", "background"));
         HOST.put("subagent.completed", List.of("stopReason", "steps", "durationMs"));
         HOST.put("subagent.delivered", List.of("agents"));
+        HOST.put("subagent.waiting", List.of("api", "summary"));
+        HOST.put("subagent.wait_ended", List.of("outcome"));
         HOST.put("tools.loaded", List.of("tools", "projectTools"));
         HOST.put("tools.project_ignored", List.of("tools", "reason"));
         HOST.put("turn.started", List.of("prompt"));

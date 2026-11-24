@@ -249,6 +249,31 @@ class TuiTest {
         assertTrue(sc.contains("Back to the main agent; sub-1 keeps its conversation (/switch sub-1 to go on)."), sc);
     }
 
+    /** Spec 033: a background question waits, the user sees a notice, and /switch asks it. */
+    @Test
+    void aHeldQuestionIsAnsweredThroughSwitch() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws33"));
+        Tui tui = new Tui(terminal("go\n/agents\n/switch sub-1\ny\n/switch main\n/exit\n"), null);
+        try (Session session = Session.open(tmp.resolve("home33"), ws, Settings.defaults(),
+                Session.Access.prompter(tui.prompter()).interactive(true),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(
+                        "```js\napi.spawnAgent({task: 'save c', background: true});\n"
+                                + "for (let i = 0; i < 400 && JSON.parse(api.agents())[0].status !== 'waiting'; i++) { api.waitAgent({agent: 'sub-1', timeoutMs: 50}); }\n"
+                                + "JSON.parse(api.agents())[0].status\n```",
+                        "```js\napi.writeFile('c.txt', 'saved')\n```",
+                        "Started it.",
+                        "Saved c.txt."), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("▸ [sub-1] is waiting for you: write c.txt (5 bytes) (/switch sub-1 to answer)"), sc);
+        assertTrue(sc.matches("(?s).*sub-1 +waiting .*"), "/agents shows it waiting: " + sc);
+        assertTrue(sc.contains("sub-1 is running; you can type when its turn ends."), sc);
+        assertTrue(sc.contains("Allow writeFile: write c.txt (5 bytes)?"), sc);
+        assertTrue(sc.contains("Saved c.txt."), sc);
+        assertEquals("saved", Files.readString(ws.resolve("c.txt")));
+    }
+
     /** Spec 020 AC-06. */
     @Test
     void modelRetriesShowAsSteps() throws Exception {

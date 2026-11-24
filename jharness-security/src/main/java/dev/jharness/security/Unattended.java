@@ -8,18 +8,34 @@ import java.util.function.Supplier;
  */
 public final class Unattended {
 
-    public static final String REASON = "no one can answer while this runs in the background "
-            + "(allow it with a saved rule or a permission mode, or run the subagent in the foreground)";
+    public static final String REASON = "no one answered while this ran in the background "
+            + "(the user can /switch to the subagent to answer; or allow it with a saved rule or a permission mode, or run the subagent in the foreground)";
 
-    private static final ThreadLocal<String> AGENT = new ThreadLocal<>();
+    /**
+     * Holds a background subagent's question until the user switches to it (spec 033, D-072), then asks
+     * with the real prompter; or gives up, answering {@code UNATTENDED}.
+     */
+    @FunctionalInterface
+    public interface Waiter {
+        Prompter.Answer await(String agent, Operation op, Prompter real);
+    }
+
+    private record Mark(String agent, Waiter waiter) {}
+
+    private static final ThreadLocal<Mark> AGENT = new ThreadLocal<>();
 
     private Unattended() {
     }
 
     /** Runs {@code body} on this thread as the unattended agent {@code agent}. */
     public static <T> T run(String agent, Supplier<T> body) {
-        String before = AGENT.get();
-        AGENT.set(agent);
+        return run(agent, null, body);
+    }
+
+    /** As {@link #run(String, Supplier)}, with a waiter that may hold the question instead of refusing it at once. */
+    public static <T> T run(String agent, Waiter waiter, Supplier<T> body) {
+        Mark before = AGENT.get();
+        AGENT.set(new Mark(agent, waiter));
         try {
             return body.get();
         } finally {
@@ -38,6 +54,12 @@ public final class Unattended {
 
     /** {@code p}, except that unattended threads get {@code UNATTENDED} without asking. */
     public static Prompter guard(Prompter p) {
-        return op -> active() ? Prompter.Answer.UNATTENDED : p.ask(op);
+        return op -> {
+            Mark m = AGENT.get();
+            if (m == null) {
+                return p.ask(op);
+            }
+            return m.waiter() == null ? Prompter.Answer.UNATTENDED : m.waiter().await(m.agent(), op, p);
+        };
     }
 }

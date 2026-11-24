@@ -443,12 +443,15 @@ final class Tui {
         }
     }
 
-    private void flushPending() {
+    /** @return whether a partial line was printed */
+    private boolean flushPending() {
         if (!pending.isEmpty()) {
             raw.print(styler.line(pending.toString()));
             pending.setLength(0);
             out.flush();
+            return true;
         }
+        return false;
     }
 
     private static String modelName(Session s) {
@@ -675,12 +678,17 @@ final class Tui {
         }
         talking = name;
         following = name;
+        boolean running = session.runningSubagents().contains(name);
+        if (running) {
+            // A held question (spec 033) is asked as soon as attend() wakes it, so the prompter must be ready first.
+            prompter().idle = false;
+        }
         session.attend(name);
         Session.Subagent a = session.subagents().stream().filter(x -> x.name().equals(name)).findFirst().orElseThrow();
         String task = a.task().strip().replaceAll("\\s+", " ");
         out.println("Talking to " + name + " (" + (task.length() > 80 ? task.substring(0, 80) + "…" : task) + "). Your messages go to it and its "
                 + "questions come to you; /switch main goes back.");
-        if (session.runningSubagents().contains(name)) {
+        if (running) {
             out.println(name + " is running; you can type when its turn ends" + (terminal.getType().startsWith("dumb") ? "." : " (Esc stops it)."));
             out.flush();
             watch(session, name, () -> session.interruptSubagent(name));
@@ -806,7 +814,7 @@ final class Tui {
         if (e.type().equals("model.delta")) {
             return;
         }
-        flushPending();
+        boolean flushed = flushPending();
         boolean steps = !events.equals("none");
         // A subagent's lines say whose they are (spec 026).
         String who = e.agent().equals("main") ? "" : "[" + e.agent() + "] ";
@@ -822,9 +830,18 @@ final class Tui {
             }
             case "subagent.completed" -> {
                 if (steps) {
+                    if (flushed) {
+                        out.println();
+                    }
                     String stop = e.body().get("stopReason").asText();
                     String text = "▸ " + who + stop + " after " + e.body().get("steps").asInt() + " steps";
                     raw.println(stop.equals("done") ? styler.step(text) : styler.error(text));
+                }
+            }
+            case "subagent.waiting", "subagent.wait_ended" -> {
+                String text = waitingLine(e, who);
+                if (text != null) {
+                    raw.println(text);
                 }
             }
             case "loop.code" -> {
@@ -874,6 +891,15 @@ final class Tui {
         out.flush();
     }
 
+    /** A held question (spec 033): the notice that it waits, and the line when no one answered in time. */
+    private String waitingLine(Event e, String who) {
+        if (e.type().equals("subagent.waiting")) {
+            return styler.error("▸ " + who + "is waiting for you: " + e.body().get("summary").asText() + " (/switch " + e.agent() + " to answer)");
+        }
+        String outcome = e.body().get("outcome").asText();
+        return outcome.equals("timeout") ? styler.error("▸ " + who + "no one answered in time; that question was denied") : null;
+    }
+
     /** A background subagent's start and end, above the prompt if the user is typing; its other events stay in the log. */
     private void backgroundEvent(Event e) {
         String who = "[" + e.agent() + "] ";
@@ -890,9 +916,10 @@ final class Tui {
                 String t = "▸ " + who + stop + " after " + e.body().get("steps").asInt() + " steps (/agents " + e.agent() + " shows its events)";
                 yield stop.equals("done") ? styler.step(t) : styler.error(t);
             }
+            case "subagent.waiting", "subagent.wait_ended" -> waitingLine(e, who);
             default -> events.equals("all") ? styler.dim("· " + who + e.type() + " " + e.body()) : null;
         };
-        if (text == null || events.equals("none") && !e.type().equals("subagent.completed")) {
+        if (text == null || events.equals("none") && !e.type().equals("subagent.completed") && !e.type().startsWith("subagent.wait")) {
             return;
         }
         flushPending();
