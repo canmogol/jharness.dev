@@ -1,6 +1,22 @@
 # Changelog
 
-<!-- last-commit: 25107e3605e33c3426dc8a40fc0b9dd56f1f5394 -->
+<!-- last-commit: 8fe6290d12881b692e3fcef8934f00e185d01c55 -->
+
+## 2026-11-24 · 034 JS hooks
+
+- Hooks are JavaScript files in `~/.jharness/hooks/` or a trusted project's `.jharness/hooks/`. A file defines any of `preTool(call)`, `postTool(call)` and `stop(turn)`.
+- `preTool` runs before every api call of every agent, before the permission check. `{block: "reason"}` refuses the call, and a hook that fails blocks the call too.
+- `postTool` sees each call's outcome and result. `stop` can return `{continue: "message"}` to make the agent go on, at most 3 times a turn.
+- Hooks only tighten: a call they let through still asks as usual. Each runs in its own sandbox, and its own api calls run no hooks.
+- `/hooks` lists the hooks, the trust question lists a project's hooks, and the UI shows blocks, continues and errors.
+- `examples/.jharness/hooks/guard.js` blocks pushes to `main` or `master` and hand edits of lock files, and asks the agent to run the tests when it changed files without doing so. CI runs it in the native binary.
+- Decision: JS hooks (D-073).
+
+## 2026-11-24 · 033 Held background questions
+
+- When a background subagent needs your approval, its question waits instead of failing, and only that subagent pauses. A line above the prompt says `[sub-2] is waiting for you`, `/agents` shows it as `waiting`, and `/switch sub-2` asks the question.
+- After 10 minutes (`agent.backgroundQuestionWait`), or when the subagent is stopped, the question is denied as before. `"backgroundQuestions": "deny"` and `-p` deny at once.
+- Decision: held background questions (D-072).
 
 ## 2026-11-24 · 032 Switch to a subagent
 
