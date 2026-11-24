@@ -64,6 +64,7 @@ public final class Session implements AutoCloseable {
     private ApiServices services;
     private PlanState plans;
     private dev.jharness.mcp.McpServers mcp;
+    private dev.jharness.net.review.SystemOneReviewer reviewer;
     private volatile CommandRunner commands;
     private SubagentRunner subagents;
     private Path home;
@@ -138,6 +139,7 @@ public final class Session implements AutoCloseable {
         // Before anything starts, so a missing secret leaves nothing running (spec 017).
         Secrets loaded = Secrets.load(home, System::getenv);
         Map<String, String> tokens = gitTokens(settings, loaded);
+        String reviewerKey = reviewerKey(settings, loaded);
         String id = EventBus.newSessionId();
         while (Files.exists(SessionLog.pathFor(home, ws.root(), id))) {
             id = EventBus.newSessionId();
@@ -200,6 +202,15 @@ public final class Session implements AutoCloseable {
                 : new PermissionEngine(mode, ProjectRules.load(home, ws.root()),
                         dev.jharness.security.Unattended.guard(access.prompter()), bus, turns);
         PermissionGate gate = access.gate() != null ? access.gate() : engine;
+        dev.jharness.net.review.SystemOneReviewer reviewer = null;
+        if (engine != null && settings.reviewer().enabled()) {
+            reviewer = new dev.jharness.net.review.SystemOneReviewer(settings.reviewer(), reviewerKey, bus, turns,
+                    ws.root().getFileName() == null ? ws.root().toString() : ws.root().getFileName().toString());
+            engine.useReviewer(reviewer);
+            bus.publish(turns.get(), "reviewer.ready", Json.object().put("url", settings.reviewer().url()).put("model", settings.reviewer().model())
+                    .put("askBelow", settings.reviewer().askBelow()).put("denyBelow", settings.reviewer().denyBelow())
+                    .put("timeoutMs", settings.reviewer().timeout().toMillis()).put("onError", settings.reviewer().onError()));
+        }
         PlanState plans = new PlanState(bus, engine, access.prompter(), agent != null && agent.plan());
         Checkpoints checkpoints = new Checkpoints(Checkpoints.rootFor(home, ws.root(), bus.session()), bus, turns);
         var http = new dev.jharness.net.http.HttpOperations(bus, turns, settings.http(), settings.timeouts());
@@ -244,12 +255,27 @@ public final class Session implements AutoCloseable {
         s.services = services;
         s.plans = plans;
         s.mcp = mcp;
+        s.reviewer = reviewer;
         s.subagents = subagents;
         s.home = home;
         s.trusted = access.trusted();
         s.proxy = proxy;
         s.sessionDir = sessionDir;
         return s;
+    }
+
+    /** The reviewer's bearer token (spec 038); a named secret that isn't set stops start-up. */
+    static String reviewerKey(Settings settings, Secrets secrets) throws ConfigException {
+        var r = settings.reviewer();
+        if (!r.enabled() || r.apiKeyEnv() == null) {
+            return null;
+        }
+        String v = secrets.apply(r.apiKeyEnv());
+        if (v == null || v.isBlank()) {
+            throw new ConfigException("reviewer.apiKeyEnv: secret " + r.apiKeyEnv()
+                    + " is not set (set it in the environment or in ~/.jharness/secrets, or turn the reviewer off)");
+        }
+        return v.strip();
     }
 
     /** The tokens for {@code git.credentials} (spec 017, AC-06); a mapped secret that isn't set stops start-up. */
@@ -281,7 +307,8 @@ public final class Session implements AutoCloseable {
         Path project = projectNetworkRules(root);
         boolean offline = settings.offline();
         // Offline, only model endpoints on this machine or a private network are allowed automatically (D-055).
-        List<Rule> endpoints = java.util.stream.Stream.concat(modelEndpoints(settings.models()).stream(), mcpEndpoints(settings.mcp()).stream())
+        List<Rule> endpoints = java.util.stream.Stream.of(modelEndpoints(settings.models()), mcpEndpoints(settings.mcp()),
+                        reviewerEndpoint(settings.reviewer())).flatMap(List::stream)
                 .filter(r -> !offline || NetworkRules.local(r.target().toString())).toList();
         boolean trusted = access.trusted();
         EgressProxy p = EgressProxy.start(() -> new NetworkRules(RulesFile.load(general), RulesFile.load(project), trusted, endpoints, offline),
@@ -320,6 +347,28 @@ public final class Session implements AutoCloseable {
             l.add(RulesFile.rule(Rule.Action.ALLOW, h + ":" + port, "MCP server " + srv.name()));
         }
         return List.copyOf(l);
+    }
+
+    /** The reviewer's endpoint is allowed automatically, like model endpoints (D-031). */
+    static List<Rule> reviewerEndpoint(dev.jharness.config.ReviewerSettings r) {
+        if (!r.enabled()) {
+            return List.of();
+        }
+        URI u = URI.create(r.url());
+        int port = u.getPort() > 0 ? u.getPort() : "https".equalsIgnoreCase(u.getScheme()) ? 443 : 80;
+        String host = u.getHost();
+        String h = host.startsWith("[") ? host : host.contains(":") ? "[" + host + "]" : host;
+        return List.of(RulesFile.rule(Rule.Action.ALLOW, h + ":" + port, "action reviewer"));
+    }
+
+    /** The start-up line for the reviewer, or null when it is off (spec 038). */
+    public String describeReviewer() {
+        if (reviewer == null) {
+            return null;
+        }
+        var r = reviewer.settings();
+        return String.format("Action reviewer: %s at %s · asks below %.2f, denies below %.2f%s", r.model(), r.url(), r.askBelow(), r.denyBelow(),
+                NetworkRules.local(URI.create(r.url()).getHost()) ? "" : " · actions and their context are sent to this server");
     }
 
     /** {@code /mcp}: each server, how it is reached and its tools or error. */

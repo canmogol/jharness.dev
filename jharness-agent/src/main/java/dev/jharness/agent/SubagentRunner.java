@@ -297,6 +297,9 @@ final class SubagentRunner implements Subagents {
             gate = op -> name.equals(attended) ? next.decide(op)
                     : Unattended.run(name, holdQuestions ? this::await : null, () -> next.decide(op));
         }
+        // The gate is shared; mark whose decision this is, so the action reviewer sees the subagent's task (spec 038).
+        PermissionGate marked = gate;
+        gate = op -> dev.jharness.security.Caller.as(name, () -> marked.decide(op));
         ApiServices services = new ApiServices(p.files(), gate, bus, turns, p.search(), p.git(), p.checkpoints(), p.builds(), p.http(), null, p.hooks(), p.planning(), p.mcp());
         ModelProvider provider = provider(model, def, turns, parent);
         String system = SystemPrompt.build(context, projectMd, userMd, def) + toolsText + NOTE;

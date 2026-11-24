@@ -3,7 +3,7 @@
 Features in build order. Each phase ends with a gate it must pass before the next starts. No dates are set yet.
 How each phase is built and tested is in `../plan.md`; why each choice was made is in `decisions.md`.
 
-Last updated: 2026-11-18
+Last updated: 2026-11-24
 
 ---
 
@@ -89,7 +89,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Slash commands (Markdown templates and JS) (spec 035)
 - [x] MCP client (stdio, streamable HTTP), called from JS through `api.mcp`; stdio servers started through `ProcessRunner` in the OS sandbox (spec 037)
 - [x] Todo list and plan mode (spec 036)
-- [ ] Optional action reviewer: a System One API decision model (Jev, or a local equivalent such as Laya); only tightens; fails to ask (D-031)
+- [x] Optional action reviewer: a System One API decision model (Jev, or a local equivalent such as Laya); only tightens; fails to ask (D-031, spec 038)
 
 **Gate:** one custom agent and one hook ship as working examples.
 

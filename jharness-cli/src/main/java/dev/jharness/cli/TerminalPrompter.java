@@ -79,6 +79,11 @@ final class TerminalPrompter implements Prompter {
                 }
             }
         }
+        String review = op.detail().path("review").path("reason").asText("");
+        if (!review.isEmpty()) {
+            // Spec 038: the reviewer turned an allow into this question; say why.
+            out.println(styler.dim("Reviewer: " + review));
+        }
         out.println("Allow " + op.api() + ": " + op.summary() + "?");
         out.flush();
         while (true) {

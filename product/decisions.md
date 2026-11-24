@@ -452,6 +452,7 @@ Local 7B model speed is a soft target, not a gate. On a 16 GB Apple Silicon Mac:
 "reviewer": {
   "enabled": true,
   "url": "http://127.0.0.1:8000/v1/systemone",
+  "model": "jev-latest",
   "apiKeyEnv": "SYSTEMONE_API_KEY",
   "askBelow": 0.90,
   "denyBelow": 0.20,
@@ -462,11 +463,25 @@ Local 7B model speed is a soft target, not a gate. On a 16 GB Apple Silicon Mac:
 
 The reviewer endpoint is allowed through the proxy automatically, like the model endpoint. Every verdict emits a `review.*` event with the confidence.
 
+**How it asks** (spec 038). One `noul` question per operation, named `fits`: does this action fit the user's request? The `state` holds the main agent's latest request, the calling agent and a subagent's task, the workspace name, and the action (api, kind, summary, detail with long fields cut). The answer's `noul`, a probability from 0 to 1, is the confidence:
+
+| `noul` | Effect |
+| --- | --- |
+| At or above `askBelow` | Decision unchanged |
+| Below `askBelow` | Asks the user, with the reviewer's reason, even in bypass or accept-edits mode or with a saved rule |
+| Below `denyBelow` | Denied without asking |
+
+- Reviewed: every state-changing operation that plan mode doesn't deny, before the mode and saved rules. Not reviewed: reads, events, session state and the proxy's own network questions.
+- Failure: any status other than 200, no answer within `timeoutMs`, or no `noul` from 0 to 1. `onError` is `ask` (the default; denied when no one can answer) or `deny`.
+- User-only: a project's `reviewer` is ignored, because it could send the context to its own server or turn the reviewer off. A named key that isn't set stops start-up.
+- Events: `reviewer.ready`, `review.verdict` (confidence, outcome `keep`, `ask` or `deny`) and `review.failed`.
+- Hosts that serve the API: TypeSafe (`https://api.typesafe.ai/v1/systemone`, model `jev-latest`) and DigitalOcean (`https://inference.do-ai.run/v1/systemone`, model `typesafe-jev-1.13.0`).
+
 **Why.** Rules can't judge intent: a prompt-injected commit of unrelated files, an unrequested npm script or a POST to an allowed host all pass the rules. A reviewer catches some of these. It can't be the security boundary because it is probabilistic and judges text an attacker may control.
 
 **Costs.** A local decision model such as Laya is a separate server, outside the one-binary principle, so it stays optional and user-run. Jev sends the action and its context off the machine. Each reviewed operation adds latency.
 
-**Source.** User request and acceptance on 2026-11-17. Changed by the user on 2026-11-24: one System One API back-end (Jev or a local equivalent such as Laya) instead of Kev, Jev or an own model profile.
+**Source.** User request and acceptance on 2026-11-17. Changed by the user on 2026-11-24: one System One API back-end (Jev or a local equivalent such as Laya) instead of Kev, Jev or an own model profile. Refined by spec 038 on 2026-11-24: the `model` key, one `noul` question, the review order and user-only settings.
 
 ## D-032 — Model profiles
 
@@ -1287,6 +1302,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q79 | How are slash commands defined? | A Markdown file is a prompt template; a JS file's `run(args)` builds a prompt or prints text, in its own sandbox | Repeated tasks become one command without a new release | D-074 |
 | Q80 | How do the todo list and plan mode work? | The agent sets its list with `api.todos([...])`; `/plan` makes the session read-only, and `api.proposePlan(text)` shows the plan and asks the user to approve it, which turns plan mode off | The user sees the agent's steps and approves a plan before anything changes | D-075 |
 | Q81 | How are MCP servers configured and called? | In `~/.jharness/settings.json` `"mcp": {"servers": {...}}` (command or url); `api.mcp({server, tool, input})` calls a tool after approval; `api.mcp({list: true})` lists them | Lets the agent use the user's other tools under the same sandbox and permissions | D-076 |
+| Q82 | How does the action reviewer ask System One? | One `noul` question per state-changing operation, with the user's request and the action as `state`; below `askBelow` asks, below `denyBelow` denies; failures ask | Maps the answer straight onto D-031's two thresholds | D-031 |
 
 ---
 

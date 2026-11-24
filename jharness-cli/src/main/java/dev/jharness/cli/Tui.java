@@ -280,6 +280,10 @@ final class Tui {
                 + (session.agent() != null ? " · agent " + session.agent().name() : "")
                 + (session.offline() ? " · offline" : "") + " · /help for commands");
         raw.println(styler.dim("Session log: " + session.logPath()));
+        String reviewer = session.describeReviewer();
+        if (reviewer != null) {
+            out.println(reviewer);
+        }
         var project = session.tools().project();
         if (!project.isEmpty()) {
             out.println("Project tools: " + String.join("; ", project.stream().map(dev.jharness.process.ToolDefinitions.ProjectTool::line).toList()));
@@ -1011,6 +1015,14 @@ final class Tui {
                     }
                 }
             }
+            case "review.verdict" -> {
+                if (e.body().get("outcome").asText().equals("deny")) {
+                    raw.println(styler.error(String.format("▸ reviewer refused %s (confidence %.2f)", e.body().get("api").asText(),
+                            e.body().get("confidence").asDouble())));
+                }
+            }
+            case "review.failed" -> raw.println(styler.error("▸ reviewer failed on " + e.body().get("api").asText() + ": "
+                    + e.body().get("error").asText() + (e.body().get("outcome").asText().equals("deny") ? "; refused" : "; asking you")));
             case "model.retry" -> {
                 if (steps) {
                     long s = (e.body().get("waitMs").asLong() + 999) / 1000;

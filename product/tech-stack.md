@@ -3,7 +3,7 @@
 The stack is chosen to stay Native Image friendly: few reflection-heavy libraries, and thin clients of our own where an SDK might not compile.
 Reasons for the main choices are in `decisions.md`.
 
-Last updated: 2026-11-18
+Last updated: 2026-11-24
 
 ## Core
 
@@ -60,6 +60,16 @@ A decision model behind the System One API (`POST /v1/systemone`), with one HTTP
 | --- | --- | --- |
 | Jev | Hosted | Action and context leave the machine |
 | Laya | User-run, on this machine or the LAN | A locally running equivalent; works offline |
+
+One `noul` question per state-changing operation; the answer from 0 to 1 is the confidence (spec 038).
+
+| Key | Default | Range |
+| --- | --- | --- |
+| `model` | `jev-latest` | Any model name the server knows, such as `typesafe-jev-1.13.0` on DigitalOcean |
+| `askBelow` | 0.90 | 0 to 1 |
+| `denyBelow` | 0.20 | 0 to `askBelow` |
+| `timeoutMs` | 3000 | 500 to 60000 |
+| `onError` | `ask` | `ask` or `deny` |
 
 ## Sandbox limits (defaults, tune in P0)
 

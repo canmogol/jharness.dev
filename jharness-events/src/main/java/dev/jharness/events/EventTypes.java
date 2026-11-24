@@ -52,6 +52,9 @@ public final class EventTypes {
         HOST.put("subagent.wait_ended", List.of("outcome"));
         HOST.put("mcp.connected", List.of("server", "transport", "tools"));
         HOST.put("mcp.called", List.of("server", "tool", "isError"));
+        HOST.put("review.verdict", List.of("api", "kind", "confidence", "outcome"));
+        HOST.put("review.failed", List.of("api", "kind", "error", "outcome"));
+        HOST.put("reviewer.ready", List.of("url", "model"));
         HOST.put("todo.updated", List.of("items"));
         HOST.put("plan.mode", List.of("plan", "mode"));
         HOST.put("plan.proposed", List.of("plan"));
