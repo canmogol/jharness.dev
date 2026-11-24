@@ -87,6 +87,10 @@
           "parameterTypes": [
             "java.lang.String"
           ]
+        },
+        {
+          "name": "models",
+          "parameterTypes": []
         }
       ]
     }

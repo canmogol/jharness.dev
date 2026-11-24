@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -137,6 +138,15 @@ class SettingsTest {
         assertEquals(100, Settings.defaults().agent().maxSteps());
         assertEquals(500, Settings.parse("{\"agent\":{\"maxSteps\":500}}", "s").agent().maxSteps());
         assertEquals(5, Settings.parse("{\"agent\":{\"maxSteps\":5}}", "s").agent().maxSteps());
+        assertEquals(10, Settings.defaults().agent().subagentsPerTurn());
+        assertEquals(100, Settings.defaults().agent().subagentMaxSteps());
+        AgentSettings a = Settings.parse("{\"agent\":{\"subagentsPerTurn\":1000,\"subagentMaxSteps\":500}}", "s").agent();
+        assertEquals(1000, a.subagentsPerTurn());
+        assertEquals(500, a.subagentMaxSteps());
+        for (String bad : List.of("{\"subagentsPerTurn\":1001}", "{\"subagentsPerTurn\":0}", "{\"subagentMaxSteps\":501}", "{\"subagentMaxSteps\":\"5\"}")) {
+            ConfigException e = assertThrows(ConfigException.class, () -> Settings.parse("{\"agent\":" + bad + "}", "s"), bad);
+            assertTrue(e.getMessage().contains("expected a whole number from 1 to"), e.getMessage());
+        }
         assertTrue(bad("{\"agent\":{\"maxSteps\":0}}").getMessage().contains("agent.maxSteps"));
         assertTrue(bad("{\"agent\":{\"maxSteps\":501}}").getMessage().contains("1 to 500"));
         assertTrue(bad("{\"agent\":{\"steps\":3}}").getMessage().contains("agent.steps"));

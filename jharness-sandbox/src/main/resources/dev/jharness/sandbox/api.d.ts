@@ -135,13 +135,20 @@ type NpmRequest = Timed & (
  */
 interface SpawnRequest {
   task: string;
+  /** A custom agent's name: the subagent runs with its prompt, tools and limits. */
   agent?: string;
+  /** A model profile name from api.models(); default: the custom agent's model, else the session's. */
+  model?: string;
   maxSteps?: number;
 }
 
 /** {"agent": string, "reply": string, "stopReason": "done" | "max_steps" | "error" | "interrupted", "steps": number, "error"?: string}
  *   — reply is the subagent's final message, cut to the last 30,000 characters */
 type SpawnResultJson = string;
+
+/** {"current": string | null, "models": [{"name": string, "provider": string, "model": string, "notes"?: string}]}
+ *   — current is the session's profile */
+type ModelsJson = string;
 
 /** type must start with "agent." or "custom."; at most 64 KB */
 interface AgentEvent {
@@ -179,10 +186,12 @@ declare const api: {
   fetch(request: { url: string; timeoutMs?: number } | string): PageJson;
   /**
    * Runs a subagent on a task in its own sandbox and returns its final reply. It has the same api and
-   * permissions as you (each change still asks), but can't start subagents itself. At most 10 per turn.
-   * A string is the task.
+   * permissions as you (each change still asks), but can't start subagents itself. The user's settings
+   * limit how many one turn may start (10 by default) and its steps (100 by default). A string is the task.
    */
   spawnAgent(request: SpawnRequest | string): SpawnResultJson;
+  /** The model profiles spawnAgent can use, by name. */
+  models(): ModelsJson;
   /** Records an event in the session log; returns its id. */
   emit(event: AgentEvent | string): string;
 };

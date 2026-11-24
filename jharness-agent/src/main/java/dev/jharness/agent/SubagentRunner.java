@@ -31,10 +31,6 @@ import dev.jharness.security.PermissionGate;
  */
 final class SubagentRunner implements Subagents {
 
-    /** Subagents one turn of the main agent may start. */
-    static final int MAX_PER_TURN = 10;
-    /** A subagent's step limit when neither the request nor its agent sets one. */
-    static final int DEFAULT_STEPS = 30;
     static final int MAX_TASK_CHARS = 20_000;
 
     static final String NOTE = """
@@ -46,7 +42,7 @@ final class SubagentRunner implements Subagents {
             You can't start subagents yourself.
             """;
 
-    private static final Set<String> FIELDS = Set.of("task", "agent", "maxSteps");
+    private static final Set<String> FIELDS = Set.of("task", "agent", "model", "maxSteps");
 
     private final Path home;
     private final Path workspace;
@@ -93,7 +89,7 @@ final class SubagentRunner implements Subagents {
         for (var it = req.fieldNames(); it.hasNext(); ) {
             String f = it.next();
             if (!FIELDS.contains(f)) {
-                throw new IllegalArgumentException("spawnAgent does not take \"" + f + "\" (takes: agent, maxSteps, task)");
+                throw new IllegalArgumentException("spawnAgent does not take \"" + f + "\" (takes: agent, maxSteps, model, task)");
             }
         }
         String task = req.path("task").asText("").strip();
@@ -109,9 +105,23 @@ final class SubagentRunner implements Subagents {
                 throw new IllegalArgumentException(e.getMessage());
             }
         }
+        String model = null;
+        JsonNode mn = req.get("model");
+        if (mn != null && !mn.isNull()) {
+            if (!mn.isTextual() || mn.asText().isBlank()) {
+                throw new IllegalArgumentException("\"model\" must be a profile name from api.models()");
+            }
+            model = mn.asText();
+            try {
+                settings.models().resolve(model);
+            } catch (ConfigException e) {
+                throw new IllegalArgumentException(e.getMessage());
+            }
+        }
         AgentLoop parent = parentLoop;
         int limit = parent.maxSteps();
-        int steps = def != null && def.maxSteps() != null ? Math.min(def.maxSteps(), limit) : Math.min(DEFAULT_STEPS, limit);
+        int dflt = def != null && def.maxSteps() != null ? def.maxSteps() : settings.agent().subagentMaxSteps();
+        int steps = Math.min(dflt, limit);
         JsonNode ms = req.get("maxSteps");
         if (ms != null && !ms.isNull()) {
             if (!ms.isInt() || ms.asInt() < 1 || ms.asInt() > limit) {
@@ -120,8 +130,9 @@ final class SubagentRunner implements Subagents {
             steps = ms.asInt();
         }
         int turn = parentTurns.current();
-        if (perTurn.computeIfAbsent(turn, t -> new AtomicInteger()).incrementAndGet() > MAX_PER_TURN) {
-            throw new IllegalArgumentException("this turn already started " + MAX_PER_TURN + " subagents, the most one turn may");
+        int most = settings.agent().subagentsPerTurn();
+        if (perTurn.computeIfAbsent(turn, t -> new AtomicInteger()).incrementAndGet() > most) {
+            throw new IllegalArgumentException("this turn already started " + most + " subagents, the most one turn may (agent.subagentsPerTurn)");
         }
         String name = "sub-" + started.incrementAndGet();
         TurnCounter turns = TurnCounter.following(name, parentTurns);
@@ -134,11 +145,11 @@ final class SubagentRunner implements Subagents {
             gate = planGate(gate, def.name());
         }
         ApiServices services = new ApiServices(p.files(), gate, bus, turns, p.search(), p.git(), p.checkpoints(), p.builds(), p.http(), null);
-        ModelProvider provider = provider(def, turns, parent);
+        ModelProvider provider = provider(model, def, turns, parent);
         String system = SystemPrompt.build(context, projectMd, userMd, def) + NOTE;
         long t0 = System.nanoTime();
         bus.publish(turns.get(), "subagent.started", Json.object().put("task", task.length() > 2000 ? task.substring(0, 2000) + "…" : task)
-                .put("customAgent", def == null ? "default" : def.name()).put("maxSteps", steps));
+                .put("customAgent", def == null ? "default" : def.name()).put("model", modelName(model, def)).put("maxSteps", steps));
         TurnResult r;
         try (AgentIsolate isolate = new IsolateManager(settings.sandbox(), bus, turns).create(name, "subagent")) {
             if (def != null && def.helpers() != null) {
@@ -170,12 +181,37 @@ final class SubagentRunner implements Subagents {
         return Json.write(out);
     }
 
+    @Override
+    public String models() {
+        ObjectNode out = Json.object();
+        String current = profile != null ? profile : settings.models().defaultName();
+        if (current == null) {
+            out.putNull("current");
+        } else {
+            out.put("current", current);
+        }
+        var list = out.putArray("models");
+        settings.models().all().values().forEach(p -> {
+            ObjectNode m = list.addObject().put("name", p.name()).put("provider", p.provider()).put("model", p.model());
+            if (p.notes() != null) {
+                m.put("notes", p.notes());
+            }
+        });
+        return Json.write(out);
+    }
+
+    /** The profile name the subagent runs with, for its {@code subagent.started} event. */
+    private String modelName(String model, AgentDefinition def) {
+        String n = model != null ? model : def != null && def.model() != null ? def.model() : profile;
+        return n == null ? "session" : n;
+    }
+
     /**
-     * The custom agent's profile, else a new client for the session's profile, so the subagent's model
+     * The request's model profile, else the custom agent's profile, else a new client for the session's profile, so the subagent's model
      * events carry its name; sessions opened without a profile (replays) share their provider.
      */
-    private ModelProvider provider(AgentDefinition def, TurnCounter turns, AgentLoop parent) throws ConfigException {
-        String name = def != null && def.model() != null ? def.model() : profile;
+    private ModelProvider provider(String model, AgentDefinition def, TurnCounter turns, AgentLoop parent) throws ConfigException {
+        String name = model != null ? model : def != null && def.model() != null ? def.model() : profile;
         if (name == null) {
             return parent.provider();
         }

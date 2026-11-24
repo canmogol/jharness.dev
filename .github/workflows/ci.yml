@@ -123,6 +123,11 @@ jobs:
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --type subagent. > "$tmp/sub-log.txt"
           cat "$tmp/sub-log.txt"
           grep -q "\[sub-1\]  subagent.completed  stopReason=done steps=1" "$tmp/sub-log.txt"
+          # api.models() lists the model profiles in the native binary.
+          printf '%s\n' '{"reply":"```js\nJSON.parse(api.models()).models.length + \" profiles\"\n```"}' '{"reply":"Listed."}' > "$tmp/models.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/models.jsonl" -p "models" | tee "$tmp/models.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --full --json > "$tmp/models-log.jsonl"
+          grep -q '0 profiles' "$tmp/models-log.jsonl"
 
       # The JLine TUI in the native binary through a pseudo-terminal: approval prompt, step, reply, /help, Ctrl-D.
       - name: TUI pseudo-terminal check

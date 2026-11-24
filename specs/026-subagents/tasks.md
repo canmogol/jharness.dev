@@ -20,17 +20,22 @@ Format: `- [x] T### [P] description (AC-xx)`. `[P]` = can run in parallel with o
 - [x] T006 CI native step spawns a subagent (AC-09)
 - [x] T007 README, D-064, roadmap (AC-10)
 
+## Group 4 — Review changes
+
+- [x] T008 `model` on `spawnAgent`, `api.models()`, `agent.subagentsPerTurn` and `agent.subagentMaxSteps`; `SubagentTest` and `SettingsTest` cases (AC-01, AC-04, AC-05, AC-07, AC-11)
+
 ## Traceability
 
 | AC | Tasks |
 | --- | --- |
-| AC-01 | T001, T002, T004 |
+| AC-01 | T001, T002, T004, T008 |
 | AC-02 | T002, T004 |
 | AC-03 | T002, T004 |
-| AC-04 | T002, T004 |
-| AC-05 | T001, T002, T004 |
+| AC-04 | T002, T004, T008 |
+| AC-05 | T001, T002, T004, T008 |
 | AC-06 | T003, T004 |
-| AC-07 | T002, T003, T004 |
+| AC-07 | T002, T003, T004, T008 |
 | AC-08 | T005 |
 | AC-09 | T001, T006 |
 | AC-10 | T007 |
+| AC-11 | T008 |

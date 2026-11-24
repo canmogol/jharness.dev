@@ -4,13 +4,19 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-/** The {@code agent} section: {@code maxSteps}, the most RunJS steps in one turn (1 to 500, default 100; D-051). */
-public record AgentSettings(int maxSteps) {
+/**
+ * The {@code agent} section: {@code maxSteps}, the most RunJS steps in one turn (1 to 500, default 100; D-051);
+ * {@code subagentsPerTurn}, the most subagents one turn of the main agent may start (1 to 1000, default 10); and
+ * {@code subagentMaxSteps}, a subagent's step limit when its request and custom agent set none (1 to 500,
+ * default 100; D-064). A subagent never runs more steps than {@code maxSteps}.
+ */
+public record AgentSettings(int maxSteps, int subagentsPerTurn, int subagentMaxSteps) {
 
     public static final int MAX_STEPS_LIMIT = 500;
+    public static final int SUBAGENTS_PER_TURN_LIMIT = 1000;
 
     public static AgentSettings defaults() {
-        return new AgentSettings(100);
+        return new AgentSettings(100, 10, 100);
     }
 
     static AgentSettings parse(JsonNode section, String source) throws ConfigException {
@@ -20,17 +26,27 @@ public record AgentSettings(int maxSteps) {
         if (!section.isObject()) {
             throw new ConfigException(source + ": \"agent\" must be an object");
         }
-        int maxSteps = defaults().maxSteps();
+        AgentSettings d = defaults();
+        int maxSteps = d.maxSteps();
+        int perTurn = d.subagentsPerTurn();
+        int subSteps = d.subagentMaxSteps();
         for (Map.Entry<String, JsonNode> e : section.properties()) {
-            if (!e.getKey().equals("maxSteps")) {
-                throw new ConfigException(source + ": agent." + e.getKey() + " is not a known setting (known: maxSteps)");
+            switch (e.getKey()) {
+                case "maxSteps" -> maxSteps = number(e, source, MAX_STEPS_LIMIT);
+                case "subagentsPerTurn" -> perTurn = number(e, source, SUBAGENTS_PER_TURN_LIMIT);
+                case "subagentMaxSteps" -> subSteps = number(e, source, MAX_STEPS_LIMIT);
+                default -> throw new ConfigException(source + ": agent." + e.getKey()
+                        + " is not a known setting (known: maxSteps, subagentMaxSteps, subagentsPerTurn)");
             }
-            JsonNode v = e.getValue();
-            if (!v.canConvertToInt() || v.asInt() < 1 || v.asInt() > MAX_STEPS_LIMIT) {
-                throw new ConfigException(source + ": agent.maxSteps=" + v.asText() + ": expected a whole number from 1 to " + MAX_STEPS_LIMIT);
-            }
-            maxSteps = v.asInt();
         }
-        return new AgentSettings(maxSteps);
+        return new AgentSettings(maxSteps, perTurn, subSteps);
+    }
+
+    private static int number(Map.Entry<String, JsonNode> e, String source, int max) throws ConfigException {
+        JsonNode v = e.getValue();
+        if (!v.isIntegralNumber() || v.asInt() < 1 || v.asInt() > max) {
+            throw new ConfigException(source + ": agent." + e.getKey() + "=" + v.asText() + ": expected a whole number from 1 to " + max);
+        }
+        return v.asInt();
     }
 }

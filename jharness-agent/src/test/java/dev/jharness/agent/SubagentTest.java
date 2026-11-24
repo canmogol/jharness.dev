@@ -31,12 +31,13 @@ class SubagentTest {
     ReplayProvider replay;
     List<JsonNode> events;
     TurnResult result;
+    Settings settings = Settings.defaults();
 
     private Session open(AgentDefinition agent, List<String> replies) throws Exception {
         home = Files.createDirectories(tmp.resolve("home"));
         ws = Files.createDirectories(tmp.resolve("ws"));
         Files.writeString(ws.resolve("a.txt"), "old");
-        return Session.open(home, ws, Settings.defaults(), Session.Access.prompter(op -> Prompter.Answer.ONCE).agent(agent),
+        return Session.open(home, ws, settings, Session.Access.prompter(op -> Prompter.Answer.ONCE).agent(agent),
                 (bus, turns) -> replay = ReplayProvider.ofReplies(replies, bus, turns));
     }
 
@@ -77,7 +78,8 @@ class SubagentTest {
         assertEquals("sub-1", started.get("agent").asText());
         assertEquals(1, started.get("turn").asInt(), "the parent's turn");
         assertEquals("default", started.get("customAgent").asText());
-        assertEquals(SubagentRunner.DEFAULT_STEPS, started.get("maxSteps").asInt());
+        assertEquals(100, started.get("maxSteps").asInt(), "agent.subagentMaxSteps by default");
+        assertEquals("session", started.get("model").asText(), "the session's provider");
         JsonNode done = of("subagent.completed").getFirst();
         assertEquals("done", done.get("stopReason").asText());
         assertTrue(of("loop.code").stream().anyMatch(e -> e.get("agent").asText().equals("sub-1")), "the subagent's steps carry its name");
@@ -137,6 +139,46 @@ class SubagentTest {
         AgentDefinition lead = AgentDefinition.resolve(tmp.resolve("home"), Files.createDirectories(tmp.resolve("ws")), false, "lead");
         turn(lead, js("JSON.parse(api.spawnAgent('write')).reply"), js("api.writeFile('a.txt', 'x')"), "No.", "done");
         assertTrue(resultOf(2).contains("agent lead can't use api.writeFile"), resultOf(2));
+    }
+
+    @Test
+    void modelsListsTheProfilesAndSpawnTakesOne() throws Exception {
+        settings = Settings.parse("""
+                {"model": "local", "models": {
+                  "local": {"provider": "openai-compatible", "baseUrl": "http://localhost:1/v1", "model": "qwen", "notes": "small"},
+                  "big": {"provider": "anthropic", "model": "claude-x", "apiKeyEnv": "SECRET_ENV"}}}""", "s");
+        turn(null,
+                js("api.models()"),
+                js("const out = [];\n"
+                        + "for (const q of [{task: 'x', model: 'nope'}, {task: 'x', model: 3}]) {\n"
+                        + "  try { api.spawnAgent(q); } catch (e) { out.push(e.message); }\n"
+                        + "}\nout.join('\\n')"),
+                "done");
+        String models = resultOf(1);
+        assertTrue(models.contains("\"current\":\"local\""), models);
+        assertTrue(models.contains("{\"name\":\"local\",\"provider\":\"openai-compatible\",\"model\":\"qwen\",\"notes\":\"small\"}"), models);
+        assertTrue(models.contains("\"name\":\"big\""), models);
+        assertFalse(models.contains("localhost") || models.contains("SECRET_ENV"), "no URLs or key variables");
+        String errors = resultOf(2);
+        assertTrue(errors.contains("unknown model profile \"nope\" (known: local, big)"), errors);
+        assertTrue(errors.contains("\"model\" must be a string"), errors);
+        assertEquals(0, of("subagent.started").size());
+    }
+
+    @Test
+    void subagentLimitsComeFromSettings() throws Exception {
+        settings = Settings.parse("{\"agent\": {\"subagentsPerTurn\": 2, \"subagentMaxSteps\": 7}}", "s");
+        turn(null,
+                js("let n = 0;\ntry { for (let i = 0; i < 3; i++) { api.spawnAgent('t' + i); n++; } } catch (e) { n + ': ' + e.message }"),
+                "ok", "ok", "done");
+        assertTrue(resultOf(3).contains("2: this turn already started 2 subagents"), resultOf(3));
+        assertEquals(7, of("subagent.started").getFirst().get("maxSteps").asInt());
+    }
+
+    @Test
+    void modelsIsNotAvailableInASubagent() throws Exception {
+        turn(null, js("api.spawnAgent('list')"), js("api.models()"), "no", "done");
+        assertTrue(resultOf(2).contains("models is not available here"), resultOf(2));
     }
 
     @Test

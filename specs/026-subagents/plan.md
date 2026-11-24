@@ -4,7 +4,7 @@ Spec: `spec.md` · Status: Done · Created: 2026-11-23
 
 ## Approach
 
-- Sandbox: `Subagents` interface; `ApiServices.subagents` (null = not available); `HostApi.spawnAgent` checks the request, passes the gate as `Operation.Kind.AGENT` (not state-changing) and runs the spawn outside the run clock; the JS shim and `api.d.ts` get `spawnAgent`; the native metadata lists it.
+- Sandbox: `Subagents` interface; `ApiServices.subagents` (null = not available); `HostApi.spawnAgent` checks the request, passes the gate as `Operation.Kind.AGENT` (not state-changing) and runs the spawn outside the run clock; the JS shim and `api.d.ts` get `spawnAgent`; the native metadata lists it. `api.models()` lists the model profiles through `Subagents.models()`; `AgentSettings` gets `subagentsPerTurn` and `subagentMaxSteps`.
 - Agent: `SubagentRunner` implements `Subagents`. Per spawn it builds a `TurnCounter.following` the parent's turn, the gate (the session's, plus `ToolsGate` and a plan gate for the custom agent), `ApiServices` without subagents, a provider (the agent's profile, else a new client for the session's profile, else the session's provider), an isolate from `IsolateManager` with the `subagent` profile, and an `AgentLoop`. It publishes `subagent.started` and `subagent.completed`.
 - `AgentLoop.child` lets `interrupt` reach the running subagent.
 - TUI: `[sub-N]` on step lines and the start and end lines. `LogFormat` fields for the new events.
