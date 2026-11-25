@@ -421,10 +421,10 @@ class TuiTest {
     @Test
     void commandsComeFromTheHelp() {
         assertEquals(List.of("/agent", "/agents", "/commands", "/compact", "/context", "/diff", "/events", "/exit", "/follow", "/help", "/hooks", "/mcp",
-                "/model", "/network", "/plan", "/rewind", "/stop", "/switch", "/thinking", "/todos", "/undo"), List.copyOf(Tui.COMMANDS.keySet()));
+                "/model", "/network", "/plan", "/rewind", "/stop", "/switch", "/thinking", "/todos", "/undo", "/view"), List.copyOf(Tui.COMMANDS.keySet()));
         // Spec 046: the help lists the commands in alphabetical order, then the keys.
         assertEquals(Tui.COMMANDS.keySet().stream().sorted().toList(), List.copyOf(Tui.COMMANDS.keySet()));
-        assertTrue(Tui.HELP.indexOf("Keys:") > Tui.HELP.indexOf("/undo") && Tui.HELP.indexOf("@PATH") > Tui.HELP.indexOf("Keys:"), Tui.HELP);
+        assertTrue(Tui.HELP.indexOf("Keys:") > Tui.HELP.indexOf("/view") && Tui.HELP.indexOf("@PATH") > Tui.HELP.indexOf("Keys:"), Tui.HELP);
         assertEquals("list model profiles", Tui.COMMANDS.get("/model"));
         assertEquals("quit (also /quit, /q, or Ctrl-D)", Tui.COMMANDS.get("/exit"));
     }
@@ -634,6 +634,23 @@ class TuiTest {
         assertTrue(sc.contains("Resumed " + saved.session() + ": 1 turn, 2 messages; it began with \"plan the shop\"."), sc);
         assertTrue(sc.contains("Last reply: Planned the shop."), sc);
         assertTrue(sc.contains("before the session was resumed"), sc);
+    }
+
+    /** Spec 048 AC-05: /view prints the viewer's address, the same one on a second /view. */
+    @Test
+    void viewPrintsTheAddress() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws-view"));
+        Tui tui = new Tui(terminal("/view\n/view\n/exit\n"), null);
+        try (Session session = Session.open(tmp.resolve("home-view"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        var m = java.util.regex.Pattern.compile("Open (http://127\\.0\\.0\\.1:\\d+/\\?t=[A-Za-z0-9_-]+)").matcher(sc);
+        assertTrue(m.find(), sc);
+        String first = m.group(1);
+        assertTrue(m.find() && m.group(1).equals(first), "one viewer per session: " + sc);
+        assertTrue(sc.contains("Read-only, on this machine only"), sc);
     }
 
     /** Spec 024 AC-01, AC-02: "/" then Tab prints the help; "/mo" then Tab completes /model; other text keeps its Tab behavior. */

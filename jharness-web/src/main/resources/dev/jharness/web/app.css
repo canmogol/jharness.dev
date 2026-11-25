@@ -1,0 +1,31 @@
+:root { --bg: #fdfdfc; --fg: #1d1d1b; --dim: #6b6b66; --line: #e4e3df; --card: #f4f3f0; --add: #1f7a3a; --del: #b3261e; --accent: #2f5fb3; --warn: #9a5b00; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #161615; --fg: #e8e7e3; --dim: #9a9993; --line: #2c2c2a; --card: #1f1f1d; --add: #6fcf8a; --del: #f28b82; --accent: #8ab4f8; --warn: #e0a84f; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 12px 16px; z-index: 1; }
+h1 { font-size: 17px; margin: 0 0 2px; }
+#meta { color: var(--dim); font-size: 13px; overflow-wrap: anywhere; }
+.controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 8px; font-size: 13px; }
+.status { color: var(--dim); }
+.status.live { color: var(--add); }
+main { max-width: 980px; margin: 0 auto; padding: 8px 16px 40px; }
+.turn { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 18px; }
+.prompt { font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
+.prompt::before { content: "> "; color: var(--accent); }
+.reply { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; }
+.who { color: var(--accent); font-size: 12px; margin-right: 6px; }
+.step { color: var(--dim); font-size: 13px; margin: 4px 0; overflow-wrap: anywhere; }
+.step.bad { color: var(--del); }
+.step.ask { color: var(--warn); }
+pre { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; overflow-x: auto; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 6px 0; }
+pre .add { color: var(--add); }
+pre .del { color: var(--del); }
+pre .hunk { color: var(--accent); }
+details { margin: 6px 0; }
+summary { cursor: pointer; color: var(--dim); font-size: 13px; }
+.thinking { color: var(--dim); white-space: pre-wrap; font-size: 13px; }
+.raw { color: var(--dim); font: 12px ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; margin: 2px 0; }
+.note { text-align: center; color: var(--dim); font-size: 12px; }
+.hidden { display: none; }

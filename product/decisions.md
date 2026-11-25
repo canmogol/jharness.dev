@@ -93,6 +93,7 @@ Last updated: 2026-11-24
 | D-080 | Status line, a new extension point: a line under the input on real terminals with built-in items chosen by `ui.statusLine`; `~/.jharness/statusline.js` can return the whole line from a JSON snapshot, in an isolate with no `api`; refreshed on events, throttled; failures fall back to the default line | Accepted |
 | D-081 | Resume and fork: the main conversation is saved after each turn, compaction, undo and rewind as `<session-id>.state.json` (0600, atomic) next to the log; `--resume [ID]` continues the same session and log, `--fork [ID]` starts a new session from a copy; earlier turns can't be rewound | Accepted |
 | D-082 | Headless output: `-p --output text|json|stream-json`; json is one result object (reply, stop reason, usage, files changed, denied actions); stream-json is every event as a JSON line then the result; exit 0 done, 1 failed or stopped early, 2 bad input; `--mode` sets the permission mode | Accepted |
+| D-083 | Web viewer: `jharness-web` with the JDK `HttpServer` on `127.0.0.1`, a random token, `Host` and `Origin` checks, GET only and strict headers; Server-Sent Events of the stream-json lines; `jharness view [SESSION]` follows a log, `/view` serves the running session live; the architecture test allows its listening socket | Accepted |
 
 ---
 
@@ -1355,6 +1356,29 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** Roadmap item "Headless mode with text, JSON and stream-JSON output"; US-5.1 and US-5.2. Recommended options accepted while the user was away, specifying 047-headless-output, 2026-11-24.
 
+## D-083 — The web session viewer
+
+**Decision.** D-053's viewer, as built (spec 048).
+
+- **Module and server.** `jharness-web` holds the server (`SessionViewer`, the JDK's `com.sun.net.httpserver`, which works in the native binary), the feed and a log tail. The architecture test allows its listening socket and no other; it opens no outbound connection, so Article V is unaffected.
+- **Where.** Bound to `127.0.0.1` on a free port (`--port` for `jharness view`). From another machine, an SSH port forward.
+- **Access.** A 256-bit random token per viewer, in the address (`?t=`), compared in constant time, on every request, assets included. `Host` must be `127.0.0.1:PORT` or `localhost:PORT` (against DNS rebinding); an `Origin`, when sent, must be the same. Only `GET`; anything else is 405. At most 8 viewers at once.
+- **Headers.** A Content Security Policy that allows only the page's own script, style and event stream (`default-src 'none'`), `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` (so the token doesn't leak), `nosniff`, `no-store`.
+- **Stream.** `/events` is Server-Sent Events of the same JSON lines as `--output stream-json` (D-082): what has happened so far, then each new event. A browser that falls 20,000 lines behind is disconnected; the backlog keeps the last 100,000 lines.
+- **Two ways in.** `jharness view [SESSION]` (default `last`) reads a session's log and follows it as it grows until Ctrl-C, for finished sessions and ones running elsewhere; the log has no streamed chunks, so replies appear whole. `/view` in the UI serves the running session from its event bus, chunks included, until the UI quits.
+- **Page.** Embedded `index.html`, `app.js` and `app.css`, no outside resources. Turns with their prompt, streamed replies, steps, approvals and denials, diffs, subagents, compaction, todos; thinking and every event on request; a filter by agent. Event text is only set as text, never as markup, and a test checks the script for HTML sinks.
+- **Read-only.** No endpoint changes anything; approvals stay in the terminal (D-053).
+- **No browser start.** JHarness prints the address; opening a browser would start a process.
+
+**Why.** It follows D-053 with the simplest server that runs in the binary. The token, `Host` and `Origin` checks and the CSP cover the usual attacks on a local server: other pages in the browser, DNS rebinding, and injected event text. Reusing stream-json keeps one event format.
+
+**Rejected.**
+- A cookie instead of the token in the address (the address is what the user gets; `no-referrer` keeps it from leaking).
+- WebSockets (Server-Sent Events are one-way, which is all a read-only page needs).
+- Opening the browser automatically (a process start, and not wanted over SSH).
+
+**Source.** Roadmap item "Read-only web session viewer on `127.0.0.1`"; D-053. Recommended options accepted while the user was away, specifying 048-web-viewer, 2026-11-24.
+
 ---
 
 ## Questions and answers
@@ -1454,6 +1478,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q89 | How should `jharness tools` list the tools? | A table: `NAME SOURCE EXECUTABLE STATUS OPERATIONS`, columns as wide as their longest value, escaped values; edited and broken files noted below | The rows didn't line up and had no headers | D-066 |
 | Q90 | Should `/help` list the commands in alphabetical order? | Yes: commands A to Z with their forms; keys and `@PATH` in their own section at the end; Tab completion follows the same order | Easier to find a command | D-062 |
 | Q91 | What does headless mode print, and how does CI set the permission mode? | `--output text`, `json` (one result object) or `stream-json` (every event, then the result); exit 0, 1 or 2; `--mode` for the session | Pipelines get one parseable answer and a meaningful exit code | D-082 |
+| Q92 | How is the web viewer served and protected? | `jharness-web`, the JDK `HttpServer` on `127.0.0.1`; token, `Host` and `Origin` checks, GET only, a strict CSP; Server-Sent Events of the stream-json lines; `jharness view` and `/view` | Long sessions and diffs read better in a browser, and a local page can't change the session | D-083 |
 
 ---
 
