@@ -1,6 +1,22 @@
 # Changelog
 
-<!-- last-commit: ec3d09190213c2f8d965e719d5779764abb0356d -->
+<!-- last-commit: f88747cb02d55a2f34fc5283364b597aefcbfe38 -->
+
+## 2026-11-25 · 050 Viewer page assets
+
+- Fix: the web viewer's page linked its script and stylesheet without the token, so the browser got 403 for both and the page stayed empty at "connecting…". The page now links them with the token; every request still needs it.
+- A regression test and CI's native step load the page's own links as a browser does.
+- Decision: D-083 note.
+
+## 2026-11-25 · 049 Usage tracking
+
+- A model profile can set `"price": {"input": 3, "output": 15}` in US dollars per million tokens, with optional `cacheRead` and `cacheWrite` (Claude profiles default to a tenth and 1.25 times the input price). No price ships with JHarness.
+- With a price, each `model.completed` logs its `costUsd`, so reports never apply a new price to old requests.
+- `/usage` shows this session's requests, tokens and cost by agent; a resumed session includes its earlier runs.
+- `jharness usage` lists this folder's sessions from the last 30 days with a total (`--days N`, `--all`, `jharness usage ID` by agent, `--json`).
+- The headless result's `usage` adds `costUsd` and `unpricedRequests`; the status line has a `cost` item.
+- A cost shows `-` without a price and ends in `+` when some requests had none.
+- Decision: usage tracking (D-084, Q93).
 
 ## 2026-11-25 · 048 Web session viewer
 
