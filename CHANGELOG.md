@@ -1,6 +1,25 @@
 # Changelog
 
-<!-- last-commit: 0f472b5270ee6850e292532fc871904ae1113b07 -->
+<!-- last-commit: ec3d09190213c2f8d965e719d5779764abb0356d -->
+
+## 2026-11-25 · 048 Web session viewer
+
+- `jharness view [SESSION]` serves a session's log as a read-only web page and follows it until Ctrl-C, including a session running in another terminal. `/view` in the UI shows the running session live, streamed chunks included.
+- Both print an address like `http://127.0.0.1:PORT/?t=TOKEN`; JHarness doesn't open the browser.
+- The page shows prompts, replies, steps, approvals and denials, diffs, subagents and todos, with thinking and raw events on request and a filter by agent. Event text is never turned into markup.
+- The server listens on `127.0.0.1` only, needs the random token on every request, checks `Host` and `Origin`, serves only `GET` and sends a strict content-security policy. Nothing in the browser can change the session.
+- The new `jharness-web` module is the only place besides the egress proxy allowed a listening socket; it opens no outbound connection.
+- CI's native step checks the page, the event stream, a missing token, a wrong `Host` and a `POST`.
+- Decision: read-only web session viewer (D-083, Q92).
+
+## 2026-11-25 · 047 Headless output
+
+- `jharness -p --output json` prints one result object: reply, stop reason, steps, error, exit code, duration, token use for all agents (cache included), files changed, denied actions and subagents.
+- `--output stream-json` prints every event of the run as a JSON line, streamed chunks included, then the result object.
+- Exit codes: 0 when the turn finished, 1 when it failed or stopped early (a turn that hits `agent.maxSteps` now exits 1), 2 for bad flags or settings. In the JSON modes a start failure still prints a result object.
+- `--mode ask|accept-edits|plan|bypass` sets the session's permission mode over user and project settings.
+- Fix: CI's `jharness tools` check expected the old row format from before 045.
+- Decision: headless output (D-082, Q91).
 
 ## 2026-11-24 · 046 Sorted help
 
