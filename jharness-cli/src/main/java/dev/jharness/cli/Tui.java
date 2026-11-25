@@ -66,6 +66,7 @@ final class Tui {
               /thinking       show or hide the model's thinking
               /todos          show the agent's todo list
               /undo           undo the last turn's file changes and remove it from the conversation
+              /usage          show this session's tokens and cost, for each agent
               /view           show this session in the browser, read-only (prints the address)
             Keys:
               @PATH           attach a file or folder to the prompt (Tab completes the path)
@@ -866,6 +867,7 @@ final class Tui {
                 }
             }
             case "/view" -> view(session);
+            case "/usage" -> usage(session);
             case "/commands" -> {
                 List<String> c = session.commands(BUILT_IN).describe();
                 if (c.isEmpty()) {
@@ -930,6 +932,24 @@ final class Tui {
         }
         out.println("Open " + viewer.url());
         out.println("Read-only, on this machine only; it stops when you quit.");
+    }
+
+    /** {@code /usage} (spec 049): this session's log added up, so a resumed session counts its earlier runs too. */
+    private void usage(Session session) {
+        Usage u;
+        try {
+            u = Usage.ofLog(session.logPath());
+        } catch (IOException | RuntimeException e) {
+            raw.println(styler.error("Can't read the session log: " + TerminalSafe.escape(String.valueOf(e.getMessage()))));
+            return;
+        }
+        if (u.total.requests == 0) {
+            out.println("No model requests yet.");
+            return;
+        }
+        out.println("Usage this session:");
+        Usage.table("AGENT", u.agents, u.total).forEach(out::println);
+        Usage.notes(u.total).forEach(out::println);
     }
 
     /** Undo would race a running background subagent's writes (spec 027 AC-06). */

@@ -131,7 +131,7 @@ abstract class HttpProvider implements ModelProvider {
                 Failure f;
                 try {
                     ChatReply reply = attempt(req, onDelta, n);
-                    bus.publish(origin.get(), "model.completed", ModelEvents.completed(provider(), model(), reply));
+                    bus.publish(origin.get(), "model.completed", ModelEvents.completed(provider(), model(), reply, profile.price()));
                     return reply;
                 } catch (Failure x) {
                     f = x;

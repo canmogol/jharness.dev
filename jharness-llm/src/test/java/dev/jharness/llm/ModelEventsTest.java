@@ -23,4 +23,13 @@ class ModelEventsTest {
         assertEquals("hi", b.get("text").asText());
         assertFalse(b.has("textCut") || b.has("thinking") || b.has("thinkingCut"));
     }
+
+    /** Spec 049, AC-02: a priced profile's requests carry their cost. */
+    @Test
+    void costIsAddedWithAPrice() {
+        var reply = new ChatReply("hi", "", "stop", 10_000, 2_000, 6_000, 1_000);
+        assertFalse(ModelEvents.completed("p", "m", reply).has("costUsd"), "no price, no cost");
+        var b = ModelEvents.completed("p", "m", reply, new dev.jharness.config.ModelPrice(3, 15, 0.3, 3.75));
+        assertEquals(0.04455, b.get("costUsd").asDouble(), 1e-9);
+    }
 }

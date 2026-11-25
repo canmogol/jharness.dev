@@ -11,6 +11,7 @@ import java.util.function.Supplier;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import dev.jharness.config.ModelPrice;
 import dev.jharness.events.EventBus;
 import dev.jharness.events.Json;
 import dev.jharness.events.Origin;
@@ -28,6 +29,7 @@ public final class ReplayProvider implements ModelProvider {
     private int next;
     private final List<ChatRequest> requests = new ArrayList<>();
     private volatile int contextWindow;
+    private volatile ModelPrice price;
 
     public ReplayProvider(List<JsonNode> lines, EventBus bus, Supplier<Origin> origin) {
         this.lines = List.copyOf(lines);
@@ -66,6 +68,12 @@ public final class ReplayProvider implements ModelProvider {
     /** For tests and recordings (spec 039): the context window this replay claims; 0 means unknown. */
     public ReplayProvider contextWindow(int tokens) {
         contextWindow = tokens;
+        return this;
+    }
+
+    /** For tests (spec 049): price the replies' token counts like a profile with this price. */
+    public ReplayProvider price(ModelPrice p) {
+        price = p;
         return this;
     }
 
@@ -158,7 +166,7 @@ public final class ReplayProvider implements ModelProvider {
         // A recording may give the token counts the real model reported (spec 039).
         ChatReply reply = new ChatReply(text, thinking, "replay", line.path("inputTokens").asInt(0), line.path("outputTokens").asInt(0),
                 line.path("cacheReadTokens").asInt(0), line.path("cacheWriteTokens").asInt(0));
-        bus.publish(origin.get(), "model.completed", ModelEvents.completed("replay", "replay", reply));
+        bus.publish(origin.get(), "model.completed", ModelEvents.completed("replay", "replay", reply, price));
         return reply;
     }
 

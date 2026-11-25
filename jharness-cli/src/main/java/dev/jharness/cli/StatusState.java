@@ -31,6 +31,9 @@ final class StatusState {
     int cacheWrite;
     int inputTokens;
     long cacheReadTotal;
+    /** Every agent's cost so far (spec 049), and whether any request had a price. */
+    double cost;
+    boolean priced;
     String workspace = "";
     /** Background subagents and whether each is held on a question. */
     final Map<String, Boolean> agents = new LinkedHashMap<>();
@@ -61,8 +64,13 @@ final class StatusState {
                 }
             }
             case "model.completed" -> {
+                boolean costed = b.has("costUsd");
+                if (costed) {
+                    cost += b.get("costUsd").asDouble();
+                    priced = true;
+                }
                 if (!main) {
-                    return false;
+                    return costed;
                 }
                 int in = b.path("inputTokens").asInt();
                 if (in > 0) {
@@ -132,6 +140,11 @@ final class StatusState {
         agents.keySet().forEach(names::add);
         o.putObject("cache").put("readTokens", cacheRead).put("writeTokens", cacheWrite).put("inputTokens", inputTokens)
                 .put("readTotal", cacheReadTotal);
+        if (priced) {
+            o.put("costUsd", Math.round(cost * 1e6) / 1e6);
+        } else {
+            o.putNull("costUsd");
+        }
         o.put("turn", turn).put("busy", busy).put("workspace", workspace);
         o.put("line", line(items));
         return o;
@@ -155,6 +168,7 @@ final class StatusState {
                     yield (running > 0 ? running + " running" : "") + (running > 0 && held > 0 ? ", " : "") + (held > 0 ? held + " held" : "");
                 }
                 case "cache" -> cacheRead > 0 ? "cache " + kilo(cacheRead) + " read" : null;
+                case "cost" -> priced ? Usage.dollars(cost) : null;
                 case "turn" -> turn > 0 ? "turn " + turn : null;
                 case "workspace" -> workspace.isEmpty() ? null : workspace;
                 default -> null;

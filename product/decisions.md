@@ -3,7 +3,7 @@
 Decision log for JHarness. Each entry records what was decided, why, and what was rejected.
 Status values: **Accepted** (settled), **Proposed** (recommended, not yet confirmed), **Open** (needs an answer before the related work starts).
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 ---
 
@@ -94,6 +94,7 @@ Last updated: 2026-11-24
 | D-081 | Resume and fork: the main conversation is saved after each turn, compaction, undo and rewind as `<session-id>.state.json` (0600, atomic) next to the log; `--resume [ID]` continues the same session and log, `--fork [ID]` starts a new session from a copy; earlier turns can't be rewound | Accepted |
 | D-082 | Headless output: `-p --output text|json|stream-json`; json is one result object (reply, stop reason, usage, files changed, denied actions); stream-json is every event as a JSON line then the result; exit 0 done, 1 failed or stopped early, 2 bad input; `--mode` sets the permission mode | Accepted |
 | D-083 | Web viewer: `jharness-web` with the JDK `HttpServer` on `127.0.0.1`, a random token, `Host` and `Origin` checks, GET only and strict headers; Server-Sent Events of the stream-json lines; `jharness view [SESSION]` follows a log, `/view` serves the running session live; the architecture test allows its listening socket | Accepted |
+| D-084 | Usage tracking: a profile's `price` (US dollars per million tokens, set by the user; no shipped list) puts `costUsd` on each `model.completed`; `/usage`, `jharness usage`, the headless result and a `cost` status item add the logged events up, by agent and session | Accepted |
 
 ---
 
@@ -1297,7 +1298,7 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 **Decision.** The TUI shows a status line under the input, and users can program it. This is a new extension point, next to agents, hooks, tools and commands.
 
 - **Where.** At the bottom of a real terminal, as JLine's status area: a scroll region keeps it below the prompt and the output. Never on dumb terminals or in `-p`.
-- **Built-in items.** `model` (profile and model), `context` (percent of the window, `~` when estimated), `mode` (permission mode, `[plan]` in plan mode), `agents` (background subagents running and held on a question), `cache` (the last request's cache reads), `turn`, `workspace`. Items with nothing to say are left out; the rest are joined by ` · `.
+- **Built-in items.** `model` (profile and model), `context` (percent of the window, `~` when estimated), `mode` (permission mode, `[plan]` in plan mode), `agents` (background subagents running and held on a question), `cache` (the last request's cache reads), `cost` (every agent's cost so far, once a request had a price; spec 049, D-084), `turn`, `workspace`. Items with nothing to say are left out; the rest are joined by ` · `.
 - **Setting.** `ui.statusLine`: `true` (the default, every item), `false` (no line), or a list of items in the order to show them.
 - **Script.** If `~/.jharness/statusline.js` exists (a regular file, up to 64 KB, not writable by others), its `status(s)` returns the whole line. It runs in its own isolate with the subagent sandbox limits and without `api`, and gets a JSON snapshot of the same values plus `line`, the default rendering. Only the user's home can define it, never a project. The result is cut at the first line break and 1,000 characters and escaped with `TerminalSafe`.
 - **Failures.** If the script throws, hits a limit, returns something other than a string, or the file can't be used, `statusline.failed` (reason, error) is recorded, the TUI says so once per distinct failure, and the default line shows in its place. A run over 1 second (10 seconds for the first, which warms the isolate up) turns the script off for the session.
@@ -1341,7 +1342,7 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 **Decision.** `jharness -p` serves scripts and CI (US-5.1, US-5.2).
 
 - **`--output text`** (the default): the reply as it streams, as before.
-- **`--output json`**: nothing until the turn ends, then one line: `{"type": "result", session, stopReason, reply, steps, error?, exitCode, durationMs, usage: {requests, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}, filesChanged, denied: [{agent, api, summary, reason}], subagents}`. Usage counts every agent's model requests.
+- **`--output json`**: nothing until the turn ends, then one line: `{"type": "result", session, stopReason, reply, steps, error?, exitCode, durationMs, usage: {requests, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, costUsd?, unpricedRequests}, filesChanged, denied: [{agent, api, summary, reason}], subagents}`. Usage counts every agent's model requests; `costUsd` and `unpricedRequests` came with spec 049 (D-084).
 - **`--output stream-json`**: every event as a JSON line, the envelope included, as it happens: the events from opening the session (from the session log, this run only), then each live one, streamed `model.delta` chunks too. The result object is the last line. This is the stream the web viewer reads (D-053).
 - **Escaping.** Output is JSON escaped with `\u` for control and bidi characters, so it is valid JSON and safe on a terminal (D-060). Errors still go to stderr as text.
 - **Exit codes**, in every output mode: 0 when the turn ended `done`; 1 when it failed or stopped early (`error`, `max_steps`, `interrupted`); 2 for bad flags or settings, with a result object (`session: null`) on stdout in the JSON modes. Before this, a turn stopped at `max_steps` exited 0.
@@ -1378,6 +1379,28 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 - Opening the browser automatically (a process start, and not wanted over SSH).
 
 **Source.** Roadmap item "Read-only web session viewer on `127.0.0.1`"; D-053. Recommended options accepted while the user was away, specifying 048-web-viewer, 2026-11-24.
+
+## D-084 — Usage tracking
+
+**Decision.** Token use and cost are added up from the session log (spec 049).
+
+- **Price.** A model profile may set `"price": {"input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75}`, in US dollars per million tokens, each 0 to 10,000. `input` and `output` are required. Without the cache prices, `anthropic` profiles use a tenth of `input` for reads and 1.25 times for writes (Anthropic's 5-minute cache rates), and `openai-compatible` ones `input`. No price is set by default and none ships with JHarness.
+- **Cost.** With a price, `model.completed` gets `costUsd`: prompt tokens not read from or written to the cache at `input`, cache reads at `cacheRead`, cache writes at `cacheWrite`, and output at `output`. The log keeps it, so a report never applies today's price to old requests.
+- **Reports.** One tally, in total and by agent:
+  - `/usage`: this session's log, so a resumed session counts its earlier runs.
+  - `jharness usage`: this folder's sessions from the last 30 days (`--days N`, `--all`), one row each with a total; `jharness usage SESSION` by agent; `--json`.
+  - The headless result's `usage` (D-082) adds `costUsd` and `unpricedRequests`.
+  - The status line's `cost` item (D-080), shown once a request had a price.
+- **Unpriced requests.** Counted apart: the cost shows `-` when none had a price and ends in `+` when some didn't, with a note on how to set one.
+
+**Why.** Users pick models by cost (US-1.3) and want to catch expensive runs. Prices change and differ by account, region and server, so a shipped list would go stale and look authoritative; the user's own price is honest. Counting from logged events reuses the audit trail and needs no new store.
+
+**Rejected.**
+- A built-in price table, or fetching prices (stale, and a network call).
+- Spending limits that stop a session (later, if wanted; the numbers are now there).
+- A separate usage database (the logs already hold every request).
+
+**Source.** Roadmap item "Usage tracking (tokens, cost)". Recommended options accepted while the user was away, specifying 049-usage-tracking, 2026-11-25.
 
 ---
 
@@ -1479,6 +1502,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q90 | Should `/help` list the commands in alphabetical order? | Yes: commands A to Z with their forms; keys and `@PATH` in their own section at the end; Tab completion follows the same order | Easier to find a command | D-062 |
 | Q91 | What does headless mode print, and how does CI set the permission mode? | `--output text`, `json` (one result object) or `stream-json` (every event, then the result); exit 0, 1 or 2; `--mode` for the session | Pipelines get one parseable answer and a meaningful exit code | D-082 |
 | Q92 | How is the web viewer served and protected? | `jharness-web`, the JDK `HttpServer` on `127.0.0.1`; token, `Host` and `Origin` checks, GET only, a strict CSP; Server-Sent Events of the stream-json lines; `jharness view` and `/view` | Long sessions and diffs read better in a browser, and a local page can't change the session | D-083 |
+| Q93 | How are tokens and cost tracked? | A profile's `price` puts `costUsd` on each `model.completed`; `/usage`, `jharness usage`, the headless result and a `cost` status item add the log up | Users pick models by cost and want to catch expensive runs; a shipped price list would go stale | D-084 |
 
 ---
 

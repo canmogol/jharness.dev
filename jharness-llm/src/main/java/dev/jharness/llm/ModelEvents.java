@@ -2,6 +2,7 @@ package dev.jharness.llm;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import dev.jharness.config.ModelPrice;
 import dev.jharness.events.Json;
 
 /** The {@code model.completed} body every provider publishes (D-046): reply and thinking, each capped. */
@@ -13,6 +14,11 @@ final class ModelEvents {
     private ModelEvents() {}
 
     static ObjectNode completed(String provider, String model, ChatReply r) {
+        return completed(provider, model, r, null);
+    }
+
+    /** @param price the profile's price, or null; with one, {@code costUsd} is the request's cost (spec 049) */
+    static ObjectNode completed(String provider, String model, ChatReply r, ModelPrice price) {
         ObjectNode b = Json.object().put("provider", provider).put("model", model).put("stopReason", r.stopReason())
                 .put("inputTokens", r.inputTokens()).put("outputTokens", r.outputTokens());
         if (r.cacheReadTokens() > 0) {
@@ -20,6 +26,10 @@ final class ModelEvents {
         }
         if (r.cacheWriteTokens() > 0) {
             b.put("cacheWriteTokens", r.cacheWriteTokens());
+        }
+        if (price != null) {
+            double c = price.cost(r.inputTokens(), r.outputTokens(), r.cacheReadTokens(), r.cacheWriteTokens());
+            b.put("costUsd", Math.round(c * 1e8) / 1e8);
         }
         put(b, "text", r.text());
         if (!r.thinking().isEmpty()) {
