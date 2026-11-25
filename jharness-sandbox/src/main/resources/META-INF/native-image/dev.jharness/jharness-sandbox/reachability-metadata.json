@@ -104,12 +104,6 @@
           "parameterTypes": []
         },
         {
-          "name": "waitAgent",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
           "name": "agents",
           "parameterTypes": []
         },

@@ -49,9 +49,13 @@ class ApiContractTest {
     @Test
     void declarationShimAndHostAgree() {
         Map<String, Integer> host = host();
-        assertEquals(20, host.size(), host.toString());
+        assertEquals(19, host.size(), host.toString());
         assertEquals(host, declared(), "api.d.ts differs from HostApi");
-        assertEquals(host, shim(), "the JS shim differs from HostApi");
+        Map<String, Integer> shim = shim();
+        // Spec 054: only a stub that explains the removal is left of api.waitAgent.
+        assertEquals(0, shim.remove("waitAgent"));
+        assertTrue(AgentIsolate.shim().contains("api.waitAgent was removed: end your turn instead"));
+        assertEquals(host, shim, "the JS shim differs from HostApi");
     }
 
     @Test

@@ -574,22 +574,6 @@ public final class HostApi {
         return call("models", Operation.Kind.READ, "list model profiles", Json.object(), () -> s.subagents().models());
     }
 
-    /** {@code api.waitAgent} (spec 027): waits, outside the run clock, for a background subagent. */
-    @HostAccess.Export
-    public String waitAgent(String json) {
-        ObjectNode a;
-        try {
-            if (s.subagents() == null) {
-                throw new IllegalArgumentException("waitAgent is not available here (a subagent can't start other agents)");
-            }
-            a = json != null && !json.startsWith("{") ? Json.object().put("agent", json) : args(json);
-        } catch (RuntimeException e) {
-            return reject("waitAgent", e);
-        }
-        String name = a.path("agent").asText("?");
-        return call("waitAgent", Operation.Kind.READ, "wait for " + name, Json.object().put("agent", name), () -> agentCall(() -> s.subagents().waitAgent(a)));
-    }
-
     /** {@code api.agents} (spec 027): this session's subagents. */
     @HostAccess.Export
     public String agents() {

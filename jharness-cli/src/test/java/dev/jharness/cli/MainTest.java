@@ -239,6 +239,27 @@ class MainTest {
         assertEquals("hello file", Files.readString(ws.resolve("a.txt")));
     }
 
+    /** Spec 054 AC-05: in -p a background subagent's reply starts another turn; the result is the last turn's. */
+    @Test
+    void headlessDeliversBackgroundReplies() throws Exception {
+        String spawn = "```js\napi.spawnAgent({task: 'read a.txt', background: true});\n"
+                + "for (let i = 0; i < 400 && JSON.parse(api.agents())[0].status === 'running'; i++) { const t = Date.now(); while (Date.now() - t < 50) {} }\n"
+                + "'started'\n```";
+        Path r = replay(spawn, "a.txt says hello file.", "Started it.", "The subagent says the file says hello file.");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "--output", "json", "-p", "read it"));
+        var j = dev.jharness.events.Json.parse(out.toString(java.nio.charset.StandardCharsets.UTF_8).strip());
+        assertEquals("The subagent says the file says hello file.", j.get("reply").asText());
+        assertEquals("done", j.get("stopReason").asText());
+        assertEquals(1, j.get("steps").asInt(), "every turn's steps");
+        assertEquals("sub-1", j.get("subagents").get(0).asText());
+        // With agent.autoTurns 0 the run ends after the prompt's turn, as before.
+        out.reset();
+        Files.createDirectories(home.resolve(".jharness"));
+        Files.writeString(home.resolve(".jharness/settings.json"), "{\"agent\": {\"autoTurns\": 0}}");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "--output", "json", "-p", "read it"));
+        assertEquals("Started it.", dev.jharness.events.Json.parse(out.toString(java.nio.charset.StandardCharsets.UTF_8).strip()).get("reply").asText());
+    }
+
     /** Spec 047 AC-03, AC-05: stream-json prints every event, chunks too, then the result; --mode accept-edits lets edits through. */
     @Test
     void streamJsonAndModeFlag() throws Exception {

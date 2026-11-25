@@ -19,7 +19,10 @@ import dev.jharness.events.SessionLog;
 import dev.jharness.llm.ReplayProvider;
 import dev.jharness.security.Prompter;
 
-/** Spec 027: background subagents. Each subagent gets its own replay provider, so threads don't race for replies. */
+/**
+ * Specs 027 and 054: background subagents. Each subagent gets its own replay provider, so threads don't race for replies.
+ * A turn never waits for one; its reply starts a main turn ({@link Session#deliveryTurn}).
+ */
 class BackgroundSubagentTest {
 
     @TempDir
@@ -64,19 +67,33 @@ class BackgroundSubagentTest {
         assertTrue(s.runningSubagents().isEmpty(), "background subagents finished");
     }
 
+    /** The main turn ends at once; the subagent's reply starts a turn of its own (spec 054 AC-02). */
     @Test
-    void aBackgroundSubagentRunsWhileTheMainAgentWaits() throws Exception {
+    void aBackgroundSubagentsReplyStartsAMainTurn() throws Exception {
         Path log;
         try (Session s = open(List.of(
-                js("const a = JSON.parse(api.spawnAgent({task: 'read a.txt', background: true}));\n"
-                        + "const r = JSON.parse(api.waitAgent(a.agent));\na.agent + ' ' + a.status + ' ' + r.status + ': ' + r.reply"),
-                "done"),
+                js("const a = JSON.parse(api.spawnAgent({task: 'read a.txt', background: true}));\na.agent + ' ' + a.status"),
+                "Started it.", "It says old."),
                 Map.of("sub-1", List.of(js("api.readFile('a.txt')"), "a.txt says old.")))) {
-            s.loop().turn("go", d -> {});
+            TurnResult first = s.loop().turn("go", d -> {});
+            assertEquals("Started it.", first.reply());
+            assertTrue(s.awaitFinished(), "its reply is ready");
+            assertTrue(s.deliveryPending());
+            TurnResult auto = s.deliveryTurn(d -> {});
+            assertEquals("It says old.", auto.reply());
+            assertNull(s.deliveryTurn(d -> {}), "delivered once");
+            assertFalse(s.awaitFinished(), "none left running");
             log = s.logPath();
         }
-        assertTrue(resultOf(1).contains("sub-1 running done: a.txt says old."), resultOf(1));
+        assertTrue(resultOf(1).contains("sub-1 running"), resultOf(1));
+        String delivered = resultOf(2);
+        assertTrue(delivered.startsWith("[Background subagents that finished since your last turn]"), delivered);
+        assertTrue(delivered.contains("sub-1 (done after 1 steps): a.txt says old."), delivered);
+        assertTrue(delivered.endsWith(Session.AUTO_PROMPT), delivered);
         List<JsonNode> events = SessionLog.read(log);
+        List<JsonNode> turns = of(events, "turn.started").stream().filter(e -> e.get("agent").asText().equals("main")).toList();
+        assertFalse(turns.get(0).has("auto"));
+        assertTrue(turns.get(1).get("auto").asBoolean(), "the delivery turn is marked");
         JsonNode started = of(events, "subagent.started").getFirst();
         assertTrue(started.get("background").asBoolean());
         assertEquals("sub-1", started.get("agent").asText());
@@ -84,21 +101,20 @@ class BackgroundSubagentTest {
     }
 
     @Test
-    void waitTimesOutAndStopAgentStopsIt() throws Exception {
+    void stopAgentStopsIt() throws Exception {
         Path log;
         try (Session s = open(List.of(
                 js("const a = JSON.parse(api.spawnAgent({task: 'spin', background: true})).agent;\n"
-                        + "const w = JSON.parse(api.waitAgent({agent: a, timeoutMs: 300}));\n"
                         + "const before = JSON.parse(api.agents())[0].status;\n"
                         + "const st = JSON.parse(api.stopAgent(a));\n"
                         + "const after = JSON.parse(api.agents())[0];\n"
-                        + "w.status + ' ' + before + ' ' + st.status + ' ' + after.status + ' ' + after.background + ' ' + after.task"),
+                        + "before + ' ' + st.status + ' ' + after.status + ' ' + after.background + ' ' + after.task"),
                 "done"),
                 Map.of("sub-1", List.of(js("while (true) {}"), "never")))) {
             s.loop().turn("go", d -> {});
             log = s.logPath();
         }
-        assertTrue(resultOf(1).contains("running running stopped stopped true spin"), resultOf(1));
+        assertTrue(resultOf(1).contains("running stopped stopped true spin"), resultOf(1));
         JsonNode done = of(SessionLog.read(log), "subagent.completed").getFirst();
         assertEquals("stopped", done.get("stopReason").asText());
     }
@@ -109,8 +125,7 @@ class BackgroundSubagentTest {
         try (Session s = open(List.of(
                 js("const out = [];\nconst a = JSON.parse(api.spawnAgent({task: 'spin', background: true})).agent;\n"
                         + "for (const f of [() => api.spawnAgent({task: 'two', background: true}), () => api.spawnAgent({task: 'x', background: 'yes'}),\n"
-                        + "    () => api.waitAgent('sub-9'), () => api.waitAgent({agent: a, timeoutMs: -1}), () => api.waitAgent({agent: a, color: 1}),\n"
-                        + "    () => api.stopAgent('')]) {\n"
+                        + "    () => api.stopAgent('sub-9'), () => api.waitAgent({agent: a}), () => api.stopAgent('')]) {\n"
                         + "  try { f(); out.push('no error'); } catch (e) { out.push(e.message); }\n"
                         + "}\napi.stopAgent(a);\nout.join('\\n')"),
                 "done"),
@@ -121,8 +136,8 @@ class BackgroundSubagentTest {
         assertTrue(errors.contains("1 background subagents are running, the most at once (agent.subagentsRunning)"), errors);
         assertTrue(errors.contains("\"background\" must be true or false"), errors);
         assertTrue(errors.contains("no subagent sub-9 in this session (known: sub-1)"), errors);
-        assertTrue(errors.contains("\"timeoutMs\" must be a whole number from 0 to 3600000"), errors);
-        assertTrue(errors.contains("waitAgent does not take \"color\""), errors);
+        assertTrue(errors.contains("end your turn, and start this one when one of them has finished"), errors);
+        assertTrue(errors.contains("api.waitAgent was removed: end your turn instead"), errors);
         assertTrue(errors.contains("stopAgent needs a subagent name"), errors);
         assertFalse(errors.contains("no error"), errors);
     }
@@ -130,10 +145,10 @@ class BackgroundSubagentTest {
     @Test
     void aBackgroundSubagentNeverAsks() throws Exception {
         try (Session s = open(List.of(
-                js("JSON.parse(api.waitAgent(JSON.parse(api.spawnAgent({task: 'write', background: true})).agent)).reply"),
-                "done"),
+                js("api.spawnAgent({task: 'write', background: true}); 'started'"), "done"),
                 Map.of("sub-1", List.of(js("api.writeFile('a.txt', 'x')"), "Could not write.")))) {
             s.loop().turn("go", d -> {});
+            waitIdle(s);
             String subResult = subs.get("sub-1").requests().get(1).messages().getLast().content();
             assertTrue(subResult.contains("no one answered while this ran in the background"), subResult);
         }
@@ -207,7 +222,7 @@ class BackgroundSubagentTest {
             s.loop().turn("go", d -> {});
             String r = subs.get("sub-1").requests().get(1).messages().getLast().content();
             assertTrue(r.contains("agents is not available here"), r);
-            assertTrue(r.contains("waitAgent is not available here"), r);
+            assertTrue(r.contains("api.waitAgent was removed"), r);
             assertTrue(r.contains("stopAgent is not available here"), r);
         }
     }
@@ -224,18 +239,21 @@ class BackgroundSubagentTest {
             assertEquals(List.of("sub-2"), s.stopSubagents());
             assertTrue(s.runningSubagents().isEmpty());
             assertEquals("stopped", s.subagents().get(1).status());
+            assertFalse(s.deliveryPending(), "a stopped subagent starts no turn (spec 054)");
         }
     }
 
     /** Spec 032: the user talks to a finished subagent; its questions are asked only while it is attended. */
     @Test
     void theUserTalksToASubagentAndAnswersItsQuestions() throws Exception {
-        try (Session s = open(List.of(js("JSON.parse(api.waitAgent(JSON.parse(api.spawnAgent({task: 'pick a color', background: true})).agent)).reply"),
+        try (Session s = open(List.of(js("api.spawnAgent({task: 'pick a color', background: true}); 'started'"), "Started.",
                 "It asks which color."),
                 Map.of("sub-1", List.of("Which color?", js("api.writeFile('a.txt', 'blue')"), "Saved blue.", js("api.writeFile('a.txt', 'red')"),
                         "Could not save red.")))) {
             s.loop().turn("go", d -> {});
-            assertTrue(resultOf(1).contains("Which color?"), resultOf(1));
+            waitIdle(s);
+            s.deliveryTurn(d -> {});
+            assertTrue(resultOf(2).contains("Which color?"), resultOf(2));
             assertTrue(s.subagentOpen("sub-1"));
             s.attend("sub-1");
             TurnResult r = s.talk("sub-1", "blue", d -> {});
@@ -325,13 +343,64 @@ class BackgroundSubagentTest {
     void denyModeAndHeadlessSessionsNeverWait() throws Exception {
         interactive = true;
         settings = Settings.parse("{\"agent\": {\"backgroundQuestions\": \"deny\"}}", "s");
-        try (Session s = open(List.of(js("JSON.parse(api.waitAgent(JSON.parse(api.spawnAgent({task: 'w', background: true})).agent)).reply"), "done"),
+        try (Session s = open(List.of(js("api.spawnAgent({task: 'w', background: true}); 'started'"), "Started.", "done"),
                 Map.of("sub-1", List.of(js("api.writeFile('a.txt', 'x')"), "Denied.")))) {
             s.loop().turn("go", d -> {});
-            assertTrue(resultOf(1).contains("Denied."), resultOf(1));
+            waitIdle(s);
+            s.deliveryTurn(d -> {});
+            assertTrue(resultOf(2).contains("Denied."), resultOf(2));
         }
         assertThrows(dev.jharness.config.ConfigException.class, () -> Settings.parse("{\"agent\": {\"backgroundQuestions\": \"ask\"}}", "s"));
         assertThrows(dev.jharness.config.ConfigException.class, () -> Settings.parse("{\"agent\": {\"backgroundQuestionWait\": \"2s\"}}", "s"));
         assertEquals(java.time.Duration.ofMinutes(10), Settings.defaults().agent().backgroundQuestionWait());
+    }
+
+    /** Spec 054 AC-04: /answer asks a held question without switching to the subagent. */
+    @Test
+    void answerAsksAHeldQuestionWithoutSwitching() throws Exception {
+        interactive = true;
+        Path log;
+        try (Session s = open(List.of(js("api.spawnAgent({task: 'write', background: true}); 'started'"), "Started."),
+                Map.of("sub-1", List.of(js("api.writeFile('a.txt', 'x')"), "Wrote it.")))) {
+            s.loop().turn("go", d -> {});
+            waitFor(() -> s.subagents().getFirst().status().equals("waiting"));
+            assertEquals(List.of("sub-1"), s.heldSubagents());
+            assertEquals(0, asked.get());
+            assertTrue(s.answer("sub-1"), "it held a question");
+            assertEquals(1, asked.get(), "asked once, through the real prompter");
+            waitFor(() -> s.runningSubagents().isEmpty());
+            assertEquals("x", Files.readString(ws.resolve("a.txt")));
+            assertTrue(s.heldSubagents().isEmpty());
+            assertFalse(s.answer("sub-1"), "nothing left to answer");
+            assertTrue(assertThrows(IllegalArgumentException.class, () -> s.answer("sub-9")).getMessage().contains("no subagent sub-9"));
+            log = s.logPath();
+        }
+        assertEquals("asked", of(SessionLog.read(log), "subagent.wait_ended").getFirst().get("outcome").asText());
+    }
+
+    /** Spec 054 AC-04: an /answer that comes after the wait ended doesn't answer the subagent's next question. */
+    @Test
+    void aLateAnswerDoesntCarryOver() throws Exception {
+        interactive = true;
+        try (Session s = open(List.of(js("api.spawnAgent({task: 'two writes', background: true}); 'started'"), "Started."),
+                Map.of("sub-1", List.of(js("try { api.writeFile('a.txt', 'x'); } catch (e) {} 'one'"), js("api.writeFile('a.txt', 'y')"), "Done.")))) {
+            s.runner().questionWait = java.time.Duration.ofMillis(300);
+            s.loop().turn("go", d -> {});
+            waitFor(() -> s.runningSubagents().isEmpty());
+            assertFalse(s.answer("sub-1"), "both questions timed out; no answer was pending");
+            assertEquals(0, asked.get());
+            assertEquals("old", Files.readString(ws.resolve("a.txt")));
+        }
+    }
+
+    @Test
+    void autoTurnsSetting() throws Exception {
+        assertEquals(10, Settings.defaults().agent().autoTurns());
+        assertEquals(0, Settings.parse("{\"agent\": {\"autoTurns\": 0}}", "s").agent().autoTurns());
+        assertEquals(100, Settings.parse("{\"agent\": {\"autoTurns\": 100}}", "s").agent().autoTurns());
+        for (String bad : List.of("101", "-1", "\"5\"", "1.5")) {
+            var e = assertThrows(dev.jharness.config.ConfigException.class, () -> Settings.parse("{\"agent\": {\"autoTurns\": " + bad + "}}", "s"));
+            assertTrue(e.getMessage().contains("agent.autoTurns"), e.getMessage());
+        }
     }
 }

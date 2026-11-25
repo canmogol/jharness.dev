@@ -409,12 +409,13 @@ public final class Main implements Callable<Integer> {
                         t = x.prompt() == null ? "" : x.prompt();
                     }
                 }
-                return s.turn(t, d -> {
+                java.util.function.Consumer<String> onDelta = d -> {
                     if (text) {
                         out.print(d);
                         out.flush();
                     }
-                });
+                };
+                return deliver(s, s.turn(t, onDelta), onDelta);
             });
             int code = exitCode(r);
             if (text) {
@@ -435,6 +436,37 @@ public final class Main implements Callable<Integer> {
             }
             return code;
         }
+    }
+
+    /**
+     * After the prompt's turn (spec 054): while background subagents run, each reply that comes back starts another turn,
+     * up to {@code agent.autoTurns}; the run ends when none is left. The result is the last turn's, with every turn's steps.
+     */
+    private TurnResult deliver(Session s, TurnResult r, java.util.function.Consumer<String> onDelta) {
+        int steps = r.steps();
+        int max = s.settings().agent().autoTurns();
+        for (int n = 0; n < max && r.stopReason().equals("done"); n++) {
+            try {
+                if (!s.awaitFinished()) {
+                    break;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            TurnResult next = s.deliveryTurn(onDelta);
+            if (next == null) {
+                break;
+            }
+            steps += next.steps();
+            r = new TurnResult(next.reply(), next.stopReason(), steps, next.error());
+        }
+        List<String> left = s.runningSubagents();
+        if (!left.isEmpty()) {
+            err.println("jharness: stopping " + String.join(", ", left) + ", still running when the run ended"
+                    + (r.stopReason().equals("done") ? " (agent.autoTurns: " + max + ")" : ""));
+        }
+        return r;
     }
 
     /** 0 when the turn finished; 1 when it failed or stopped early, such as at {@code agent.maxSteps} (spec 047). */

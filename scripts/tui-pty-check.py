@@ -66,10 +66,10 @@ def main():
         f.write(json.dumps({"reply": "Changing it.\n```js\napi.writeFile('a.txt', 'new')\n```"}) + "\n")
         f.write(json.dumps({"reply": "Changed a.txt to new."}) + "\n")
         f.write(json.dumps({"reply": "Spinning.\n```js\nwhile (true) {}\n```"}) + "\n")
-        # A background subagent that spins; main waits until it has taken its reply (spec 030).
+        # A background subagent that spins; main spins until it has taken its reply (spec 030).
         f.write(json.dumps({"reply": "```js\napi.spawnAgent({task: 'spin', background: true});\n"
                             "for (let i = 0; i < 200 && JSON.parse(api.agents())[0].steps < 1; i++) "
-                            "{ api.waitAgent({agent: 'sub-1', timeoutMs: 50}); }\n'started'\n```"}) + "\n")
+                            "{ const t = Date.now(); while (Date.now() - t < 50) {} }\n'started'\n```"}) + "\n")
         f.write(json.dumps({"reply": "```js\nwhile (true) {}\n```"}) + "\n")
         f.write(json.dumps({"reply": "Background started."}) + "\n")
         # After /stop all, the user switches to the stopped subagent and talks to it (spec 032).

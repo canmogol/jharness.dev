@@ -64,13 +64,12 @@ p.status !== 200 ? "status " + p.status
   : p.title + "\n" + p.text.split("\n").filter(l => /timeout/i.test(l)).slice(0, 20).join("\n");
 ```
 
-Hand a side task to a background subagent, keep working, then collect its result:
+Hand a side task to a background subagent and keep working; end your turn when you're done, and its reply starts a new turn of yours when it finishes:
 
 ```js
 const a = JSON.parse(api.spawnAgent({task: "List every TODO comment in src/ with its file and line.", background: true})).agent;
 const mine = JSON.parse(api.grep({pattern: "class App"})).matches.length;
-const r = JSON.parse(api.waitAgent({agent: a, timeoutMs: 120000}));
-"my search: " + mine + " match(es)\n" + a + " (" + r.status + "): " + (r.reply || "still running");
+"my search: " + mine + " match(es); " + a + " is listing the TODOs";
 ```
 
 Record progress during a long task, so the user can follow it in the session log:

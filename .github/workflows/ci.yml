@@ -132,10 +132,14 @@ jobs:
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/models.jsonl" -p "models" | tee "$tmp/models.txt"
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json --type api.call > "$tmp/models-log.jsonl"
           grep '"api":"models"' "$tmp/models-log.jsonl" | grep -q '"status":"ok"'
-          # A background subagent (spec 027): the main agent waits for it with api.waitAgent.
-          printf '%s\n' '{"reply":"```js\nconst a = JSON.parse(api.spawnAgent({task: \"read a.txt\", background: true})).agent;\nJSON.parse(api.waitAgent(a)).reply\n```"}' '{"reply":"```js\napi.readFile(\"a.txt\")\n```"}' '{"reply":"It says hello."}' '{"reply":"Background done."}' > "$tmp/bg.jsonl"
+          # A background subagent (specs 027, 054): the main turn ends; the subagent's reply starts another turn.
+          # The main block spins until the subagent is done, so the two take their recorded replies in order.
+          printf '%s\n' '{"reply":"```js\napi.spawnAgent({task: \"read a.txt\", background: true});\nfor (let i = 0; i < 400 && JSON.parse(api.agents())[0].status === \"running\"; i++) { const t = Date.now(); while (Date.now() - t < 50) {} }\n\"started\"\n```"}' '{"reply":"```js\napi.readFile(\"a.txt\")\n```"}' '{"reply":"It says hello."}' '{"reply":"Started it."}' '{"reply":"Background done."}' > "$tmp/bg.jsonl"
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/bg.jsonl" -p "in the background" | tee "$tmp/bg.txt"
+          grep -q "Started it." "$tmp/bg.txt"
           grep -q "Background done." "$tmp/bg.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json --type turn.started > "$tmp/bg-turns.jsonl"
+          grep '"agent":"main"' "$tmp/bg-turns.jsonl" | grep -q '"auto":true'
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --agent sub-1 --type subagent. > "$tmp/bg-log.txt"
           cat "$tmp/bg-log.txt"
           grep -q "\[sub-1\]  subagent.started  customAgent=default model=session maxSteps=100 background=true" "$tmp/bg-log.txt"

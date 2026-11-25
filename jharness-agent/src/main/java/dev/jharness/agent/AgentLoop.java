@@ -385,20 +385,36 @@ public final class AgentLoop {
 
     /** One user turn with the files the prompt mentions attached to its message (spec 040). */
     public synchronized TurnResult turn(String prompt, Mentions.Result attached, Consumer<String> onDelta) {
+        return turn(prompt, attached, onDelta, false);
+    }
+
+    /**
+     * A turn the user didn't start (spec 054): background subagents finished, and their replies come with it through the
+     * notes. Its {@code turn.started} has {@code "auto": true}.
+     */
+    public synchronized TurnResult autoTurn(String prompt, Consumer<String> onDelta) {
+        return turn(prompt, Mentions.Result.NONE, onDelta, true);
+    }
+
+    private TurnResult turn(String prompt, Mentions.Result attached, Consumer<String> onDelta, boolean auto) {
         turns.next();
         interrupted = cancelled;
         turnThread = Thread.currentThread();
         try {
-            return runTurn(prompt, attached, onDelta);
+            return runTurn(prompt, attached, onDelta, auto);
         } finally {
             turnThread = null;
             Thread.interrupted();
         }
     }
 
-    private TurnResult runTurn(String prompt, Mentions.Result attached, Consumer<String> onDelta) {
-        bus.publish(turns.get(), "turn.started", Json.object().put("prompt", prompt));
-        if (firstPrompt == null) {
+    private TurnResult runTurn(String prompt, Mentions.Result attached, Consumer<String> onDelta, boolean auto) {
+        var started = Json.object().put("prompt", prompt);
+        if (auto) {
+            started.put("auto", true);
+        }
+        bus.publish(turns.get(), "turn.started", started);
+        if (firstPrompt == null && !auto) {
             firstPrompt = prompt.length() > 200 ? prompt.substring(0, 200) : prompt;
         }
         if (!attached.isEmpty()) {

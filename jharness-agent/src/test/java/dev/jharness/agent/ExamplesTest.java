@@ -61,7 +61,7 @@ class ExamplesTest {
             }
         }
         assertTrue(new TreeSet<>(List.of(String.join("\n", b).split("\\W+"))).containsAll(
-                List.of("listFiles", "grep", "editFile", "tools", "tool", "git", "fetch", "spawnAgent", "waitAgent", "emit", "writeFile")));
+                List.of("listFiles", "grep", "editFile", "tools", "tool", "git", "fetch", "spawnAgent", "emit", "writeFile")));
     }
 
     @Test
@@ -111,19 +111,24 @@ class ExamplesTest {
         List<String> replies = new ArrayList<>();
         for (String code : examples) {
             replies.add("```js\n" + code + "\n```");
-            if (code.contains("background: true")) {
-                replies.add("TODO at src/App.java line 5.");
-            }
             replies.add("done");
         }
+        // The background subagent's reply, then the main turn it starts (spec 054).
+        replies.add("Noted.");
         ReplayProvider[] replay = new ReplayProvider[1];
         Prompter user = op -> op.summary().contains("notes.txt") ? Prompter.Answer.DENY : Prompter.Answer.ONCE;
         Path log;
         try (Session s = Session.open(home, ws, Settings.layered(home, ws, true, null).settings(), Session.Access.prompter(user).trusted(true),
                 (bus, turns) -> replay[0] = ReplayProvider.ofReplies(replies, bus, turns))) {
+            // The subagent has its own replies, so it doesn't race the main agent for them.
+            s.runner().testProviders = t -> ReplayProvider.ofReplies(List.of("TODO at src/App.java line 5."), s.bus(), t);
             for (int i = 0; i < examples.size(); i++) {
                 TurnResult r = s.loop().turn("example " + (i + 1), d -> {});
                 assertEquals("done", r.stopReason(), "example " + (i + 1));
+            }
+            // Its reply came with a later example's turn, or starts a turn of its own now.
+            if (s.awaitFinished()) {
+                assertEquals("Noted.", s.deliveryTurn(d -> {}).reply());
             }
             log = s.logPath();
         }
@@ -157,7 +162,9 @@ class ExamplesTest {
         assertTrue(all.contains("changed files:\n M src/App.java"), "status: " + all);
         assertTrue(all.contains("committed"), "commit: " + all);
         assertTrue(all.contains("Config guide\nSet timeout to 30 s."), "fetch: " + all);
-        assertTrue(all.contains("sub-1 (done): TODO at src/App.java line 5."), "background subagent: " + all);
+        assertTrue(all.contains("is listing the TODOs"), "background subagent: " + all);
+        assertTrue(replay[0].requests().stream().anyMatch(q -> q.messages().stream()
+                .anyMatch(m -> m.content().contains("sub-1 (done after 0 steps): TODO at src/App.java line 5."))), "its reply reached the main agent");
         assertTrue(all.contains("2 Markdown files to check"), "emit: " + all);
         assertTrue(events.stream().anyMatch(e -> e.get("type").asText().equals("agent.progress") && e.get("source").asText().equals("guest")));
         assertTrue(all.contains("could not write: "), "refused write: " + all);

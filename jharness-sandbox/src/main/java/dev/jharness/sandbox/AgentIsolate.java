@@ -60,7 +60,8 @@ public final class AgentIsolate implements AutoCloseable {
                 emit: (e) => call('emit', [s(e)]),
                 spawnAgent: (q) => call('spawnAgent', [s(typeof q === 'string' ? {task: q} : q)]),
                 models: () => call('models', []),
-                waitAgent: (q) => call('waitAgent', [s(q)]),
+                // Removed in spec 054 (D-087): a turn never waits for a subagent; its reply starts a new turn.
+                waitAgent: () => { throw new Error("api.waitAgent was removed: end your turn instead; a background subagent's reply starts a new turn of yours when it finishes, and the user answers its questions"); },
                 agents: () => call('agents', []),
                 stopAgent: (name) => call('stopAgent', [t(name)]),
               });
