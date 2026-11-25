@@ -1,0 +1,5 @@
+{
+  "title": "Fix date parsing (JavaScript)",
+  "prompt": "The booking form shows every date one month late, and impossible dates such as 2026-02-30 are accepted. Fix parseIsoDate in lib/dates.js so it returns the right date and null for dates that don't exist.",
+  "check": [["node", ".eval/check.js"]]
+}

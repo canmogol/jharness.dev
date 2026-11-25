@@ -67,7 +67,9 @@ This repository is planned with spec-driven development: product docs first, the
 
 ## Status
 
-Phases 0 to 3 are done; their gates passed (`docs/p0-results.md`, `docs/p1-gate.md`, `docs/p2-gate.md`, `docs/p3-gate.md`). Phase 2 added build tools in the OS sandbox, the egress proxy and network rules, `api.http`, git network operations, offline mode, the security suites, model retries and debugging tools (specs 011–024). Phase 3 (extensibility) added custom agents, subagents, tool definition files, hooks, slash commands, MCP, plan mode and the optional action reviewer (specs 025–038). Phase 4 (context and release, v0.1) is next.
+Phases 0 to 3 are done; their gates passed (`docs/p0-results.md`, `docs/p1-gate.md`, `docs/p2-gate.md`, `docs/p3-gate.md`). Phase 2 added build tools in the OS sandbox, the egress proxy and network rules, `api.http`, git network operations, offline mode, the security suites, model retries and debugging tools (specs 011–024). Phase 3 (extensibility) added custom agents, subagents, tool definition files, hooks, slash commands, MCP, plan mode and the optional action reviewer (specs 025–038). Phase 4 (context and release, v0.1) is under way (specs 039–051).
+
+Evals on real repo tasks measure each release: `scripts/eval.py path/to/jharness --model PROFILE` runs the tasks in `evals/tasks/` in headless mode and scores them with hidden checks. `docs/evals.md` explains it and keeps the scores.
 
 ## Build and run
 

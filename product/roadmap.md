@@ -106,7 +106,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Read-only web session viewer on `127.0.0.1`, reading the same event stream as headless mode; no approvals from the browser; doesn't gate v0.1 (D-053, spec 048)
 - [x] Manual browser and terminal-size checks of the viewer and TUI, never in CI (D-086, spec 053)
 - [x] Usage tracking (tokens, cost) (spec 049)
-- [ ] Evals on real repo tasks
+- [x] Evals on real repo tasks (spec 051)
 - [ ] GitHub releases with checksums, Homebrew tap, install script
 - [ ] macOS code signing and notarization
 - [ ] `jharness update` with signature verification

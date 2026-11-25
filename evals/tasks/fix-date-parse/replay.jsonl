@@ -1,0 +1,3 @@
+{"reply": "```js\napi.readFile(\"lib/dates.js\")\n```"}
+{"reply": "```js\napi.editFile(\"lib/dates.js\", \"const d = new Date(Date.UTC(year, month, day));\\n  return d;\", \"const d = new Date(Date.UTC(year, month - 1, day));\\n  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {\\n    return null;\\n  }\\n  return d;\");\n\"fixed\"\n```"}
+{"reply": "parseIsoDate now passes a zero-based month to Date.UTC and returns null when the date rolled over, such as 2026-02-30."}

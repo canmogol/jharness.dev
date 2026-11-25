@@ -1,0 +1,5 @@
+{
+  "title": "Answer a question about the code",
+  "prompt": "Which class sends the welcome email after someone signs up, and which class calls it? Answer with the two class names; don't change any files.",
+  "check": {"replyContains": ["GreetingSender", "OnboardingListener"], "unchanged": true}
+}

@@ -95,6 +95,7 @@ Last updated: 2026-11-25
 | D-082 | Headless output: `-p --output text|json|stream-json`; json is one result object (reply, stop reason, usage, files changed, denied actions); stream-json is every event as a JSON line then the result; exit 0 done, 1 failed or stopped early, 2 bad input; `--mode` sets the permission mode | Accepted |
 | D-083 | Web viewer: `jharness-web` with the JDK `HttpServer` on `127.0.0.1`, a random token, `Host` and `Origin` checks, GET only and strict headers; Server-Sent Events of the stream-json lines; `jharness view [SESSION]` follows a log, `/view` serves the running session live; the architecture test allows its listening socket | Accepted |
 | D-084 | Usage tracking: a profile's `price` (US dollars per million tokens, set by the user; no shipped list) puts `costUsd` on each `model.completed`; `/usage`, `jharness usage`, the headless result and a `cost` status item add the logged events up, by agent and session | Accepted |
+| D-085 | Evals: small repository tasks with hidden checks in `evals/tasks/`, run by the maintainer script `scripts/eval.py` through headless `jharness -p --output json`; a check must fail before the run; CI runs recorded solutions; live scores per release in `docs/evals.md` | Accepted |
 | D-086 | Manual checks: `scripts/viewer-check.mjs` (the web viewer in Chromium, Firefox, WebKit with Playwright, and Safari through safaridriver) and `scripts/tui-tmux-check.py` (the TUI at several sizes in tmux); never in CI; run after viewer or terminal UI changes and before each release, on Linux and macOS | Accepted |
 
 ---
@@ -1404,6 +1405,24 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** Roadmap item "Usage tracking (tokens, cost)". Recommended options accepted while the user was away, specifying 049-usage-tracking, 2026-11-25.
 
+## D-085 — Evals on real repo tasks
+
+**Decision.** Evals are repository tasks with hidden checks, run by a maintainer script (spec 051).
+
+- **Tasks.** `evals/tasks/NAME/`: `task.json` (title, prompt, check, optional mode and timeout), `repo/` (the code the agent works in), `check/` (never shown to the agent) and `replay.jsonl` (a recorded solution). Six to start: bug fixes, a feature, a refactor and a question, in Java and JavaScript.
+- **Runner.** `scripts/eval.py BIN`: a fresh git repository per task; the check runs first and must fail; then `jharness -p PROMPT --output json --mode accept-edits` (D-082); then the check is copied to `.eval/` and run. A question's check reads the reply and expects no changed files.
+- **Score.** Pass or fail per task, with steps, time, tokens and cost (D-084) from the result object; the score is the share passed. `--out` writes JSON.
+- **Where.** CI runs `--replay`, which checks the tasks and the runner (6/6 required). Live runs use the maintainer's settings and keys before each release; scores go in `docs/evals.md` and results in `evals/results/`.
+
+**Why.** US-6.3 asks whether the agent gets better or worse between releases. Hidden checks measure outcomes, not the path taken. Headless JSON output already carries everything to score. A script rather than a `jharness eval` command, because checks run `javac`, `java` and `node`, which the binary must never start (Article IV). The baseline run catches a task whose check passes without a fix.
+
+**Rejected.**
+- `jharness eval` in the binary (it would start arbitrary check commands).
+- Live model runs in CI (no key, cost, and flaky results gating merges).
+- Public benchmark suites for now (large, networked, and slow); the format can take more tasks.
+
+**Source.** Roadmap item "Evals on real repo tasks"; US-6.3. Recommended options accepted while the user was away, specifying 051-evals, 2026-11-25.
+
 ---
 
 ## D-086 — Manual browser and terminal checks
@@ -1526,6 +1545,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q91 | What does headless mode print, and how does CI set the permission mode? | `--output text`, `json` (one result object) or `stream-json` (every event, then the result); exit 0, 1 or 2; `--mode` for the session | Pipelines get one parseable answer and a meaningful exit code | D-082 |
 | Q92 | How is the web viewer served and protected? | `jharness-web`, the JDK `HttpServer` on `127.0.0.1`; token, `Host` and `Origin` checks, GET only, a strict CSP; Server-Sent Events of the stream-json lines; `jharness view` and `/view` | Long sessions and diffs read better in a browser, and a local page can't change the session | D-083 |
 | Q93 | How are tokens and cost tracked? | A profile's `price` puts `costUsd` on each `model.completed`; `/usage`, `jharness usage`, the headless result and a `cost` status item add the log up | Users pick models by cost and want to catch expensive runs; a shipped price list would go stale | D-084 |
+| Q94 | How are evals run and scored? | Repository tasks with hidden checks in `evals/tasks/`, run by `scripts/eval.py` through headless JSON output; a check must fail first; CI runs recorded solutions; live scores per release | Shows whether releases get better or worse, without the binary starting check commands | D-085 |
 | Q95 | How are the web viewer and the TUI checked in real browsers and terminals? | `scripts/viewer-check.mjs` (Playwright: Chromium, Firefox, WebKit; Safari through safaridriver) and `scripts/tui-tmux-check.py` (tmux, several sizes), by hand after viewer or TUI changes and before releases, never in CI | The viewer's 403s slipped past tests that fetched files by hand; browsers in CI would cost minutes per run | D-086 |
 
 ---
