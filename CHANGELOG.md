@@ -1,6 +1,27 @@
 # Changelog
 
-<!-- last-commit: f88747cb02d55a2f34fc5283364b597aefcbfe38 -->
+<!-- last-commit: 3a10e917e50962575c758810518c7d883fb79bb0 -->
+
+## 2026-11-25 · 053 Manual viewer and terminal checks
+
+- `node scripts/viewer-check.mjs BIN` opens a recorded session in `jharness view` with Playwright (Chromium, Firefox, WebKit) or Safari through safaridriver. It checks that the page's files load, that nothing gets a 403, that there are no console errors or CSP violations, that the reply's Markdown renders and that the terminal prints the events. It saves a screenshot per browser.
+- `scripts/tui-tmux-check.py BIN` runs the TUI in tmux at several sizes. It checks the reply's styles, that the status line stays on the last row after a resize, and that Ctrl-D exits 0.
+- Neither runs in CI. Both run after viewer or terminal UI changes and before each release, on Linux and macOS; `docs/manual-checks.md` says how and records results.
+- Decision: manual browser and terminal checks (D-086, Q95).
+
+## 2026-11-25 · 052 Viewer feedback
+
+- `jharness view` now prints the session's events in its terminal as `jharness log` does, while the browser follows them; `--quiet` prints only the address.
+- Replies render as Markdown in the browser: headings, bold, italics, code, code blocks, lists, quotes, tables and links. Links open only for `http` and `https` addresses, and the page still never turns event text into markup.
+- Fix: the browser's request for `favicon.ico` got a 403; the page now has an inline icon.
+- Decision: D-083 notes.
+
+## 2026-11-25 · 051 Evals on real repo tasks
+
+- `evals/tasks/` has six small repository tasks with hidden checks: bug fixes, a feature, a refactor and a question, in Java and JavaScript.
+- `scripts/eval.py BIN` runs each in a fresh git repository through `jharness -p --output json --mode accept-edits` and scores pass or fail with steps, tokens, cost and time. A check must fail before the run; `--out` writes JSON.
+- CI runs the suite with recorded solutions and needs 6/6. Live scores per release go in `docs/evals.md`.
+- Decision: evals on real repo tasks (D-085, Q94).
 
 ## 2026-11-25 · 050 Viewer page assets
 
