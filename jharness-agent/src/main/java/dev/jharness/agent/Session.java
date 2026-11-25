@@ -551,6 +551,48 @@ public final class Session implements AutoCloseable {
         subagents.attend(name);
     }
 
+    /** The prompt of a turn that background subagents' replies start (spec 054); the replies come before it. */
+    public static final String AUTO_PROMPT = "[No message from the user: this turn started because background subagents finished. "
+            + "Their replies are above. Tell the user briefly what came back, and go on if the task needs more.]";
+
+    /** Whether a background subagent finished and its reply hasn't reached the main agent yet (spec 054). */
+    public boolean deliveryPending() {
+        return subagents.deliveryPending();
+    }
+
+    /**
+     * A main turn with the replies of the background subagents that finished (spec 054), or null when there are none.
+     */
+    public TurnResult deliveryTurn(java.util.function.Consumer<String> onDelta) {
+        if (!subagents.deliveryPending()) {
+            return null;
+        }
+        return loop.autoTurn(AUTO_PROMPT, onDelta);
+    }
+
+    /** Headless runs: waits until a background subagent's reply is ready (true) or none is running (false). */
+    public boolean awaitFinished() throws InterruptedException {
+        return subagents.awaitFinished();
+    }
+
+    /** Called on the subagent's thread when a background subagent finishes (spec 054); null for none. */
+    public void onSubagentFinished(Runnable r) {
+        subagents.onFinished(r);
+    }
+
+    /** The background subagents holding a question for the user, oldest first. */
+    public List<String> heldSubagents() {
+        return subagents.held();
+    }
+
+    /**
+     * {@code /answer NAME} (spec 054): asks that subagent's held question now and returns once it was answered; the
+     * user stays in the main chat. False if it holds none.
+     */
+    public boolean answer(String name) {
+        return subagents.answer(name);
+    }
+
     /** Whether the user can switch to and talk to this subagent. */
     public boolean subagentOpen(String name) {
         return subagents.isOpen(name);

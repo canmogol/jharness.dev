@@ -179,10 +179,10 @@ class TuiTest {
     @Test
     void agentsAndStopCommands() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws27"));
-        // Main spawns a background subagent and waits 5 s, so the subagent takes its reply (an endless loop) first.
+        // Main spawns a background subagent and spins 2 s, so the subagent takes its reply (an endless loop) first.
         Tui tui = new Tui(terminal("go\n/agents\n/agents sub-1\n/agents sub-9\n/undo\n/stop sub-9\n/stop all\n/stop all\n/agents\n/exit\n"), null);
         try (Session session = replaySession(tmp.resolve("home27"), ws, "{}", tui,
-                "```js\napi.spawnAgent({task: 'spin   forever', background: true}); JSON.parse(api.waitAgent({agent: 'sub-1', timeoutMs: 5000})).status\n```",
+                "```js\napi.spawnAgent({task: 'spin   forever', background: true}); const t = Date.now(); while (Date.now() - t < 2000) {} 'running'\n```",
                 "```js\nwhile (true) {}\n```", "Started it.")) {
             tui.run(session);
         }
@@ -205,9 +205,9 @@ class TuiTest {
         Path ws = Files.createDirectories(tmp.resolve("ws30"));
         // Main starts sub-1 and waits until its first step runs, so sub-1 takes its reply (a 2 s block) before main's next.
         Tui tui = new Tui(terminal("go\n/follow sub-9\n/follow\n/follow sub-1\n/agents\n/exit\n"), null);
-        try (Session session = replaySession(tmp.resolve("home30"), ws, "{}", tui,
+        try (Session session = replaySession(tmp.resolve("home30"), ws, "{\"agent\": {\"autoTurns\": 0}}", tui,
                 "```js\napi.spawnAgent({task: 'count to two', background: true});\n"
-                        + "for (let i = 0; i < 200 && JSON.parse(api.agents())[0].steps < 1; i++) { api.waitAgent({agent: 'sub-1', timeoutMs: 50}); }\n'ok'\n```",
+                        + "for (let i = 0; i < 200 && JSON.parse(api.agents())[0].steps < 1; i++) { const t = Date.now(); while (Date.now() - t < 50) {} }\n'ok'\n```",
                 "```js\nconst t = Date.now(); while (Date.now() - t < 2000) {}\n'slept'\n```",
                 "Started it.",
                 "Sub says hi.\nAll done.")) {
@@ -231,8 +231,9 @@ class TuiTest {
     void switchTalksToASubagent() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws32"));
         Tui tui = new Tui(terminal("go\n/switch sub-9\n/switch sub-1\nblue\ny\n/agents\n/switch main\n/exit\n"), null);
-        try (Session session = replaySession(tmp.resolve("home32"), ws, "{}", tui,
-                "```js\nJSON.parse(api.waitAgent(JSON.parse(api.spawnAgent({task: 'pick a color', background: true})).agent)).reply\n```",
+        try (Session session = replaySession(tmp.resolve("home32"), ws, "{\"agent\": {\"autoTurns\": 0}}", tui,
+                "```js\napi.spawnAgent({task: 'pick a color', background: true});\n"
+                        + "for (let i = 0; i < 400 && JSON.parse(api.agents())[0].status === 'running'; i++) { const t = Date.now(); while (Date.now() - t < 50) {} }\n'started'\n```",
                 "Which color?",
                 "It asks which color.",
                 "```js\napi.writeFile('c.txt', 'blue')\n```",
@@ -254,11 +255,11 @@ class TuiTest {
     void aHeldQuestionIsAnsweredThroughSwitch() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws33"));
         Tui tui = new Tui(terminal("go\n/agents\n/switch sub-1\ny\n/switch main\n/exit\n"), null);
-        try (Session session = Session.open(tmp.resolve("home33"), ws, Settings.defaults(),
+        try (Session session = Session.open(tmp.resolve("home33"), ws, Settings.parse("{\"agent\": {\"autoTurns\": 0}}", "t"),
                 Session.Access.prompter(tui.prompter()).interactive(true),
                 (bus, turns) -> ReplayProvider.ofReplies(List.of(
                         "```js\napi.spawnAgent({task: 'save c', background: true});\n"
-                                + "for (let i = 0; i < 400 && JSON.parse(api.agents())[0].status !== 'waiting'; i++) { api.waitAgent({agent: 'sub-1', timeoutMs: 50}); }\n"
+                                + "for (let i = 0; i < 400 && JSON.parse(api.agents())[0].status !== 'waiting'; i++) { const t = Date.now(); while (Date.now() - t < 50) {} }\n"
                                 + "JSON.parse(api.agents())[0].status\n```",
                         "```js\napi.writeFile('c.txt', 'saved')\n```",
                         "Started it.",
@@ -266,12 +267,122 @@ class TuiTest {
             tui.run(session);
         }
         String sc = screen();
-        assertTrue(sc.contains("▸ [sub-1] is waiting for you: write c.txt (5 bytes) (/switch sub-1 to answer)"), sc);
+        assertTrue(sc.contains("▸ [sub-1] is waiting for you: write c.txt (5 bytes) (/answer sub-1 to answer)"), sc);
         assertTrue(sc.matches("(?s).*sub-1 +waiting .*"), "/agents shows it waiting: " + sc);
         assertTrue(sc.contains("sub-1 is running; you can type when its turn ends."), sc);
         assertTrue(sc.contains("Allow writeFile: write c.txt (5 bytes)?"), sc);
         assertTrue(sc.contains("Saved c.txt."), sc);
         assertEquals("saved", Files.readString(ws.resolve("c.txt")));
+    }
+
+    /** Spec 054 AC-04: /answer asks a held question in place; the user stays in the main chat. */
+    @Test
+    void answerAsksAHeldQuestionInPlace() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws54a"));
+        Tui tui = new Tui(terminal("go\n/answer sub-9\n/answer\ny\n/agents\n/answer\n/exit\n"), null);
+        try (Session session = Session.open(tmp.resolve("home54a"), ws, Settings.parse("{\"agent\": {\"autoTurns\": 0}}", "t"),
+                Session.Access.prompter(tui.prompter()).interactive(true),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(
+                        "```js\napi.spawnAgent({task: 'save c', background: true});\n"
+                                + "for (let i = 0; i < 400 && JSON.parse(api.agents())[0].status !== 'waiting'; i++) { const t = Date.now(); while (Date.now() - t < 50) {} }\n"
+                                + "JSON.parse(api.agents())[0].status\n```",
+                        "```js\napi.writeFile('c.txt', 'saved')\n```",
+                        "Started it.",
+                        "Saved c.txt."), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("▸ [sub-1] is waiting for you: write c.txt (5 bytes) (/answer sub-1 to answer)"), sc);
+        assertTrue(sc.contains("sub-9 isn't waiting for an answer. Waiting: sub-1."), sc);
+        assertTrue(sc.contains("sub-1 asks:\n") && sc.contains("Allow writeFile: write c.txt (5 bytes)?"), sc);
+        assertTrue(sc.contains("Back to the main chat."), sc);
+        assertFalse(sc.contains("sub-1> "), "the prompt stays the main one: " + sc);
+        assertTrue(sc.contains("No subagent is waiting for an answer."), sc);
+        assertEquals("saved", Files.readString(ws.resolve("c.txt")));
+    }
+
+    /** Spec 054 AC-02: a finished background subagent's reply starts a main turn by itself. */
+    @Test
+    void aFinishedSubagentStartsAMainTurn() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws54b"));
+        Tui tui = new Tui(terminal("go\n"), null);
+        ReplayProvider[] replay = new ReplayProvider[1];
+        try (Session session = Session.open(tmp.resolve("home54b"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> replay[0] = ReplayProvider.ofReplies(List.of(
+                        "```js\napi.spawnAgent({task: 'count TODOs', background: true});\n"
+                                + "for (let i = 0; i < 400 && JSON.parse(api.agents())[0].status === 'running'; i++) { const t = Date.now(); while (Date.now() - t < 50) {} }\n'started'\n```",
+                        "Found 3 TODOs.",
+                        "Started it.",
+                        "sub-1 found 3 TODOs."), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        int notice = sc.indexOf("▸ the main agent goes on with the finished subagents' replies (Esc stops it)");
+        assertTrue(notice > sc.indexOf("Started it."), sc);
+        assertTrue(sc.indexOf("sub-1 found 3 TODOs.") > notice, sc);
+        String last = replay[0].requests().getLast().messages().getLast().content();
+        assertTrue(last.contains("sub-1 (done after 0 steps): Found 3 TODOs.") && last.endsWith(Session.AUTO_PROMPT), last);
+    }
+
+    /** Spec 054 AC-02: the user sits at an empty prompt; a subagent that finishes then wakes it and the main agent goes on. */
+    @Test
+    void aFinishWakesAnIdlePrompt() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws54d"));
+        var keys = new java.io.PipedOutputStream();
+        var in = new java.io.PipedInputStream(keys);
+        Terminal t = new DumbTerminal("test", "dumb", in, screen, StandardCharsets.UTF_8);
+        t.setSize(new org.jline.terminal.Size(200, 50));
+        Tui tui = new Tui(t, null);
+        try (Session session = Session.open(tmp.resolve("home54d"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of(
+                        "```js\napi.spawnAgent({task: 'slow job', background: true});\n"
+                                + "for (let i = 0; i < 400 && JSON.parse(api.agents())[0].steps < 1 && JSON.parse(api.agents())[0].status === 'running'; i++) {"
+                                + " const t = Date.now(); while (Date.now() - t < 20) {} }\n'started'\n```",
+                        "```js\nconst t = Date.now(); while (Date.now() - t < 1500) {}\n'slept'\n```",
+                        "Started it.",
+                        "The slow job is done.",
+                        "It finished."), bus, turns))) {
+            Thread run = new Thread(() -> tui.run(session));
+            run.start();
+            keys.write("go\n".getBytes(StandardCharsets.UTF_8));
+            keys.flush();
+            long end = System.currentTimeMillis() + 20_000;
+            while (!screen().contains("It finished.") && System.currentTimeMillis() < end) {
+                Thread.sleep(20);
+            }
+            keys.write("/exit\n".getBytes(StandardCharsets.UTF_8));
+            keys.flush();
+            run.join(10_000);
+            assertFalse(run.isAlive(), "the TUI ended");
+        }
+        String sc = screen();
+        assertTrue(sc.indexOf("▸ the main agent goes on with the finished subagents' replies") > sc.indexOf("Started it."), sc);
+        assertTrue(sc.contains("It finished."), "the woken prompt ran the turn: " + sc);
+        assertFalse(sc.contains("[interrupted]"), sc);
+    }
+
+    /** Spec 054 AC-03: agent.autoTurns caps the automatic turns in a row; then replies wait for the user's message. */
+    @Test
+    void automaticTurnsStopAtTheLimit() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws54c"));
+        Tui tui = new Tui(terminal("go\nthanks\n"), null);
+        String spawn = "```js\napi.spawnAgent({task: 'job', background: true});\n"
+                + "for (let i = 0; i < 400 && JSON.parse(api.agents()).some(a => a.status === 'running'); i++) { const t = Date.now(); while (Date.now() - t < 50) {} }\n'started'\n```";
+        ReplayProvider[] replay = new ReplayProvider[1];
+        try (Session session = Session.open(tmp.resolve("home54c"), ws, Settings.parse("{\"agent\": {\"autoTurns\": 1}}", "t"),
+                Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> replay[0] = ReplayProvider.ofReplies(List.of(
+                        spawn, "first job done", "Started one.",
+                        spawn, "second job done", "Started another.",
+                        "Both are done."), bus, turns))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertEquals(1, sc.split("the main agent goes on with", -1).length - 1, "one automatic turn: " + sc);
+        assertTrue(sc.contains("▸ the main agent went on by itself 1 time in a row (agent.autoTurns); the next replies wait for your message"), sc);
+        assertTrue(sc.contains("Both are done."), sc);
+        String last = replay[0].requests().getLast().messages().getLast().content();
+        assertTrue(last.contains("sub-2 (done after 0 steps): second job done") && last.endsWith("thanks"), "it came with the message: " + last);
     }
 
     /** Spec 035: a user's slash command runs as a turn, and /commands and /help list it. */
@@ -420,7 +531,7 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/agent", "/agents", "/commands", "/compact", "/context", "/diff", "/events", "/exit", "/follow", "/help", "/hooks", "/mcp",
+        assertEquals(List.of("/agent", "/agents", "/answer", "/commands", "/compact", "/context", "/diff", "/events", "/exit", "/follow", "/help", "/hooks", "/mcp",
                 "/model", "/network", "/plan", "/rewind", "/stop", "/switch", "/thinking", "/todos", "/undo", "/usage", "/view"), List.copyOf(Tui.COMMANDS.keySet()));
         // Spec 046: the help lists the commands in alphabetical order, then the keys.
         assertEquals(Tui.COMMANDS.keySet().stream().sorted().toList(), List.copyOf(Tui.COMMANDS.keySet()));
@@ -522,6 +633,7 @@ class TuiTest {
             assertEquals(List.of(), Tui.argChoices("/agents", List.of(), s), "no subagents yet");
             assertEquals(List.of("all"), Tui.argChoices("/stop", List.of(), s));
             assertEquals(List.of("main"), Tui.argChoices("/switch", List.of(), s));
+            assertEquals(List.of(), Tui.argChoices("/answer", List.of(), s), "no held questions");
             assertEquals(List.of("1", "2"), Tui.argChoices("/rewind", List.of(), s));
             assertEquals(List.of("--force"), Tui.argChoices("/rewind", List.of("1"), s));
             assertEquals(List.of("allow", "deny", "remove", "reload"), Tui.argChoices("/network", List.of(), s));

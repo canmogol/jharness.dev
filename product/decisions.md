@@ -75,14 +75,14 @@ Last updated: 2026-11-25
 | D-062 | In the TUI, Tab on a lone `/` prints the `/help` text above the prompt; Tab after a partial `/command` completes it, listing matches with descriptions taken from the help text | Accepted |
 | D-063 | Custom agents: a folder with `agent.json` (description, model, tools, maxSteps, plan), `prompt.md` and `helpers.js`; chosen with `--agent` at start; they only narrow; project agents only in trusted projects | Accepted |
 | D-064 | `api.spawnAgent` runs a subagent: fresh conversation with the task, own isolate (`subagent` profile), the session's gate narrowed by a custom agent, optional model profile; depth one, 10 per turn and 100 steps by default (configurable); `api.models()` lists profiles; returns its final reply | Accepted |
-| D-065 | Background subagents: `spawnAgent({background: true})`, `api.waitAgent`, `api.agents`, `api.stopAgent`; at most 4 running (configurable); they never ask (questions denied as unattended); uncollected replies come with the next prompt; Esc leaves them running, closing the session stops them; `/agents`, `/stop`, `jharness log --agent/--source` | Accepted; questions held in interactive sessions since D-072 |
+| D-065 | Background subagents: `spawnAgent({background: true})`, `api.waitAgent`, `api.agents`, `api.stopAgent`; at most 4 running (configurable); they never ask (questions denied as unattended); uncollected replies come with the next prompt; Esc leaves them running, closing the session stops them; `/agents`, `/stop`, `jharness log --agent/--source` | Accepted; questions held in interactive sessions since D-072; `api.waitAgent` removed and replies start turns since D-087 |
 | D-066 | Build tools are JSON definition files in `~/.jharness/tools/` (seeded on first run from `examples/.jharness/tools/`) and a trusted project's `.jharness/tools/`; typed fields map to fixed arguments; git and `rg` stay in code | Accepted |
 | D-067 | `api.tool(name, request)` runs every defined tool and `api.tools()` lists them; `api.maven`, `api.gradle` and `api.npm` are removed | Accepted |
 | D-068 | git and `rg` stay in Java code, not tool definitions: per-operation approvals, use in untrusted projects, injection defences, secrets, undo and structured results need host code | Accepted |
 | D-069 | `/follow [NAME]` shows a running background subagent like the main loop (streamed reply, steps, diffs) until Esc or its end; it stays a view, and shared model clients name the subagent on its events | Accepted |
 | D-070 | Project folders under `sessions/`, `projects/` and `checkpoints/` are the workspace path as a slug plus 7 hex characters; session ids are the UTC start time plus 4 hex characters; old folders are left alone | Accepted |
 | D-071 | `/switch NAME` makes the prompt talk to a subagent: new turns in its own conversation, its questions asked instead of denied, Esc stops its turn; subagents stay open after their task (at most 16 idle); `/switch main` goes back | Accepted |
-| D-072 | In an interactive session a background subagent's question waits (up to `agent.backgroundQuestionWait`, 10 min) with a notice; `/switch` asks it; `agent.backgroundQuestions: deny` and `-p` deny at once | Accepted |
+| D-072 | In an interactive session a background subagent's question waits (up to `agent.backgroundQuestionWait`, 10 min) with a notice; `/switch` asks it; `agent.backgroundQuestions: deny` and `-p` deny at once | Accepted; `/answer` asks in place since D-087 |
 | D-073 | JS hooks: `NAME.js` in `~/.jharness/hooks/` and trusted projects' `.jharness/hooks/` define `preTool` (block only, fails closed), `postTool` (observe) and `stop` (go on, at most 3 times a turn); each runs in its own isolate with subagent limits, and its own api calls are gated and run no hooks | Accepted |
 | D-074 | Slash commands: `NAME.md` templates (`$ARGUMENTS`) and `NAME.js` commands (`run(args)` returns a prompt, `{print}` or nothing) in `~/.jharness/commands/` and trusted projects; they can't replace built-ins and also work in `-p` | Accepted |
 | D-075 | `api.todos` keeps each agent's todo list, shown in the TUI; `/plan` toggles plan mode, which notes itself in each message; the main agent's `api.proposePlan` asks the user to leave plan mode and carry out the plan | Accepted |
@@ -97,6 +97,7 @@ Last updated: 2026-11-25
 | D-084 | Usage tracking: a profile's `price` (US dollars per million tokens, set by the user; no shipped list) puts `costUsd` on each `model.completed`; `/usage`, `jharness usage`, the headless result and a `cost` status item add the logged events up, by agent and session | Accepted |
 | D-085 | Evals: small repository tasks with hidden checks in `evals/tasks/`, run by the maintainer script `scripts/eval.py` through headless `jharness -p --output json`; a check must fail before the run; CI runs recorded solutions; live scores per release in `docs/evals.md` | Accepted |
 | D-086 | Manual checks: `scripts/viewer-check.mjs` (the web viewer in Chromium, Firefox, WebKit with Playwright, and Safari through safaridriver) and `scripts/tui-tmux-check.py` (the TUI at several sizes in tmux); never in CI; run after viewer or terminal UI changes and before each release, on Linux and macOS | Accepted |
+| D-087 | Subagents never block the main chat: `api.waitAgent` is removed; a finished background subagent's reply starts a main turn by itself (at an empty prompt; `agent.autoTurns`, default 10 in a row); `-p` runs until no background subagent is left; held questions never interrupt and `/answer [NAME]` asks one in place | Accepted |
 
 ---
 
@@ -991,6 +992,8 @@ The file policy applies in every mode, `bypass` included: paths stay inside the 
 
 **Rejected.** Background subagents that queue questions for later (blocks them indefinitely, confusing prompts). Typing commands during a turn (the terminal is in raw mode for Esc). Esc stopping background subagents too (they'd be lost with any turn; `/stop all` does that). A separate log file per agent (one timeline is easier to follow; the filters split it).
 
+**Note (D-087).** `api.waitAgent` was removed: a finished background subagent's reply starts a main turn by itself (`agent.autoTurns`), and `-p` runs until none is left.
+
 **Source.** User review of spec 026, 2026-11-24. Recommended options accepted while the user was away, specifying 027-background-subagents, 2026-11-24.
 
 ---
@@ -1125,6 +1128,8 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 **Why.** A background subagent that needed one approval failed its task. Holding the question until the user looks, with a time limit, gets the work done without questions popping up over the user's typing or waiting forever, the two reasons D-065 gave for denying.
 
 **Rejected.** Asking at once above the prompt (prompts over typing, D-065). Waiting without a limit (a forgotten subagent would hang). Holding network questions too (the proxy can't tell which agent opened the connection).
+
+**Note (D-087).** `/answer [NAME]` asks a held question in place, without switching; the notice names it.
 
 **Source.** User question in the review of spec 032, 2026-11-24. Recommended options accepted while the user was away, specifying 033-held-questions. Changes D-065's "never asks" for interactive sessions.
 
@@ -1446,6 +1451,25 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-087 — Subagents that don't block
+
+**Decision.** A turn never waits for a subagent, and a subagent never interrupts the user (spec 054).
+
+- **No `api.waitAgent`.** It is removed from the api, its types and the examples. A call throws an error that says to end the turn instead. `api.agents()` and `api.stopAgent` stay, and `agents()` shows `waiting` for a subagent that holds a question.
+- **A finish starts a turn.** When a background subagent finishes and the user sits at an empty main prompt, the main agent takes a turn with the reply, as the note before its prompt (`turn.started` has `"auto": true`; the prompt says no message came from the user). A finish during a turn, while the user types, or while the prompt talks to a subagent waits; it comes with the next turn of either kind. A subagent that was stopped (`/stop`, `api.stopAgent`) starts no turn; its status comes with the next one.
+- **A limit.** At most `agent.autoTurns` (0 to 100, default 10) such turns run in a row before a message from the user; 0 never starts one (D-065's pull model). Esc on an automatic turn stops the chain until the user writes again.
+- **Headless.** `-p` runs the prompt's turn; then, while background subagents run, each reply starts a turn, up to `agent.autoTurns`. The run ends when none is left. The result is the last turn's, with the steps of all; subagents still running at the end are stopped, as before, with a line on stderr.
+- **Questions.** A held question (D-072) still waits with its notice and the status line's held count. `/answer [NAME]` (the oldest by default; Tab completes the held ones) asks it there, on the subagent's thread through the normal approval prompt, and leaves the user in the main chat. `/switch NAME` still works.
+- A foreground subagent (`background: false`) is unchanged: it runs as one step and asks its questions directly.
+
+**Why.** The main model called `api.waitAgent` for 5 minutes while its subagent waited for an approval; the prompt is closed during a turn, so `/switch` couldn't be typed and nothing moved until Esc (user report, 2026-11-25). The user wants the main chat free while subagents work, and their questions visible but never in the way. A reply that starts a turn gives the main agent everything `waitAgent` did, fan-out included, without holding a turn; keeping both would leave the model the blocking one.
+
+**Rejected.** Asking a held question at once while the main turn waits on that subagent (a fix for one case; the turn still blocks). Asking held questions during any turn (interrupts unrelated work). Keeping `waitAgent` with a short limit (still blocks, and the model picks it). Typing while the main agent's own turn runs (a larger change to the terminal; later if wanted). Starting turns without a limit (two subagents that start each other would run forever).
+
+**Source.** User report and review of the blocked chat, 2026-11-25: "I don't want the main chat blocked"; "Start a main turn" when a subagent finishes; "why do we even have the `api.waitAgent`? What do you think if we remove it?" Recommended design accepted, specifying 054-subagents-dont-block. Changes D-065 (`waitAgent`, pull-only delivery, `-p` stopping subagents at once) and D-072 (`/answer`).
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1547,6 +1571,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q93 | How are tokens and cost tracked? | A profile's `price` puts `costUsd` on each `model.completed`; `/usage`, `jharness usage`, the headless result and a `cost` status item add the log up | Users pick models by cost and want to catch expensive runs; a shipped price list would go stale | D-084 |
 | Q94 | How are evals run and scored? | Repository tasks with hidden checks in `evals/tasks/`, run by `scripts/eval.py` through headless JSON output; a check must fail first; CI runs recorded solutions; live scores per release | Shows whether releases get better or worse, without the binary starting check commands | D-085 |
 | Q95 | How are the web viewer and the TUI checked in real browsers and terminals? | `scripts/viewer-check.mjs` (Playwright: Chromium, Firefox, WebKit; Safari through safaridriver) and `scripts/tui-tmux-check.py` (tmux, several sizes), by hand after viewer or TUI changes and before releases, never in CI | The viewer's 403s slipped past tests that fetched files by hand; browsers in CI would cost minutes per run | D-086 |
+| Q96 | Should a turn wait for a subagent? | No: `api.waitAgent` is removed; a background subagent's reply starts a main turn (at most `agent.autoTurns` in a row, default 10); `-p` runs until none is left; `/answer` asks a held question in place | The main chat stayed blocked behind a wait while the subagent waited for the user, who couldn't type (user report, 2026-11-25) | D-087 |
 
 ---
 

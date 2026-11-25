@@ -125,18 +125,19 @@ interface SpawnRequest {
   /** A model profile name from api.models(); default: the custom agent's model, else the session's. */
   model?: string;
   maxSteps?: number;
-  /** true: return {"agent", "status": "running"} at once; collect the result with api.waitAgent. */
+  /** true: return {"agent", "status": "running"} at once and run on its own; end your turn, and its
+   *  result starts a new turn of yours when it finishes. */
   background?: boolean;
 }
 
 /** {"agent": string, "status": Status, "reply": string, "stopReason": Status, "steps": number, "error"?: string}
  *   — Status is "done" | "max_steps" | "error" | "interrupted" | "stopped"; reply is the subagent's final
- *   message, cut to the last 30,000 characters. A background spawn, or a wait that timed out, returns
+ *   message, cut to the last 30,000 characters. A background spawn returns
  *   {"agent": string, "status": "running"}. */
 type SpawnResultJson = string;
 
 /** [{"agent": string, "task": string, "customAgent": string, "model": string, "background": boolean,
- *    "status": "running" | Status, "steps": number, "durationMs": number}] */
+ *    "status": "running" | "waiting" | Status, "steps": number, "durationMs": number}] */
 type AgentsJson = string;
 
 /** {"current": string | null, "models": [{"name": string, "provider": string, "model": string, "notes"?: string}]}
@@ -212,18 +213,14 @@ declare const api: {
    * Runs a subagent on a task in its own sandbox and returns its final reply. It has the same api and
    * permissions as you (each change still asks), but can't start subagents itself. The user's settings
    * limit how many one turn may start (10 by default), its steps (100 by default) and how many run
-   * in the background at once (4 by default). A string is the task.
+   * in the background at once (4 by default). A string is the task. Never wait for a background
+   * subagent inside a block: end your turn instead, so the user can go on. When it finishes, its reply
+   * starts a new turn of yours. Its questions go to the user, who answers them when they choose.
    */
   spawnAgent(request: SpawnRequest | string): SpawnResultJson;
   /** The model profiles spawnAgent can use, by name. */
   models(): ModelsJson;
-  /**
-   * Waits for a background subagent (a string is its name) and returns its result. timeoutMs defaults
-   * to 600000 (at most 3600000). Results you don't collect are given to you at the start of your next turn.
-   * Background subagents can't ask the user, so changes that need approval are denied for them.
-   */
-  waitAgent(request: { agent: string; timeoutMs?: number } | string): SpawnResultJson;
-  /** This session's subagents. */
+  /** This session's subagents; "waiting" means one waits for the user to answer a question. */
   agents(): AgentsJson;
   /** Stops a running background subagent. */
   stopAgent(name: string): string;

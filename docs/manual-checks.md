@@ -68,6 +68,8 @@ Record notable runs here: date, version, machine, result.
 | --- | --- | --- | --- | --- |
 | 2026-11-25 | 0.1.0-SNAPSHOT (spec 053) | macOS 14.3 arm64 | Chromium 159 and Firefox 159 pass; Playwright's WebKit for macOS 14 crashes on start (Bus error), use Safari; Safari needs Allow Remote Automation | 120x40 passes; shrinking below the prompt's row puts the prompt on the status line (80x24 → 60x18, 50x16 → 40x12) |
 | 2026-11-25 | 0.1.0-SNAPSHOT (spec 053) | Linux x86-64 | Browsers need their system libraries (`playwright install-deps`, sudo); the terminal check passes | Same resize finding as macOS |
+| 2026-11-25 | 0.1.0-SNAPSHOT (spec 054) | macOS 14.3 arm64 | Not run: the viewer didn't change | 120x40 passes; the resize finding is unchanged |
+| 2026-11-25 | 0.1.0-SNAPSHOT (spec 054) | Linux x86-64 | Not run: the viewer didn't change | Same as macOS |
 
 Notes:
 

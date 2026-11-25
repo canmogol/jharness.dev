@@ -41,8 +41,6 @@ import dev.jharness.security.Unattended;
 final class SubagentRunner implements Subagents {
 
     static final int MAX_TASK_CHARS = 20_000;
-    static final long DEFAULT_WAIT_MS = 600_000;
-    static final long MAX_WAIT_MS = 3_600_000;
     /** How long {@code /stop} and closing the session wait for a stopped subagent to end. */
     static final long STOP_WAIT_MS = 5_000;
 
@@ -124,6 +122,12 @@ final class SubagentRunner implements Subagents {
         volatile boolean open = true;
         /** The question it is waiting on for the user (spec 033), or null. */
         volatile String waiting;
+        /** {@code /answer} (spec 054): ask its held question now, without switching to it. */
+        volatile boolean answerNow;
+        /** True while its held question is being asked. */
+        volatile boolean asking;
+        /** Completed once the question {@code /answer} woke was answered. */
+        volatile CompletableFuture<Void> answered;
 
         /** Wakes a question it holds, so a stop doesn't wait for the time limit. */
         volatile Runnable wake = () -> {};
@@ -193,6 +197,8 @@ final class SubagentRunner implements Subagents {
         if (agent.equals(attended)) {
             return real.ask(op);
         }
+        // An /answer meant for an earlier question that ended first doesn't answer this one.
+        run.answerNow = false;
         run.waiting = op.summary();
         bus.publish(new dev.jharness.events.Origin(agent, parentTurns.current()), "subagent.waiting",
                 Json.object().put("api", op.api()).put("summary", op.summary()));
@@ -201,11 +207,12 @@ final class SubagentRunner implements Subagents {
         String outcome;
         try {
             synchronized (attention) {
-                while (!agent.equals(attended) && !run.stopped && System.nanoTime() < deadline) {
+                while (!agent.equals(attended) && !run.answerNow && !run.stopped && System.nanoTime() < deadline) {
                     attention.wait(Math.max(1, Math.min(1000, (deadline - System.nanoTime()) / 1_000_000)));
                 }
+                outcome = agent.equals(attended) || run.answerNow ? "asked" : run.stopped ? "stopped" : "timeout";
+                run.asking = outcome.equals("asked");
             }
-            outcome = agent.equals(attended) ? "asked" : run.stopped ? "stopped" : "timeout";
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             outcome = "stopped";
@@ -213,7 +220,93 @@ final class SubagentRunner implements Subagents {
             run.waiting = null;
         }
         bus.publish(new dev.jharness.events.Origin(agent, parentTurns.current()), "subagent.wait_ended", Json.object().put("outcome", outcome));
-        return outcome.equals("asked") ? real.ask(op) : Prompter.Answer.UNATTENDED;
+        if (!outcome.equals("asked")) {
+            return Prompter.Answer.UNATTENDED;
+        }
+        try {
+            return real.ask(op);
+        } finally {
+            run.asking = false;
+            run.answerNow = false;
+            CompletableFuture<Void> f = run.answered;
+            run.answered = null;
+            if (f != null) {
+                f.complete(null);
+            }
+        }
+    }
+
+    /**
+     * {@code /answer NAME} (spec 054): asks the subagent's held question now, on its own thread, through the real prompter,
+     * and returns once it was answered. The user stays in the main chat.
+     *
+     * @return false if it holds no question
+     */
+    boolean answer(String name) {
+        Run run = find(name);
+        if (run.waiting == null || !run.running()) {
+            return false;
+        }
+        CompletableFuture<Void> f = new CompletableFuture<>();
+        run.answered = f;
+        synchronized (attention) {
+            run.answerNow = true;
+            attention.notifyAll();
+        }
+        try {
+            // Until it is answered, or the wait ended another way (a stop, the time limit) before the question was asked.
+            while (!f.isDone() && run.running() && (run.waiting != null || run.asking)) {
+                try {
+                    f.get(100, TimeUnit.MILLISECONDS);
+                } catch (TimeoutException e) {
+                    // Check again.
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (java.util.concurrent.ExecutionException e) {
+            // Never completed exceptionally.
+        }
+        return true;
+    }
+
+    /** The background subagents holding a question for the user, oldest first (spec 054). */
+    List<String> held() {
+        return runs.stream().filter(r -> r.waiting != null && r.running()).map(r -> r.name).toList();
+    }
+
+    /** Called when a background subagent finishes, on its thread (spec 054): the TUI may start a main turn with its reply. */
+    private volatile Runnable onFinished = () -> {};
+    private final Object finishLock = new Object();
+
+    void onFinished(Runnable r) {
+        onFinished = r == null ? () -> {} : r;
+    }
+
+    /**
+     * Whether a background subagent finished and its reply hasn't reached the main agent yet. One that was stopped
+     * ({@code /stop}, {@code api.stopAgent}) doesn't count: it starts no turn, and its status comes with the next one.
+     */
+    boolean deliveryPending() {
+        return runs.stream().anyMatch(r -> r.background && !r.running() && !r.collected && !r.stopped);
+    }
+
+    /**
+     * Headless runs (spec 054): waits until a background subagent's reply is ready for the main agent (true), or until
+     * none is running (false).
+     */
+    boolean awaitFinished() throws InterruptedException {
+        synchronized (finishLock) {
+            while (true) {
+                if (deliveryPending()) {
+                    return true;
+                }
+                if (running().isEmpty()) {
+                    return false;
+                }
+                finishLock.wait(1000);
+            }
+        }
     }
 
     private final List<Run> runs = new CopyOnWriteArrayList<>();
@@ -274,7 +367,7 @@ final class SubagentRunner implements Subagents {
         int running = settings.agent().subagentsRunning();
         if (background && runs.stream().filter(x -> x.background && x.running()).count() >= running) {
             throw new IllegalArgumentException(running + " background subagents are running, the most at once (agent.subagentsRunning); "
-                    + "wait for one with api.waitAgent");
+                    + "end your turn, and start this one when one of them has finished");
         }
         int turn = parentTurns.current();
         int most = settings.agent().subagentsPerTurn();
@@ -398,6 +491,16 @@ final class SubagentRunner implements Subagents {
         String json = Json.write(out);
         run.status = stop;
         run.done.complete(json);
+        if (run.background) {
+            synchronized (finishLock) {
+                finishLock.notifyAll();
+            }
+            try {
+                onFinished.run();
+            } catch (RuntimeException e) {
+                // The listener only nudges the TUI; the reply is delivered either way.
+            }
+        }
         return json;
     }
 
@@ -409,38 +512,6 @@ final class SubagentRunner implements Subagents {
         }
         throw new IllegalArgumentException("no subagent " + name + " in this session"
                 + (runs.isEmpty() ? "" : " (known: " + String.join(", ", runs.stream().map(r -> r.name).toList()) + ")"));
-    }
-
-    @Override
-    public String waitAgent(ObjectNode req) throws Exception {
-        for (var it = req.fieldNames(); it.hasNext(); ) {
-            String f = it.next();
-            if (!f.equals("agent") && !f.equals("timeoutMs")) {
-                throw new IllegalArgumentException("waitAgent does not take \"" + f + "\" (takes: agent, timeoutMs)");
-            }
-        }
-        if (!req.path("agent").isTextual()) {
-            throw new IllegalArgumentException("waitAgent needs an \"agent\" name, such as sub-1");
-        }
-        long timeout = DEFAULT_WAIT_MS;
-        JsonNode t = req.get("timeoutMs");
-        if (t != null && !t.isNull()) {
-            if (!t.canConvertToLong() || !t.isIntegralNumber() || t.asLong() < 0 || t.asLong() > MAX_WAIT_MS) {
-                throw new IllegalArgumentException("\"timeoutMs\" must be a whole number from 0 to " + MAX_WAIT_MS);
-            }
-            timeout = t.asLong();
-        }
-        Run run = find(req.get("agent").asText());
-        try {
-            String json = run.done.get(timeout, TimeUnit.MILLISECONDS);
-            run.collected = true;
-            return json;
-        } catch (TimeoutException e) {
-            return Json.write(Json.object().put("agent", run.name).put("status", "running").put("steps", run.stepsSoFar()));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("the wait for " + run.name + " was stopped");
-        }
     }
 
     @Override
@@ -591,8 +662,8 @@ final class SubagentRunner implements Subagents {
     }
 
     /**
-     * Before each turn of the main agent: the replies of background subagents that finished and weren't
-     * collected with {@code waitAgent}, once each (AC-05); empty when there are none.
+     * Before each turn of the main agent: the replies of background subagents that finished since its last turn, once
+     * each (spec 027 AC-05); empty when there are none. A finish can start that turn itself (spec 054).
      */
     String drainFinished() {
         List<Run> ready = runs.stream().filter(r -> r.background && !r.running() && !r.collected).toList();
