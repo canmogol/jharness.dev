@@ -106,6 +106,10 @@ jobs:
           grep -q "replay/" "$tmp/list.txt"
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last | tee "$tmp/timeline.txt"
           grep -q "loop.result  step=1 status=ok" "$tmp/timeline.txt"
+          # jharness usage adds up the session's requests (spec 049); replay has no price, so no cost.
+          "$bin" usage --home "$tmp/home" --cwd "$tmp/ws" | tee "$tmp/usage.txt"
+          grep -Eq "^SESSION +STARTED +MODEL +REQUESTS" "$tmp/usage.txt"
+          "$bin" usage --home "$tmp/home" --cwd "$tmp/ws" --json | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["total"]["requests"] >= 2 and "costUsd" not in j["total"], j'
           # The example custom agent (spec 025): its helpers run and its tools hold in the native binary.
           mkdir -p "$tmp/home/.jharness/agents" && cp -R examples/.jharness/agents/reviewer "$tmp/home/.jharness/agents/"
           printf '%s\n' '{"reply":"```js\ntypeof changedFiles + \" \" + api.readFile(\"a.txt\")\n```"}' '{"reply":"```js\napi.writeFile(\"a.txt\", \"x\")\n```"}' '{"reply":"Reviewed."}' > "$tmp/agent.jsonl"

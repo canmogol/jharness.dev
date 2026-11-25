@@ -17,10 +17,11 @@ import java.time.Duration;
  *        32,768 for {@code openai-compatible} and 200,000 for {@code anthropic} unless set
  * @param promptCache whether requests mark the stable prefix for the provider's prompt cache (spec 040);
  *        only {@code anthropic} uses it, and it is on by default there
+ * @param price what the tokens cost (spec 049), or null when the profile sets no price
  */
 public record ModelProfile(String name, String provider, String baseUrl, String model, String apiKeyEnv,
         int maxTokens, String notes, int retries, Duration retryMaxWait, Duration responseTimeout, int contextWindow,
-        boolean promptCache) {
+        boolean promptCache, ModelPrice price) {
 
     public static final String OPENAI_COMPATIBLE = "openai-compatible";
     public static final String ANTHROPIC = "anthropic";
@@ -39,6 +40,13 @@ public record ModelProfile(String name, String provider, String baseUrl, String 
 
     public static int defaultContextWindow(String provider) {
         return ANTHROPIC.equals(provider) ? ANTHROPIC_CONTEXT_WINDOW : DEFAULT_CONTEXT_WINDOW;
+    }
+
+    /** A profile with no price. */
+    public ModelProfile(String name, String provider, String baseUrl, String model, String apiKeyEnv, int maxTokens, String notes,
+            int retries, Duration retryMaxWait, Duration responseTimeout, int contextWindow, boolean promptCache) {
+        this(name, provider, baseUrl, model, apiKeyEnv, maxTokens, notes, retries, retryMaxWait, responseTimeout, contextWindow,
+                promptCache, null);
     }
 
     /** A profile with the default prompt cache setting for its provider. */

@@ -421,7 +421,7 @@ class TuiTest {
     @Test
     void commandsComeFromTheHelp() {
         assertEquals(List.of("/agent", "/agents", "/commands", "/compact", "/context", "/diff", "/events", "/exit", "/follow", "/help", "/hooks", "/mcp",
-                "/model", "/network", "/plan", "/rewind", "/stop", "/switch", "/thinking", "/todos", "/undo", "/view"), List.copyOf(Tui.COMMANDS.keySet()));
+                "/model", "/network", "/plan", "/rewind", "/stop", "/switch", "/thinking", "/todos", "/undo", "/usage", "/view"), List.copyOf(Tui.COMMANDS.keySet()));
         // Spec 046: the help lists the commands in alphabetical order, then the keys.
         assertEquals(Tui.COMMANDS.keySet().stream().sorted().toList(), List.copyOf(Tui.COMMANDS.keySet()));
         assertTrue(Tui.HELP.indexOf("Keys:") > Tui.HELP.indexOf("/view") && Tui.HELP.indexOf("@PATH") > Tui.HELP.indexOf("Keys:"), Tui.HELP);
@@ -651,6 +651,22 @@ class TuiTest {
         String first = m.group(1);
         assertTrue(m.find() && m.group(1).equals(first), "one viewer per session: " + sc);
         assertTrue(sc.contains("Read-only, on this machine only"), sc);
+    }
+
+    /** Spec 049 AC-03: /usage adds up this session's requests by agent, with the cost of a priced profile. */
+    @Test
+    void usagePrintsTokensAndCost() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws-usage"));
+        Tui tui = new Tui(terminal("/usage\nhello\n/usage\n/exit\n"), null);
+        try (Session session = Session.open(tmp.resolve("home-usage"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
+                (bus, turns) -> new ReplayProvider(List.of(UsageTest.reply("Hi.", 1_000_000, 100_000, 400_000)), bus, turns).price(UsageTest.PRICE))) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("No model requests yet."), sc);
+        assertTrue(sc.contains("AGENT  REQUESTS  INPUT      OUTPUT   CACHE-READ  CACHE-WRITE  COST"), sc);
+        assertTrue(sc.contains("main   1         1,000,000  100,000  400,000     0            $3.42"), sc);
+        assertTrue(sc.contains("INPUT is the whole prompt, cached tokens included."), sc);
     }
 
     /** Spec 024 AC-01, AC-02: "/" then Tab prints the help; "/mo" then Tab completes /model; other text keeps its Tab behavior. */

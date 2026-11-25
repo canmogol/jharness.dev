@@ -57,6 +57,14 @@ final class StatusLine implements AutoCloseable {
                 : session.workspace().root().getFileName().toString();
         state.mode = session.permissionMode();
         state.plan = state.mode.equals("plan");
+        // A resumed session's earlier runs count toward the cost (spec 049); read once, before any turn of this run.
+        try {
+            Usage u = Usage.ofLog(session.logPath());
+            state.cost = u.total.cost;
+            state.priced = u.total.priced();
+        } catch (java.io.IOException | RuntimeException e) {
+            // The cost starts at zero.
+        }
         var ready = Json.object().put("from", script != null ? "script" : "default");
         var a = ready.putArray("items");
         items.forEach(a::add);

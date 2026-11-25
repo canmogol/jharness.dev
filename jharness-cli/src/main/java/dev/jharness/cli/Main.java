@@ -29,7 +29,7 @@ import picocli.CommandLine.Option;
  */
 @Command(name = "jharness", mixinStandardHelpOptions = true, version = "jharness " + Main.VERSION,
         description = "A terminal coding agent whose model acts by writing JavaScript in a sandbox.",
-        subcommands = {LogCommand.class, ToolsCommand.class, ViewCommand.class})
+        subcommands = {LogCommand.class, ToolsCommand.class, UsageCommand.class, ViewCommand.class})
 public final class Main implements Callable<Integer> {
 
     static final String VERSION = "0.1.0-SNAPSHOT";

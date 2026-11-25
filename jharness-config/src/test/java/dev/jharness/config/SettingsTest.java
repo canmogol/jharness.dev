@@ -204,7 +204,7 @@ class SettingsTest {
     @Test
     void statusLineSetting() throws Exception {
         assertEquals(UiSettings.STATUS_ITEMS, Settings.defaults().ui().statusLine());
-        assertEquals(java.util.List.of("model", "context", "mode", "agents", "cache", "turn", "workspace"), UiSettings.STATUS_ITEMS);
+        assertEquals(java.util.List.of("model", "context", "mode", "agents", "cache", "cost", "turn", "workspace"), UiSettings.STATUS_ITEMS);
         assertEquals(java.util.List.of(), Settings.parse("{\"ui\":{\"statusLine\":false}}", "s").ui().statusLine());
         assertEquals(UiSettings.STATUS_ITEMS, Settings.parse("{\"ui\":{\"statusLine\":true}}", "s").ui().statusLine());
         assertEquals(java.util.List.of("turn", "model"), Settings.parse("{\"ui\":{\"statusLine\":[\"turn\",\"model\"]}}", "s").ui().statusLine());

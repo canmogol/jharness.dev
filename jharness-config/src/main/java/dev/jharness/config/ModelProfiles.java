@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 /** The {@code model} and {@code models} sections: named profiles and the default (D-032). */
 public final class ModelProfiles {
 
-    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes", "retries", "retryMaxWait", "responseTimeout", "contextWindow", "promptCache");
+    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes", "retries", "retryMaxWait", "responseTimeout", "contextWindow", "promptCache", "price");
 
     private final String defaultName;
     private final Map<String, ModelProfile> profiles;
@@ -183,8 +183,47 @@ public final class ModelProfiles {
             }
             cache = n.get("promptCache").asBoolean();
         }
+        ModelPrice price = n.has("price") ? price(n.get("price"), where + ".price", provider) : null;
         return new ModelProfile(name, provider, baseUrl.replaceAll("/+$", ""), model, apiKeyEnv, maxTokens, notes,
-                retries, retryMaxWait, responseTimeout, window, cache);
+                retries, retryMaxWait, responseTimeout, window, cache, price);
+    }
+
+    private static final Set<String> PRICE_KEYS = Set.of("input", "output", "cacheRead", "cacheWrite");
+
+    /**
+     * {@code {"input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75}}, US dollars per million tokens (spec 049).
+     * Without the cache prices, anthropic profiles use Anthropic's rates (a tenth of input to read, 1.25 times to write)
+     * and openai-compatible ones the input price.
+     */
+    static ModelPrice price(JsonNode p, String where, String provider) throws ConfigException {
+        if (!p.isObject()) {
+            throw new ConfigException(where + ": expected an object such as {\"input\": 3, \"output\": 15}, in US dollars per million tokens");
+        }
+        for (Map.Entry<String, JsonNode> kv : p.properties()) {
+            if (!PRICE_KEYS.contains(kv.getKey())) {
+                throw new ConfigException(where + "." + kv.getKey() + " is not a known price (known: input, output, cacheRead, cacheWrite)");
+            }
+        }
+        double input = dollars(p, "input", where, null);
+        double output = dollars(p, "output", where, null);
+        boolean anthropic = ModelProfile.ANTHROPIC.equals(provider);
+        double read = dollars(p, "cacheRead", where, anthropic ? input * 0.1 : input);
+        double write = dollars(p, "cacheWrite", where, anthropic ? input * 1.25 : input);
+        return new ModelPrice(input, output, read, write);
+    }
+
+    private static double dollars(JsonNode p, String key, String where, Double dflt) throws ConfigException {
+        JsonNode v = p.get(key);
+        if (v == null) {
+            if (dflt == null) {
+                throw new ConfigException(where + "." + key + " is required (US dollars per million tokens)");
+            }
+            return dflt;
+        }
+        if (!v.isNumber() || v.asDouble() < 0 || v.asDouble() > ModelPrice.MAX || Double.isNaN(v.asDouble())) {
+            throw new ConfigException(where + "." + key + ": expected US dollars per million tokens, from 0 to " + (int) ModelPrice.MAX);
+        }
+        return v.asDouble();
     }
 
     private static java.time.Duration duration(JsonNode n, String key, String where, java.time.Duration dflt,

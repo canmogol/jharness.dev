@@ -49,7 +49,7 @@ final class LogFormat {
             Map.entry("turn.completed", List.of("steps", "stopReason", "contextTokens", "error")),
             Map.entry("model.request", List.of("profile", "model", "attempt", "messages")),
             Map.entry("model.response", List.of("status", "attempt", "durationMs", "requestId")),
-            Map.entry("model.completed", List.of("stopReason", "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "text")),
+            Map.entry("model.completed", List.of("stopReason", "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "costUsd", "text")),
             Map.entry("model.error", List.of("message")),
             Map.entry("model.retry", List.of("reason", "attempt", "attempts", "waitMs")),
             Map.entry("loop.code", List.of("step", "lines")),

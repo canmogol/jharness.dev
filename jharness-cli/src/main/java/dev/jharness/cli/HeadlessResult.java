@@ -19,11 +19,7 @@ final class HeadlessResult {
 
     private final String session;
     private final long started = System.nanoTime();
-    private long input;
-    private long outputTokens;
-    private long cacheRead;
-    private long cacheWrite;
-    private int requests;
+    private final Usage usage = new Usage();
     private final Set<String> files = new LinkedHashSet<>();
     private final List<ObjectNode> denied = new ArrayList<>();
     private final Set<String> subagents = new LinkedHashSet<>();
@@ -35,13 +31,7 @@ final class HeadlessResult {
     synchronized void onEvent(Event e) {
         var b = e.body();
         switch (e.type()) {
-            case "model.completed" -> {
-                requests++;
-                input += b.path("inputTokens").asLong();
-                outputTokens += b.path("outputTokens").asLong();
-                cacheRead += b.path("cacheReadTokens").asLong();
-                cacheWrite += b.path("cacheWriteTokens").asLong();
-            }
+            case "model.completed" -> usage.add(e.type(), e.agent(), b);
             case "file.changed" -> files.add(b.path("path").asText());
             case "permission.decided" -> {
                 if (!b.path("allowed").asBoolean(true)) {
@@ -63,8 +53,8 @@ final class HeadlessResult {
             o.put("error", r.error());
         }
         o.put("exitCode", exitCode).put("durationMs", (System.nanoTime() - started) / 1_000_000);
-        o.putObject("usage").put("requests", requests).put("inputTokens", input).put("outputTokens", outputTokens)
-                .put("cacheReadTokens", cacheRead).put("cacheWriteTokens", cacheWrite);
+        // Every agent's requests; costUsd when a profile has a price (spec 049).
+        o.set("usage", usage.total.json());
         var f = o.putArray("filesChanged");
         files.forEach(f::add);
         var d = o.putArray("denied");
