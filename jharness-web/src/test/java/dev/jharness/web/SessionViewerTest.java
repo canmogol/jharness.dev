@@ -48,7 +48,7 @@ class SessionViewerTest {
         String t = viewer.token();
         var page = get("/?t=" + t);
         assertEquals(200, page.statusCode());
-        assertTrue(page.body().contains("<script src=\"app.js\""), page.body());
+        assertTrue(page.body().contains("<script src=\"app.js?t=" + t + "\""), page.body());
         assertEquals(SessionViewer.CSP, page.headers().firstValue("Content-Security-Policy").orElse(""));
         assertEquals("no-referrer", page.headers().firstValue("Referrer-Policy").orElse(""));
         assertEquals("nosniff", page.headers().firstValue("X-Content-Type-Options").orElse(""));
@@ -61,6 +61,29 @@ class SessionViewerTest {
         var post = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + viewer.port() + "/?t=" + t))
                 .POST(HttpRequest.BodyPublishers.ofString("x")).build(), HttpResponse.BodyHandlers.ofString());
         assertEquals(405, post.statusCode(), "read-only");
+    }
+
+    /**
+     * Spec 050 regression: a browser loads the script and stylesheet exactly as the page links them. Before the fix the
+     * links had no token, so both got 403 and the page stayed unstyled at "connecting…".
+     */
+    @Test
+    void thePagesOwnLinksLoad() throws Exception {
+        viewer = SessionViewer.start(new EventFeed(), 0);
+        URI page = URI.create(viewer.url());
+        String html = get(page.getRawPath() + "?" + page.getRawQuery()).body();
+        var m = java.util.regex.Pattern.compile("(?:src|href)=\"([^\"]+)\"").matcher(html);
+        List<String> links = new ArrayList<>();
+        while (m.find()) {
+            links.add(m.group(1));
+        }
+        assertEquals(2, links.size(), html);
+        for (String link : links) {
+            URI u = page.resolve(link);
+            var res = get(u.getRawPath() + "?" + u.getRawQuery());
+            assertEquals(200, res.statusCode(), link + " as the browser asks for it");
+        }
+        assertTrue(links.stream().allMatch(l -> l.endsWith("?t=" + viewer.token())), links.toString());
     }
 
     @Test
