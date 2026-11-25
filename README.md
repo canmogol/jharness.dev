@@ -198,6 +198,8 @@ With `background: true` the subagent runs while the main agent goes on; `api.wai
 
 The security suites attack a real session: prompt injection, a malicious repository, sandbox escapes and runaway code. They run with `mvn install` and in the native smoke binary (`jharness-smoke --security`). `docs/security-suites.md` lists every case and what contains it.
 
+Two manual checks cover what CI doesn't: `node scripts/viewer-check.mjs BIN` opens the web viewer in Chromium, Firefox, WebKit and Safari with Playwright and checks the page, its console and the Markdown, and `scripts/tui-tmux-check.py BIN` checks the TUI at several terminal sizes in tmux. They never run in CI; run them after changing the viewer or the terminal UI and before each release, on Linux and macOS. `docs/manual-checks.md` says how to set them up.
+
 ## License
 
 The source code is under the [MIT License](LICENSE).
