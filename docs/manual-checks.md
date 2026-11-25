@@ -66,3 +66,10 @@ Record notable runs here: date, version, machine, result.
 
 | Date | Version | Machine | Viewer | TUI sizes |
 | --- | --- | --- | --- | --- |
+| 2026-11-25 | 0.1.0-SNAPSHOT (spec 053) | macOS 14.3 arm64 | Chromium 159 and Firefox 159 pass; Playwright's WebKit for macOS 14 crashes on start (Bus error), use Safari; Safari needs Allow Remote Automation | 120x40 passes; shrinking below the prompt's row puts the prompt on the status line (80x24 → 60x18, 50x16 → 40x12) |
+| 2026-11-25 | 0.1.0-SNAPSHOT (spec 053) | Linux x86-64 | Browsers need their system libraries (`playwright install-deps`, sudo); the terminal check passes | Same resize finding as macOS |
+
+Notes:
+
+- A macOS native binary built where `LC_CTYPE` is `C` (such as an SSH session with `LANG=C.UTF-8`, which macOS doesn't define) prints `?` for non-ASCII characters such as `·`, whatever the runtime locale. Build with a UTF-8 locale (`LC_ALL=en_US.UTF-8`).
+

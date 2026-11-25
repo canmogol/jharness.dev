@@ -33,6 +33,7 @@ Spec: `spec.md` · Status: Done · Created: 2026-11-25
 
 - [x] `viewer-check.mjs` on macOS: Chromium, Firefox, WebKit
 - [ ] `viewer-check.mjs` on Linux: needs the browsers' system libraries (`playwright install-deps`, sudo)
-- [ ] `viewer-check.mjs` with Safari: see the PR
+- [ ] `viewer-check.mjs` with Safari: needs Allow Remote Automation on the macOS machine
+- [ ] `viewer-check.mjs` with WebKit on macOS 14: Playwright's frozen build crashes; needs macOS 15 or later
 - [x] `tui-tmux-check.py` on Linux and macOS (it finds a resize bug; see the PR)
 - [x] `mvn install` on Linux
