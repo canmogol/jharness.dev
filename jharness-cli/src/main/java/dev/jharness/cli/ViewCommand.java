@@ -3,9 +3,15 @@ package dev.jharness.cli;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.time.ZoneId;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Consumer;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
+import dev.jharness.events.Json;
 import dev.jharness.events.SessionLogs;
 import dev.jharness.web.EventFeed;
 import dev.jharness.web.LogTail;
@@ -18,10 +24,12 @@ import picocli.CommandLine.ParentCommand;
 
 /**
  * {@code jharness view [SESSION]} (spec 048, D-083): a read-only browser view of a saved or running session, from its
- * log, on {@code 127.0.0.1}. It follows the log as it grows until Ctrl-C.
+ * log, on {@code 127.0.0.1}. It follows the log as it grows until Ctrl-C, and prints each event in the terminal as
+ * {@code jharness log SESSION} does (spec 052) unless {@code --quiet}.
  */
 @Command(name = "view", mixinStandardHelpOptions = true,
-        description = {"Show a session in the browser, read-only, on 127.0.0.1; it follows a running session's log.",
+        description = {"Show a session in the browser, read-only, on 127.0.0.1; it follows a running session's log and prints"
+                + " each event here too (--quiet prints only the address).",
                 "SESSION is an id, a unique prefix of one, \"last\" (the default), or a path to a .jsonl log. Ctrl-C stops it."})
 final class ViewCommand implements Callable<Integer> {
 
@@ -36,6 +44,12 @@ final class ViewCommand implements Callable<Integer> {
 
     @Option(names = "--port", paramLabel = "PORT", description = "Port on 127.0.0.1 (default: any free port).")
     int port;
+
+    @Option(names = {"-q", "--quiet"}, description = "Print only the address, not each event.")
+    boolean quiet;
+
+    /** Tests set the zone; null means the system's. */
+    ZoneId zone;
 
     @Option(names = "--home", hidden = true, paramLabel = "DIR", description = "Tests only: use DIR instead of the home folder.")
     Path home;
@@ -67,6 +81,7 @@ final class ViewCommand implements Callable<Integer> {
             out.println("Viewing " + TerminalSafe.escape(file.toString()));
             out.println("Open " + v.url() + " (read-only, this machine only; Ctrl-C stops)");
             out.flush();
+            Thread printer = quiet ? null : printEvents(feed, out);
             var hook = started;
             if (hook != null) {
                 hook.accept(v, stop);
@@ -83,10 +98,45 @@ final class ViewCommand implements Callable<Integer> {
             } catch (IllegalStateException ignored) {
                 // Already shutting down.
             }
+            if (printer != null) {
+                printer.interrupt();
+            }
             return 0;
         } catch (IOException e) {
             err.println("jharness view: " + e.getMessage());
             return 2;
         }
+    }
+
+    /**
+     * Prints the feed's lines, the log so far and then each new one, as {@code jharness log SESSION} formats them. The
+     * feed's listener only queues a line, so a slow terminal never holds up the tail or the browsers.
+     */
+    private Thread printEvents(EventFeed feed, PrintStream out) {
+        LinkedBlockingQueue<String> lines = new LinkedBlockingQueue<>();
+        Consumer<String> listener = lines::add;
+        LogFormat f = new LogFormat(zone != null ? zone : ZoneId.systemDefault(), false);
+        Thread t = new Thread(() -> {
+            try {
+                while (true) {
+                    String raw = lines.take();
+                    JsonNode e = null;
+                    try {
+                        JsonNode p = Json.parse(raw);
+                        e = p.isObject() ? p : null;
+                    } catch (RuntimeException ignored) {
+                        // Shown as "not JSON".
+                    }
+                    out.println(e != null ? f.line(e) : "not JSON: " + TerminalSafe.escape(LogFormat.cut(raw, LogFormat.CUT)));
+                    out.flush();
+                }
+            } catch (InterruptedException done) {
+                feed.detach(listener);
+            }
+        }, "jharness-view-print");
+        t.setDaemon(true);
+        t.start();
+        feed.attach(listener);
+        return t;
     }
 }

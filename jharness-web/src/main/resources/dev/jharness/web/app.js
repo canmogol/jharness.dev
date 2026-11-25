@@ -62,17 +62,29 @@
     return pre;
   }
 
-  // A reply: the agent's tag, then a body that streamed chunks fill and model.completed replaces.
+  // A reply: the agent's tag, then a body that streamed chunks fill and model.completed replaces. The body shows the
+  // text as Markdown (spec 052), redrawn at most once a frame while chunks arrive.
   function reply(ev) {
     let body = replies.get(ev.agent);
     if (!body) {
       const r = el("div", "reply");
-      body = el("span");
+      body = el("div", "md");
+      body.raw = "";
       r.appendChild(body);
       add(ev, who(ev, r));
       replies.set(ev.agent, body);
     }
     return body;
+  }
+
+  function setReply(body, text) {
+    body.raw = text;
+    if (body.pending) return;
+    body.pending = true;
+    requestAnimationFrame(() => {
+      body.pending = false;
+      JHarnessMarkdown.render(body, body.raw);
+    });
   }
 
   function noteAgent(a) {
@@ -124,11 +136,13 @@
       case "prompt.attached":
         step(ev, "attached " + (ev.files || []).map(f => f.path).join(", "));
         break;
-      case "model.delta":
-        reply(ev).textContent += ev.text;
+      case "model.delta": {
+        const body = reply(ev);
+        setReply(body, body.raw + (ev.text || ""));
         break;
+      }
       case "model.completed": {
-        reply(ev).textContent = ev.text || "";
+        setReply(reply(ev), ev.text || "");
         replies.delete(ev.agent);
         if (ev.thinking) {
           const d = el("details", "think");

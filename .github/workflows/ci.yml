@@ -206,8 +206,13 @@ jobs:
           base=${url%%/?t=*}; tok=${url##*t=}
           curl -sf --noproxy '*' "$url" > "$tmp/view.html"
           # The page's own links load as a browser asks for them (spec 050).
-          for a in $(sed -nE 's/.*(src|href)="([^"]*)".*/\2/p' "$tmp/view.html"); do curl -sf --noproxy '*' -o /dev/null "$base/$a"; done
-          test "$(grep -cE 'app\.(js|css)\?t=' "$tmp/view.html")" = 2
+          for a in $(sed -nE 's/.*(src|href)="([^"]*)".*/\2/p' "$tmp/view.html" | grep -v '^data:'); do curl -sf --noproxy '*' -o /dev/null "$base/$a"; done
+          test "$(grep -cE '(app|markdown)\.(js|css)\?t=' "$tmp/view.html")" = 3
+          # An inline icon, so browsers don't ask for /favicon.ico without the token (spec 052).
+          grep -q 'rel="icon" href="data:,"' "$tmp/view.html"
+          # jharness view prints each event in the terminal too, as jharness log does (spec 052).
+          for i in $(seq 50); do grep -q "  turn.completed" "$tmp/view.txt" && break; sleep 0.1; done
+          grep -q "  session.started" "$tmp/view.txt" && grep -q "  turn.completed" "$tmp/view.txt"
           curl -s --noproxy '*' --max-time 3 "$base/events?t=$tok" > "$tmp/view-events.txt" || true
           grep -q '^data: {.*"type":"session.started"' "$tmp/view-events.txt"
           test "$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' "$base/")" = 403

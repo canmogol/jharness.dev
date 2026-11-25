@@ -67,6 +67,15 @@ class ViewTest {
         return types;
     }
 
+    private static String waitFor(ByteArrayOutputStream out, String text) throws InterruptedException {
+        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (!out.toString().contains(text) && System.nanoTime() < end) {
+            Thread.sleep(20);
+        }
+        assertTrue(out.toString().contains(text), out.toString());
+        return out.toString();
+    }
+
     @Test
     void viewServesASavedSession() throws Exception {
         Path home = Files.createDirectories(tmp.resolve("home"));
@@ -89,8 +98,28 @@ class ViewTest {
         assertEquals("session.started", types.getFirst());
         assertTrue(types.contains("turn.started") && types.contains("model.completed") && types.contains("turn.completed"), types.toString());
         assertTrue(out.toString().contains("Open http://127.0.0.1:" + v.port() + "/?t="), out.toString());
+        // Spec 052: the terminal shows each event too, as jharness log SESSION does, after the address.
+        String printed = waitFor(out, "  turn.completed");
+        assertTrue(printed.indexOf("Open http") < printed.indexOf("  session.started"), printed);
+        assertTrue(printed.contains("  turn.started") && printed.contains("prompt=hello") && printed.contains("  model.completed"), printed);
         stop[0].countDown();
         assertEquals(0, code.get(20, TimeUnit.SECONDS));
+
+        // --quiet prints only the address.
+        CompletableFuture<SessionViewer> quiet = new CompletableFuture<>();
+        ViewCommand.started = (qv, s) -> {
+            stop[0] = s;
+            quiet.complete(qv);
+        };
+        ByteArrayOutputStream qout = new ByteArrayOutputStream();
+        Main q = new Main();
+        q.out = new PrintStream(qout, true);
+        q.err = new PrintStream(new ByteArrayOutputStream(), true);
+        CompletableFuture<Integer> qcode = CompletableFuture.supplyAsync(() -> Main.run(q, "view", "--quiet", "--home", home.toString(), "--cwd", ws.toString()));
+        assertEquals(lines, events(http, quiet.get(20, TimeUnit.SECONDS), lines).size(), "the browser still gets every event");
+        stop[0].countDown();
+        assertEquals(0, qcode.get(20, TimeUnit.SECONDS));
+        assertEquals(2, qout.toString().lines().count(), qout.toString());
 
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         Main bad = new Main();

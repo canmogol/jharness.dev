@@ -67,6 +67,8 @@ class SessionViewerTest {
      * Spec 050 regression: a browser loads the script and stylesheet exactly as the page links them. Before the fix the
      * links had no token, so both got 403 and the page stayed unstyled at "connecting…".
      */
+    private static final java.util.regex.Pattern CSP_ALLOWS_DATA_IMAGES = java.util.regex.Pattern.compile("img-src [^;]*data:");
+
     @Test
     void thePagesOwnLinksLoad() throws Exception {
         viewer = SessionViewer.start(new EventFeed(), 0);
@@ -77,7 +79,10 @@ class SessionViewerTest {
         while (m.find()) {
             links.add(m.group(1));
         }
-        assertEquals(2, links.size(), html);
+        // Spec 052: an empty inline icon, so the browser doesn't ask for /favicon.ico without the token (a 403).
+        assertTrue(links.remove("data:,"), html);
+        assertTrue(CSP_ALLOWS_DATA_IMAGES.matcher(SessionViewer.CSP).find(), SessionViewer.CSP);
+        assertEquals(3, links.size(), "app.css, markdown.js and app.js: " + html);
         for (String link : links) {
             URI u = page.resolve(link);
             var res = get(u.getRawPath() + "?" + u.getRawQuery());
@@ -153,12 +158,15 @@ class SessionViewerTest {
 
     @Test
     void thePageNeverTurnsEventTextIntoMarkup() throws Exception {
-        String js;
-        try (InputStream in = SessionViewer.class.getResourceAsStream("app.js")) {
-            js = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        }
-        for (String sink : List.of("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function")) {
-            assertFalse(js.contains(sink), "app.js uses " + sink);
+        for (String file : List.of("app.js", "markdown.js")) {
+            String js;
+            try (InputStream in = SessionViewer.class.getResourceAsStream(file)) {
+                js = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            for (String sink : List.of("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function",
+                    "setAttribute", "srcdoc")) {
+                assertFalse(js.contains(sink), file + " uses " + sink);
+            }
         }
         String html;
         try (InputStream in = SessionViewer.class.getResourceAsStream("index.html")) {
