@@ -200,7 +200,10 @@ jobs:
           for i in $(seq 100); do grep -q "^Open http" "$tmp/view.txt" && break; sleep 0.1; done
           url=$(sed -n 's/^Open \(http[^ ]*\).*/\1/p' "$tmp/view.txt")
           base=${url%%/?t=*}; tok=${url##*t=}
-          curl -sf --noproxy '*' "$url" | grep -q 'app.js'
+          curl -sf --noproxy '*' "$url" > "$tmp/view.html"
+          # The page's own links load as a browser asks for them (spec 050).
+          for a in $(sed -nE 's/.*(src|href)="([^"]*)".*/\2/p' "$tmp/view.html"); do curl -sf --noproxy '*' -o /dev/null "$base/$a"; done
+          test "$(grep -cE 'app\.(js|css)\?t=' "$tmp/view.html")" = 2
           curl -s --noproxy '*' --max-time 3 "$base/events?t=$tok" > "$tmp/view-events.txt" || true
           grep -q '^data: {.*"type":"session.started"' "$tmp/view-events.txt"
           test "$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' "$base/")" = 403

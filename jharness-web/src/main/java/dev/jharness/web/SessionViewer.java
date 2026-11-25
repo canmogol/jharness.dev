@@ -115,9 +115,15 @@ public final class SessionViewer implements AutoCloseable {
                 return;
             }
             String[] f = FILES.get(path);
+            byte[] body;
             try (InputStream in = SessionViewer.class.getResourceAsStream(f[0])) {
-                send(x, 200, f[1], in.readAllBytes());
+                body = in.readAllBytes();
             }
+            if (path.equals("/")) {
+                // The page's script and stylesheet need the token too (spec 050); it is base64url, safe in an attribute.
+                body = new String(body, StandardCharsets.UTF_8).replace("__TOKEN__", token).getBytes(StandardCharsets.UTF_8);
+            }
+            send(x, 200, f[1], body);
         }
     }
 
