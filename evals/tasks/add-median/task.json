@@ -1,0 +1,8 @@
+{
+  "title": "Add a method (Java)",
+  "prompt": "Add public static double median(int[] values) to src/Stats.java, next to mean. The input may be unsorted and must not be changed; for an even count, return the mean of the two middle values; an empty array throws IllegalArgumentException like mean does.",
+  "check": [
+    ["javac", "-d", ".eval/out", "src/Stats.java", ".eval/CheckStats.java"],
+    ["java", "-cp", ".eval/out", "CheckStats"]
+  ]
+}

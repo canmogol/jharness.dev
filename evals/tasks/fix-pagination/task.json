@@ -1,0 +1,8 @@
+{
+  "title": "Fix a pagination bug (Java)",
+  "prompt": "Users say the last page of search results is missing, and the last result of each page is never shown. Fix src/Pager.java.",
+  "check": [
+    ["javac", "-d", ".eval/out", "src/Pager.java", ".eval/CheckPager.java"],
+    ["java", "-cp", ".eval/out", "CheckPager"]
+  ]
+}

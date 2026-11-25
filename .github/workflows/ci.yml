@@ -198,6 +198,8 @@ jobs:
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/hj.jsonl" --output stream-json --mode accept-edits -p "write" > "$tmp/hs.jsonl"
           python3 -I -c 'import json,sys; l=[json.loads(x) for x in open(sys.argv[1])]; assert l[0]["type"]=="session.started" and l[-1]["type"]=="result" and l[-1]["filesChanged"]==["out.txt"], l[-1]' "$tmp/hs.jsonl"
           test "$(cat "$tmp/ws/out.txt")" = "x" && rm "$tmp/ws/out.txt"
+          # Evals (spec 051): each task's check fails on the untouched repo and passes with its recorded solution.
+          python3 scripts/eval.py "$bin" --replay
           # Web viewer (spec 048): jharness view serves the last session on 127.0.0.1 with a token; read-only.
           "$bin" view --home "$tmp/home" --cwd "$tmp/ws" > "$tmp/view.txt" 2>&1 &
           vw=$!

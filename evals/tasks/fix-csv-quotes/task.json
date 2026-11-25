@@ -1,0 +1,5 @@
+{
+  "title": "Handle quoted CSV fields (JavaScript)",
+  "prompt": "Importing contacts breaks on names like \"Smith, Jane\": quoted fields are split at their commas. Make parseLine in lib/csv.js handle quoted fields as the README describes.",
+  "check": [["node", ".eval/check.js"]]
+}

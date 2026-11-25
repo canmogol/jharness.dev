@@ -1,0 +1,3 @@
+{"reply": "```js\n[\"lib/order.js\", \"lib/invoice.js\", \"lib/report.js\"].map(f => f + \":\\n\" + api.readFile(f)).join(\"\\n\")\n```"}
+{"reply": "```js\nfor (const f of [\"lib/order.js\", \"lib/invoice.js\", \"lib/report.js\"]) {\n  api.writeFile(f, api.readFile(f).replaceAll(\"calcTotal\", \"orderTotal\"));\n}\n\"renamed\"\n```"}
+{"reply": "Renamed calcTotal to orderTotal in lib/order.js, its export, and the callers in lib/invoice.js and lib/report.js."}
