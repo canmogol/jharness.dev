@@ -125,7 +125,10 @@ jharness log                  # this folder's sessions, newest first
 jharness log last             # the newest session as a timeline
 jharness --resume             # continue this folder's last session (or --resume ID)
 jharness --fork ID            # a new session from a copy of a saved one
+jharness -p "fix the test" --output json --mode accept-edits   # for scripts and CI
 ```
+
+`-p` prints the reply by default (`--output text`). `--output json` prints one JSON object when the turn ends: `type` (`result`), `session`, `stopReason`, `reply`, `steps`, `error`, `exitCode`, `durationMs`, `usage` (requests and tokens, cache included), `filesChanged`, `denied` (the actions refused, since no one can approve them) and `subagents`. `--output stream-json` prints every event as a JSON line as it happens, streamed reply chunks included, then the same result object. Both escape control characters the JSON way, so stdout stays valid JSON. The exit code is 0 when the turn finished, 1 when it failed or stopped early (such as at `agent.maxSteps`) and 2 for bad flags or settings, which still print a result object with `--output json`. `--mode ask|accept-edits|plan|bypass` sets the permission mode for the session, over your settings and the project's; with `-p`, anything still left to ask is denied.
 
 After each turn, JHarness saves the conversation next to the session log (`<session-id>.state.json`, mode 0600). `--resume` continues the last session of the folder, or the one whose id (or the start of it) you give, in the same session and log; the model gets the earlier turns back. `--fork` starts a new session from a copy and leaves the saved one as it was. Both work with `-p`, and the UI says which session it continues and shows its last reply. Background subagents, the todo list and plan mode start fresh, and turns from before the resume can't be undone with `/undo` or `/rewind`, since their file checkpoints belong to the earlier run.
 

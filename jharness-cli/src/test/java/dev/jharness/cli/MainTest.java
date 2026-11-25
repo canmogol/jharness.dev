@@ -218,6 +218,76 @@ class MainTest {
         assertFalse(o.contains("\u001b"), o);
     }
 
+    /** Spec 047 AC-02: --output json prints one result object and nothing else on stdout. */
+    @Test
+    void jsonOutputIsOneResultObject() throws Exception {
+        Path r = replay("```js\napi.writeFile('a.txt', 'changed')\n```", "Tried to write.\u001b[31m");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "--output", "json", "-p", "change a.txt"));
+        String o = out.toString(java.nio.charset.StandardCharsets.UTF_8).strip();
+        assertEquals(1, o.lines().count(), "one line: " + o);
+        var j = dev.jharness.events.Json.parse(o);
+        assertEquals("result", j.get("type").asText());
+        assertEquals("done", j.get("stopReason").asText());
+        assertEquals("Tried to write.\u001b[31m", j.get("reply").asText(), "the exact reply, escaped only as JSON");
+        assertFalse(o.contains("\u001b"), "no raw ESC on stdout");
+        assertEquals(1, j.get("steps").asInt());
+        assertEquals(0, j.get("exitCode").asInt());
+        assertTrue(j.get("session").asText().startsWith("s-"));
+        assertEquals(2, j.get("usage").get("requests").asInt());
+        assertEquals("writeFile", j.get("denied").get(0).get("api").asText(), "-p can't approve");
+        assertEquals(0, j.get("filesChanged").size());
+        assertEquals("hello file", Files.readString(ws.resolve("a.txt")));
+    }
+
+    /** Spec 047 AC-03, AC-05: stream-json prints every event, chunks too, then the result; --mode accept-edits lets edits through. */
+    @Test
+    void streamJsonAndModeFlag() throws Exception {
+        Path r = replay("```js\napi.writeFile('a.txt', 'changed')\n```", "Wrote it.");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "--output", "stream-json",
+                "--mode", "accept-edits", "-p", "change a.txt"));
+        List<String> lines = out.toString(java.nio.charset.StandardCharsets.UTF_8).strip().lines().toList();
+        List<String> types = lines.stream().map(l -> dev.jharness.events.Json.parse(l).get("type").asText()).toList();
+        assertEquals("session.started", types.getFirst());
+        assertTrue(types.contains("model.delta") && types.contains("turn.started") && types.contains("file.changed"), types.toString());
+        assertEquals("result", types.getLast());
+        var res = dev.jharness.events.Json.parse(lines.getLast());
+        assertEquals("Wrote it.", res.get("reply").asText());
+        assertEquals("a.txt", res.get("filesChanged").get(0).asText());
+        assertEquals(0, res.get("denied").size());
+        assertEquals("changed", Files.readString(ws.resolve("a.txt")));
+        assertTrue(lines.stream().filter(l -> l.contains("\"type\":\"turn.started\"")).allMatch(l -> l.contains("\"session\":\"" + res.get("session").asText())),
+                "events carry the session");
+    }
+
+    /** Spec 047 AC-04, AC-06: exit codes, and bad flag values. */
+    @Test
+    void exitCodesAndBadFlags() throws Exception {
+        Path loop = replay("```js\n1\n```", "```js\n2\n```", "```js\n3\n```");
+        Files.createDirectories(home.resolve(".jharness"));
+        Files.writeString(home.resolve(".jharness/settings.json"), "{\"agent\": {\"maxSteps\": 1}}");
+        assertEquals(1, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", loop.toString(), "--output", "json", "-p", "loop"));
+        var j = dev.jharness.events.Json.parse(out.toString().strip().lines().reduce((a, b) -> b).orElseThrow());
+        assertEquals("max_steps", j.get("stopReason").asText());
+        assertEquals(1, j.get("exitCode").asInt());
+        out.reset();
+        assertEquals(1, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", loop.toString(), "-p", "loop"));
+        assertTrue(err.toString().contains("stopped: max_steps"), err.toString());
+        err.reset();
+        assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--output", "xml", "-p", "x"));
+        assertTrue(err.toString().contains("--output must be text, json or stream-json"), err.toString());
+        assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--output", "json"));
+        assertTrue(err.toString().contains("--output works with -p"), err.toString());
+        assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--mode", "yolo", "-p", "x"));
+        assertTrue(err.toString().contains("--mode must be"), err.toString());
+        out.reset();
+        Files.writeString(home.resolve(".jharness/settings.json"), "{\"agent\": {\"maxSteps\": 0}}");
+        assertEquals(2, run("--home", home.toString(), "--cwd", ws.toString(), "--output", "json", "-p", "x"));
+        var bad = dev.jharness.events.Json.parse(out.toString().strip());
+        assertEquals("error", bad.get("stopReason").asText());
+        assertEquals(2, bad.get("exitCode").asInt());
+        assertTrue(bad.get("session").isNull(), "it failed before a session opened");
+    }
+
     /** Spec 022: headless output and errors are escaped too. */
     @Test
     void headlessOutputIsEscaped() throws Exception {

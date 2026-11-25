@@ -64,6 +64,16 @@ public final class Main implements Callable<Integer> {
     /** The saved session to start from, found before anything opens (spec 043). */
     private dev.jharness.agent.SessionState.Resume from;
 
+    @Option(names = "--output", paramLabel = "FORMAT",
+            description = "With -p: text (the default: the reply), json (one result object at the end) or stream-json (every event as a JSON line, then the result).")
+    String output;
+
+    @Option(names = "--mode", paramLabel = "MODE",
+            description = "Permission mode for this session: ask, accept-edits, plan or bypass (default: from settings). With -p, anything left to ask is denied.")
+    String mode;
+
+    static final List<String> OUTPUTS = List.of("text", "json", "stream-json");
+
     @Option(names = "--debug", description = "Show every event and the model's thinking as they happen; with -p, write events to stderr. Errors print their stack trace.")
     boolean debug;
 
@@ -212,6 +222,18 @@ public final class Main implements Callable<Integer> {
             err.println("jharness: " + ws + " is not a folder");
             return 2;
         }
+        if (output != null && !OUTPUTS.contains(output)) {
+            err.println("jharness: --output must be text, json or stream-json, not " + TerminalSafe.escape(output));
+            return 2;
+        }
+        if (output != null && prompt == null) {
+            err.println("jharness: --output works with -p");
+            return 2;
+        }
+        if (mode != null && !List.of("ask", "accept-edits", "plan", "bypass").contains(mode)) {
+            err.println("jharness: --mode must be ask, accept-edits, plan or bypass, not " + TerminalSafe.escape(mode));
+            return 2;
+        }
         try {
             if (resume != null && fork != null) {
                 err.println("jharness: use --resume or --fork, not both");
@@ -230,9 +252,11 @@ public final class Main implements Callable<Integer> {
             return interactive(h, ws, trust);
         } catch (ConfigException e) {
             err.println("jharness: " + e.getMessage());
+            startFailed(e.getMessage());
             return 2;
         } catch (IOException | java.io.UncheckedIOException e) {
             err.println("jharness: " + e.getMessage());
+            startFailed(e.getMessage());
             if (debug) {
                 e.printStackTrace(err);
             }
@@ -268,6 +292,10 @@ public final class Main implements Callable<Integer> {
         }
         if (offline) {
             session.put("offline", true);
+        }
+        if (mode != null) {
+            // The session layer, like --model: it wins over the user's and the project's settings (spec 047).
+            session.putObject("permissions").put("mode", mode);
         }
         return Settings.layered(h, ws, trusted, session);
     }
@@ -311,11 +339,42 @@ public final class Main implements Callable<Integer> {
             if (!changed.isEmpty()) {
                 projectIgnored(s, changed, "headless runs can't ask about changed project tools");
             }
-            s.bus().subscribe(e -> {
-                if (e.type().equals("loop.result")) {
-                    out.println();
+            boolean text = output == null || output.equals("text");
+            HeadlessResult result = new HeadlessResult(s.bus().session());
+            s.bus().subscribe(result::onEvent);
+            if (text) {
+                s.bus().subscribe(e -> {
+                    if (e.type().equals("loop.result")) {
+                        out.println();
+                    }
+                });
+            } else if (output.equals("stream-json")) {
+                // Every event, live chunks too, one JSON line each; the result object comes last (spec 047).
+                // The events from opening the session are already in its log: they go first, from this run's
+                // session.started on, then the live ones, each once.
+                java.util.Set<String> seen = java.util.concurrent.ConcurrentHashMap.newKeySet();
+                synchronized (out) {
+                    s.bus().subscribe(e -> {
+                        synchronized (out) {
+                            if (seen.add(e.id())) {
+                                out.println(TerminalSafe.escapeJson(e.toJsonLine()));
+                            }
+                        }
+                    });
+                    List<com.fasterxml.jackson.databind.JsonNode> logged = dev.jharness.events.SessionLog.read(s.logPath());
+                    int from = 0;
+                    for (int i = 0; i < logged.size(); i++) {
+                        if (logged.get(i).path("type").asText().equals("session.started")) {
+                            from = i;
+                        }
+                    }
+                    for (var line : logged.subList(from, logged.size())) {
+                        if (seen.add(line.path("id").asText())) {
+                            out.println(TerminalSafe.escapeJson(dev.jharness.events.Json.write(line)));
+                        }
+                    }
                 }
-            });
+            }
             if (debug) {
                 s.bus().subscribe(e -> {
                     if (!dev.jharness.events.SessionLog.LIVE_ONLY.contains(e.type())) {
@@ -323,14 +382,15 @@ public final class Main implements Callable<Integer> {
                     }
                 });
             }
+            String[] printed = {null};
             TurnResult r = guarded(s, () -> {
                 if (afterOpen != null) {
                     afterOpen.accept(s);
                 }
-                String text = prompt;
+                String t = prompt;
                 // A slash command from ~/.jharness/commands/ works in -p too (spec 035).
-                if (text.startsWith("/") && !text.startsWith("//")) {
-                    String[] p = text.strip().split("\\s+", 2);
+                if (t.startsWith("/") && !t.startsWith("//")) {
+                    String[] p = t.strip().split("\\s+", 2);
                     var runner = s.commands(Tui.BUILT_IN);
                     if (runner.get(p[0].substring(1)) != null) {
                         dev.jharness.agent.CommandRunner.Expansion x;
@@ -340,26 +400,54 @@ public final class Main implements Callable<Integer> {
                             return new TurnResult("", "error", 0, String.valueOf(e.getMessage()));
                         }
                         if (x.print() != null) {
-                            out.println(x.print());
+                            printed[0] = x.print();
+                            if (text) {
+                                out.println(x.print());
+                            }
                             return new TurnResult("", "done", 0, null);
                         }
-                        text = x.prompt() == null ? "" : x.prompt();
+                        t = x.prompt() == null ? "" : x.prompt();
                     }
                 }
-                return s.turn(text, d -> {
-                    out.print(d);
-                    out.flush();
+                return s.turn(t, d -> {
+                    if (text) {
+                        out.print(d);
+                        out.flush();
+                    }
                 });
             });
-            out.println();
-            if (r.stopReason().equals("error")) {
-                err.println("jharness: " + r.error());
-                return 1;
+            int code = exitCode(r);
+            if (text) {
+                out.println();
+                if (r.stopReason().equals("error")) {
+                    err.println("jharness: " + r.error());
+                } else if (!r.stopReason().equals("done")) {
+                    err.println("jharness: stopped: " + r.stopReason() + (r.error() != null ? " (" + r.error() + ")" : ""));
+                }
+            } else {
+                synchronized (out) {
+                    out.println(TerminalSafe.escapeJson(dev.jharness.events.Json.write(
+                            result.result(r, printed[0] != null ? printed[0] : r.reply(), code))));
+                }
+                if (r.stopReason().equals("error")) {
+                    err.println("jharness: " + r.error());
+                }
             }
-            if (!r.stopReason().equals("done")) {
-                err.println("jharness: stopped: " + r.stopReason());
-            }
-            return 0;
+            return code;
+        }
+    }
+
+    /** 0 when the turn finished; 1 when it failed or stopped early, such as at {@code agent.maxSteps} (spec 047). */
+    static int exitCode(TurnResult r) {
+        return r.stopReason().equals("done") ? 0 : 1;
+    }
+
+    /** With {@code --output json} or {@code stream-json}, a failure before the session opens still gives a result object. */
+    private void startFailed(String message) {
+        if (prompt != null && output != null && !output.equals("text")) {
+            var o = dev.jharness.events.Json.object().put("type", "result").putNull("session").put("stopReason", "error")
+                    .put("error", String.valueOf(message)).put("exitCode", 2);
+            out.println(TerminalSafe.escapeJson(dev.jharness.events.Json.write(o)));
         }
     }
 
