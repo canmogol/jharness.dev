@@ -1,0 +1,5 @@
+{
+  "title": "Rename a function across files (JavaScript)",
+  "prompt": "Rename calcTotal to orderTotal everywhere in lib/, including its export and every caller. Don't change what it computes.",
+  "check": [["node", ".eval/check.js"]]
+}

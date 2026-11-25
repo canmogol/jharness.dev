@@ -1,0 +1,2 @@
+{"reply": "```js\n[\"src/main/java/com/shop/account/AccountService.java\", \"src/main/java/com/shop/mail/OnboardingListener.java\", \"src/main/java/com/shop/mail/GreetingSender.java\"].map(f => f + \":\\n\" + api.readFile(f)).join(\"\\n\")\n```"}
+{"reply": "GreetingSender sends the welcome email. OnboardingListener calls it when AccountService publishes account.created during sign-up."}
