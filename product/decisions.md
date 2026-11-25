@@ -96,6 +96,7 @@ Last updated: 2026-11-25
 | D-083 | Web viewer: `jharness-web` with the JDK `HttpServer` on `127.0.0.1`, a random token, `Host` and `Origin` checks, GET only and strict headers; Server-Sent Events of the stream-json lines; `jharness view [SESSION]` follows a log, `/view` serves the running session live; the architecture test allows its listening socket | Accepted |
 | D-084 | Usage tracking: a profile's `price` (US dollars per million tokens, set by the user; no shipped list) puts `costUsd` on each `model.completed`; `/usage`, `jharness usage`, the headless result and a `cost` status item add the logged events up, by agent and session | Accepted |
 | D-085 | Evals: small repository tasks with hidden checks in `evals/tasks/`, run by the maintainer script `scripts/eval.py` through headless `jharness -p --output json`; a check must fail before the run; CI runs recorded solutions; live scores per release in `docs/evals.md` | Accepted |
+| D-086 | Manual checks: `scripts/viewer-check.mjs` (the web viewer in Chromium, Firefox, WebKit with Playwright, and Safari through safaridriver) and `scripts/tui-tmux-check.py` (the TUI at several sizes in tmux); never in CI; run after viewer or terminal UI changes and before each release, on Linux and macOS | Accepted |
 
 ---
 
@@ -1371,6 +1372,7 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 - **Page.** Embedded `index.html`, `app.js`, `markdown.js` and `app.css`, no outside resources. The page links its scripts and stylesheet with the token (`app.js?t=…`), since they need it too (spec 050 fixed links without it, which left the page empty). Its icon is an empty `data:` link (the CSP allows `data:` images), so browsers don't ask for `/favicon.ico` without the token (spec 052). Turns with their prompt, streamed replies, steps, approvals and denials, diffs, subagents, compaction, todos; thinking and every event on request; a filter by agent. Replies show as Markdown (spec 052), built as DOM nodes with links only to `http(s)` addresses. Event text is only set as text, never as markup, and a test checks the scripts for HTML sinks.
 - **Read-only.** No endpoint changes anything; approvals stay in the terminal (D-053).
 - **No browser start.** JHarness prints the address; opening a browser would start a process.
+- **Browser check.** Checked by hand in real browsers before releases and after viewer changes (D-086).
 
 **Why.** It follows D-053 with the simplest server that runs in the binary. The token, `Host` and `Origin` checks and the CSP cover the usual attacks on a local server: other pages in the browser, DNS rebinding, and injected event text. Reusing stream-json keeps one event format.
 
@@ -1420,6 +1422,27 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 - Public benchmark suites for now (large, networked, and slow); the format can take more tasks.
 
 **Source.** Roadmap item "Evals on real repo tasks"; US-6.3. Recommended options accepted while the user was away, specifying 051-evals, 2026-11-25.
+
+---
+
+## D-086 — Manual browser and terminal checks
+
+**Decision.** Two scripts check the web viewer and the TUI as a person sees them (spec 053). They run by hand, never in CI.
+
+- **Viewer.** `node scripts/viewer-check.mjs BIN` records a session whose reply has Markdown, starts `jharness view` and opens it in Chromium, Firefox and WebKit through Playwright, and in Safari through `safaridriver` (`--browsers`). It checks that the page loaded its files, that the console has no errors or CSP violations, that no request got 400 or more (the favicon included), that the reply rendered as Markdown, and that `jharness view` printed the events. A screenshot per browser.
+- **Terminal.** `scripts/tui-tmux-check.py BIN` runs the TUI in tmux at several sizes, checks the reply's styles with `capture-pane -e`, the status line's row before and after a resize, and a clean exit. It complements `scripts/tui-pty-check.py`, which CI runs.
+- **When.** After any change to the viewer or the terminal UI, and before each release, on Linux and on macOS. Results of note go in `docs/manual-checks.md`.
+- **Tools.** Playwright (Node, installed globally) and tmux are set up per machine, not by Maven or CI; without them the scripts say how to install them and exit 2.
+- **Node for the viewer.** The browser script is JavaScript because Playwright's Node package needs only npm, which the machines already have; the evals stay in Python.
+
+**Why.** Specs 048 to 050 showed that tests which fetch the files by hand miss what a browser does: the viewer shipped with 403s for its own assets and a 403 favicon. A real browser and a real terminal catch that; running them on every CI push would add minutes and system packages, so they run when they matter.
+
+**Rejected.**
+- Browsers in CI (minutes per run, browser system packages on every runner).
+- Playwright in the Maven build (a large dependency for checks that run by hand).
+- A Python Playwright script (needs pip and a virtual environment that a machine may lack).
+
+**Source.** User request after the spec 052 feedback, 2026-11-25.
 
 ---
 
@@ -1523,6 +1546,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q92 | How is the web viewer served and protected? | `jharness-web`, the JDK `HttpServer` on `127.0.0.1`; token, `Host` and `Origin` checks, GET only, a strict CSP; Server-Sent Events of the stream-json lines; `jharness view` and `/view` | Long sessions and diffs read better in a browser, and a local page can't change the session | D-083 |
 | Q93 | How are tokens and cost tracked? | A profile's `price` puts `costUsd` on each `model.completed`; `/usage`, `jharness usage`, the headless result and a `cost` status item add the log up | Users pick models by cost and want to catch expensive runs; a shipped price list would go stale | D-084 |
 | Q94 | How are evals run and scored? | Repository tasks with hidden checks in `evals/tasks/`, run by `scripts/eval.py` through headless JSON output; a check must fail first; CI runs recorded solutions; live scores per release | Shows whether releases get better or worse, without the binary starting check commands | D-085 |
+| Q95 | How are the web viewer and the TUI checked in real browsers and terminals? | `scripts/viewer-check.mjs` (Playwright: Chromium, Firefox, WebKit; Safari through safaridriver) and `scripts/tui-tmux-check.py` (tmux, several sizes), by hand after viewer or TUI changes and before releases, never in CI | The viewer's 403s slipped past tests that fetched files by hand; browsers in CI would cost minutes per run | D-086 |
 
 ---
 

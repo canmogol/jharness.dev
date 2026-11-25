@@ -104,6 +104,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Resume and fork sessions (spec 043)
 - [x] Headless mode with text, JSON and stream-JSON output; `--mode` (spec 047)
 - [x] Read-only web session viewer on `127.0.0.1`, reading the same event stream as headless mode; no approvals from the browser; doesn't gate v0.1 (D-053, spec 048)
+- [x] Manual browser and terminal-size checks of the viewer and TUI, never in CI (D-086, spec 053)
 - [x] Usage tracking (tokens, cost) (spec 049)
 - [x] Evals on real repo tasks (spec 051)
 - [ ] GitHub releases with checksums, Homebrew tap, install script
@@ -112,7 +113,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [ ] Live Claude run of the P1 gate scenario (D-045)
 - [ ] User guide, `api` reference, extension authoring guide
 
-**Gate:** v0.1 tagged; signed binaries for Linux and macOS.
+**Gate:** v0.1 tagged; signed binaries for Linux and macOS; the manual browser and terminal checks pass on both (D-086, `docs/manual-checks.md`).
 
 ## After v0.1
 
