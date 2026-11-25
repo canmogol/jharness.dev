@@ -93,7 +93,7 @@ One `noul` question per state-changing operation; the answer from 0 to 1 is the 
 | --- | --- |
 | Server | JDK `com.sun.net.httpserver`, in `jharness-web`, bound to `127.0.0.1` |
 | Stream | Server-Sent Events of the stream-json lines (D-082) |
-| Page | Embedded `index.html`, `app.js`, `app.css`; no outside resources |
+| Page | Embedded `index.html`, `app.js`, `markdown.js`, `app.css`; no outside resources |
 | Access | 256-bit random token in the address; `Host` and `Origin` checks; GET only; at most 8 viewers |
 
 ## Sandbox limits (defaults, tune in P0)

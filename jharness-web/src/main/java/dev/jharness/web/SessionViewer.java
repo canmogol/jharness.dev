@@ -39,9 +39,10 @@ public final class SessionViewer implements AutoCloseable {
     static final Map<String, String[]> FILES = Map.of(
             "/", new String[] {"index.html", "text/html; charset=utf-8"},
             "/app.js", new String[] {"app.js", "text/javascript; charset=utf-8"},
+            "/markdown.js", new String[] {"markdown.js", "text/javascript; charset=utf-8"},
             "/app.css", new String[] {"app.css", "text/css; charset=utf-8"});
 
-    static final String CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; "
+    static final String CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; "
             + "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
     private final HttpServer server;

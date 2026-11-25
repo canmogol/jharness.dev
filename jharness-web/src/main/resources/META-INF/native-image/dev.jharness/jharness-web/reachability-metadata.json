@@ -2,6 +2,7 @@
   "resources": [
     { "glob": "dev/jharness/web/index.html" },
     { "glob": "dev/jharness/web/app.js" },
+    { "glob": "dev/jharness/web/markdown.js" },
     { "glob": "dev/jharness/web/app.css" }
   ]
 }

@@ -30,12 +30,13 @@ public final class EventFeed {
     }
 
     /** Sends the backlog to the listener, then every new line, until {@link #detach}. */
-    synchronized void attach(Consumer<String> listener) {
+    public synchronized void attach(Consumer<String> listener) {
         backlog.forEach(listener);
         listeners.add(listener);
     }
 
-    void detach(Consumer<String> listener) {
+    /** Stops sending lines to the listener. */
+    public void detach(Consumer<String> listener) {
         listeners.remove(listener);
     }
 
