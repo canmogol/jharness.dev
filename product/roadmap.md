@@ -86,6 +86,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Subagents that don't block: no `api.waitAgent`, a finished subagent's reply starts a main turn, `/answer` (D-087, spec 054)
 - [x] A main prompt that never blocks: turns behind a live prompt, a queue for messages sent meanwhile, Esc on the prompt, `/answer main` (D-088, spec 055)
 - [x] File and folder deletes: `api.deleteFile`, `api.deleteFolder`, undoable, folders always ask (D-089, spec 056)
+- [x] Input at the bottom: the prompt starts on the row above the status line and stays there; resizes keep the status row free (D-091, spec 058)
 - [x] Build tools as definition files in `~/.jharness/tools/` and trusted projects; `api.tool` and `api.tools()` (spec 028)
 - [x] Prompt examples for small models, each run by a test against a test project; why git and `rg` stay in Java (spec 029)
 - [x] JS hooks (pre-tool, post-tool, stop); no shell hooks (spec 034; `examples/.jharness/hooks/guard.js` is the gate's hook example)

@@ -9,7 +9,7 @@ screen as tmux draws it. Run it after any change to the terminal UI and before e
 says how. For each size it starts jharness in a detached tmux session (its own server, no user config) with a
 recorded reply that has Markdown, then:
 
-  1. answers the trust question with "n";
+  1. answers the trust question with "n", and checks that the prompt starts on the row above the status line (spec 058);
   2. sends a prompt and waits for the reply;
   3. checks the reply's styles in `capture-pane -e`: bold, a coloured code line and list bullets;
   4. checks that the status line is on the last row and nothing else is;
@@ -111,6 +111,11 @@ def check_size(args, w, h, tmp):
         tmux("send-keys", "-t", "t", "n", "Enter")
         if not wait_for("/help for commands"):
             return ["no banner after the trust answer"]
+        time.sleep(0.5)
+        start = rows(capture(False), h)
+        if start[h - 2].rstrip() != ">":
+            save(args.out, "start", w, h)
+            fails.append("the prompt doesn't start at the bottom: row %d is %r" % (h - 1, start[h - 2]))
         tmux("send-keys", "-t", "t", "Show some Markdown.", "Enter")
         if not wait_for("Done."):
             save(args.out, "noreply", w, h)

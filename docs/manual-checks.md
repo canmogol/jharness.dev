@@ -47,7 +47,7 @@ node scripts/viewer-check.mjs jharness-cli/target/jharness --browsers webkit,chr
 
 `scripts/tui-tmux-check.py` complements `scripts/tui-pty-check.py` (which CI runs). For each size (default `80x24,120x40,50x16`) it starts the TUI in a detached tmux session with a recorded Markdown reply, then:
 
-1. answers the trust question and sends a prompt;
+1. answers the trust question, checks that the prompt starts on the row above the status line, and sends a prompt;
 2. checks the reply's styles in `capture-pane -e`: bold, a coloured code line, no raw `**`;
 3. checks that the status line is the last row and appears once;
 4. resizes the window larger, then smaller, and checks the status line again;
@@ -72,8 +72,9 @@ Record notable runs here: date, version, machine, result.
 | 2026-11-25 | 0.1.0-SNAPSHOT (spec 054) | Linux x86-64 | Not run: the viewer didn't change | Same as macOS |
 | 2026-11-26 | 0.1.0-SNAPSHOT (spec 055) | macOS 14.3 arm64 | Not run: the viewer didn't change | 120x40 passes; the resize finding is unchanged. Typing during a turn, the queue, Esc, `/answer main`, a waiting command and `/exit` during a turn pass in tmux |
 | 2026-11-26 | 0.1.0-SNAPSHOT (spec 055) | Linux x86-64 | Not run: the viewer didn't change | Same as macOS |
+| 2026-11-26 | 0.1.0-SNAPSHOT (spec 058) | macOS 14.3 arm64 | Not run: the viewer didn't change | 80x24, 120x40 and 50x16 pass, resizes included: the resize finding is fixed. The prompt starts at the bottom |
+| 2026-11-26 | 0.1.0-SNAPSHOT (spec 058) | Linux x86-64 | Not run: the viewer didn't change | Same as macOS |
 
 Notes:
 
 - A macOS native binary built where `LC_CTYPE` is `C` (such as an SSH session with `LANG=C.UTF-8`, which macOS doesn't define) prints `?` for non-ASCII characters such as `·`, whatever the runtime locale. Build with a UTF-8 locale (`LC_ALL=en_US.UTF-8`).
-

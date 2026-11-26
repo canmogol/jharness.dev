@@ -149,13 +149,20 @@ final class Tui {
             }
             Files.setPosixFilePermissions(historyFile, PosixFilePermissions.fromString("rw-------"));
         }
-        LineReaderBuilder b = LineReaderBuilder.builder().terminal(terminal).appName("jharness").completer(Tui::completeCommand);
+        // As LineReaderBuilder builds it, with a hook before resizes (spec 058).
+        Map<String, Object> vars = new java.util.HashMap<>();
         if (historyFile != null) {
-            b.variable(LineReader.HISTORY_FILE, historyFile);
+            vars.put(LineReader.HISTORY_FILE, historyFile);
         }
+        TuiReader r = new TuiReader(terminal, "jharness", vars);
+        r.setHistory(new org.jline.reader.impl.history.DefaultHistory());
+        r.setCompleter(Tui::completeCommand);
         // Tab lists the choices; Tab again cycles through them, highlighted (spec 041 AC-03).
-        b.option(LineReader.Option.AUTO_LIST, true).option(LineReader.Option.AUTO_MENU, true).option(LineReader.Option.MENU_COMPLETE, false);
-        this.reader = b.build();
+        r.setOpt(LineReader.Option.AUTO_LIST);
+        r.setOpt(LineReader.Option.AUTO_MENU);
+        r.unsetOpt(LineReader.Option.MENU_COMPLETE);
+        r.beforeResize = this::keepRoomForStatus;
+        this.reader = r;
         this.live = !terminal.getType().startsWith("dumb");
         this.above = new AboveWriter(terminal.writer(), reader);
         this.raw = new PrintWriter(above, false);
@@ -482,6 +489,7 @@ final class Tui {
                 + " is not used: /" + c.name() + " is a built-in command"))));
         startStatus(session);
         out.flush();
+        startAtBottom();
         // Spec 055: the main agent's questions during a background turn wait as notices.
         prompter().holds = new TerminalPrompter.Holds() {
             @Override
@@ -550,8 +558,10 @@ final class Tui {
             terminal.flush();
             return true;
         });
-        // When the prompt isn't reading, a resize is ours to handle; while it reads, JLine resizes the status itself.
+        // When the prompt isn't reading, a resize is ours to handle; while it reads, JLine resizes the status itself,
+        // after TuiReader's hook.
         terminal.handle(Terminal.Signal.WINCH, sig -> {
+            keepRoomForStatus();
             synchronized (this) {
                 if (status != null) {
                     status.resize(terminal.getSize());
@@ -564,6 +574,108 @@ final class Tui {
         });
         statusLine = new StatusLine(session, items, script, this::paintStatus, this::notice);
     }
+
+    /**
+     * Before a resize is handled (spec 058): when a window shrinks, terminals such as tmux keep the cursor on the screen,
+     * which can put the prompt on the last row, where the status line then draws over it. A line feed from the cursor
+     * scrolls the screen up only when the cursor is on the last row, and the cursor goes back up; so there is always a
+     * row below the prompt for the status line. The scroll region is reset first, saving and restoring the cursor,
+     * since an old region may no longer fit the screen.
+     */
+    private void keepRoomForStatus() {
+        if (status == null) {
+            return;
+        }
+        PrintWriter w = terminal.writer();
+        w.print("\u001b7\u001b[r\u001b8\n\u001b[1A");
+        w.flush();
+    }
+
+    /**
+     * At the start (spec 058): moves the cursor to the row above the status line, so the prompt starts at the bottom and
+     * output pushes the screen up from there. Needs the terminal to report the cursor position; without it nothing moves.
+     */
+    private void startAtBottom() {
+        if (!live) {
+            return;
+        }
+        // The status line's first draw sets the scroll region, which can move the cursor; it goes first.
+        StatusLine sl = statusLine;
+        if (sl != null) {
+            sl.refreshNow();
+        }
+        StringBuilder typed = new StringBuilder();
+        Attributes saved = terminal.enterRawMode();
+        try {
+            int row = cursorRow(typed);
+            if (!typed.isEmpty()) {
+                // Keys typed before the answer are read again by the first prompt, Enter included, as if typed then.
+                ((TuiReader) reader).runMacro(typed.toString());
+            }
+            int rows = terminal.getHeight();
+            if (row < 0 || rows <= 0) {
+                return;
+            }
+            // The last row is the status line's (or free without one); the prompt takes the row above it.
+            int target = rows - 2;
+            int down = target - row;
+            if (down > 0) {
+                PrintWriter w = terminal.writer();
+                // The banner ended its line, so the cursor is at the start of one.
+                w.print("\n".repeat(down));
+                w.flush();
+            }
+        } catch (RuntimeException | IOException e) {
+            // A terminal that can't say where the cursor is keeps the prompt where it is.
+        } finally {
+            terminal.setAttributes(saved);
+        }
+    }
+
+    private static final java.util.regex.Pattern CPR = java.util.regex.Pattern.compile("\u001b\\[(\\d+);(\\d+)R");
+    private static final java.util.regex.Pattern CPR_PART = java.util.regex.Pattern.compile("\u001b(\\[[0-9;]*)?");
+
+    /**
+     * Asks the terminal for the cursor position (DSR 6, answered {@code ESC [ row ; col R}) and waits up to 200 ms, so a
+     * terminal that doesn't answer never holds up the start.
+     *
+     * @param typed gets every other key read meanwhile
+     * @return the 0-based row, or -1 without an answer
+     */
+    private int cursorRow(StringBuilder typed) throws IOException {
+        PrintWriter w = terminal.writer();
+        w.print("\u001b[6n");
+        w.flush();
+        var in = terminal.reader();
+        long end = System.nanoTime() + 200_000_000L;
+        StringBuilder seq = new StringBuilder();
+        while (System.nanoTime() < end) {
+            int c = in.read(Math.max(1, (end - System.nanoTime()) / 1_000_000));
+            if (c == org.jline.utils.NonBlockingReader.EOF) {
+                break;
+            }
+            if (c < 0) {
+                continue;
+            }
+            if (seq.isEmpty() && c != 27) {
+                typed.appendCodePoint(c);
+                continue;
+            }
+            seq.appendCodePoint(c);
+            var m = CPR.matcher(seq);
+            if (m.matches()) {
+                return Integer.parseInt(m.group(1)) - 1;
+            }
+            if (!CPR_PART.matcher(seq).matches()) {
+                // Another key sequence, such as an arrow: it is the user's.
+                typed.append(seq);
+                seq.setLength(0);
+            }
+        }
+        typed.append(seq);
+        return -1;
+    }
+
 
     /** Draws the status line: through a widget while the prompt reads (JLine's lock), else under this TUI's lock. */
     private void paintStatus(String text) {
