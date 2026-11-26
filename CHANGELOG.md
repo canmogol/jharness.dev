@@ -1,6 +1,20 @@
 # Changelog
 
-<!-- last-commit: 88d4ba1d4e627d49734a7ae1f7d9aa880a8548dc -->
+<!-- last-commit: 426c8d46a91766474b3873f3d946472dd577f680 -->
+
+## 2026-11-26 · 061 Ranged and binary reads
+
+- `api.readFile(path, {fromLine, lines})` reads whole lines of a text file of any size, and `{offset, length}` reads a byte range cut to whole characters. `api.readFile(path)` is unchanged; over 1 MB or not UTF-8, its error names the alternatives.
+- `api.readBytes(path, {offset, length, encoding})` reads any file, binary too, as base64 (the default), hex, or text in a charset such as `windows-1252` or `UTF-16LE`. It returns the size, `nextOffset` and `eof`.
+- One call returns at most 1 MB; the file can be any size. Invalid bytes are an error, never replaced.
+- The native binary now has every charset (about 6 MB larger). CI's native step decodes windows-1252.
+- Decision: ranged and binary reads (D-094, Q103).
+
+## 2026-11-26 · 060 Tool update notices and write hints
+
+- When a newer JHarness ships a tool you don't have in `~/.jharness/tools/`, or one that differs from your file, the start says so once per shipped version, with the `jharness tools reset NAME` that takes it (on stderr in `-p`). New event: `tools.updates`.
+- When a tool fails and its output reads like a refused write, `api.tool`'s result has a `hint` with the folders the tool may write, so the model tells you instead of guessing.
+- Decision: tool update notices and write hints (D-093, Q102).
 
 ## 2026-11-26 · 059 Go tool
 
