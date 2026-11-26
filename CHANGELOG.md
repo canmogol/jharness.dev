@@ -1,6 +1,15 @@
 # Changelog
 
-<!-- last-commit: 3a10e917e50962575c758810518c7d883fb79bb0 -->
+<!-- last-commit: a2f68e4ce776535f26045491f89569598afc018e -->
+
+## 2026-11-25 · 054 Subagents that don't block
+
+- `api.waitAgent` is removed, so a turn never waits for a subagent. A call throws an error that tells the model to end its turn instead.
+- When a background subagent finishes and you're at an empty prompt, the main agent takes a turn with its reply by itself. `turn.started` marks it `"auto": true`.
+- At most 10 such turns run in a row before a message from you (`"agent": {"autoTurns": N}`, 0 to 100; 0 turns them off). Esc on one stops the chain. A stopped subagent starts no turn.
+- `/answer [NAME]` asks a background subagent's held question in place, the oldest by default, and leaves you in the main chat. The held notice names it, and Tab completes the held names.
+- `-p` keeps going until no background subagent is left, each reply taking a turn; the result is the last turn's.
+- Decision: subagents that don't block (D-087, Q96; notes on D-065 and D-072).
 
 ## 2026-11-25 · 053 Manual viewer and terminal checks
 
