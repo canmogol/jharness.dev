@@ -97,7 +97,7 @@ public final class PermissionEngine implements PermissionGate {
                 if (r != null) {
                     rules.add(r);
                     var e = Json.object().put("kind", r.kind().wire());
-                    e.put(r.kind() == Operation.Kind.WRITE ? "path" : "op", r.key());
+                    e.put(r.kind() == Operation.Kind.WRITE || r.kind() == Operation.Kind.DELETE ? "path" : "op", r.key());
                     bus.publish(origin.get(), "permission.rule_added", e);
                 }
                 yield Decision.allow("approved by the user for this project");

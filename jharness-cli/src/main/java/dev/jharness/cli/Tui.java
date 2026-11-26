@@ -1671,6 +1671,8 @@ final class Tui {
                     raw.println(styler.step("▸ " + who + "step " + e.body().get("step").asInt() + ": running " + e.body().get("lines").asInt() + " lines"));
                 }
             }
+            case "folder.deleted" -> raw.println(styler.step(TerminalSafe.escape("▸ " + who + "deleted folder " + e.body().get("path").asText()
+                    + "/ (" + e.body().get("files").asInt() + (e.body().get("files").asInt() == 1 ? " file)" : " files)"))));
             case "file.changed" -> {
                 String path = e.body().get("path").asText();
                 String diff = e.body().get("diff").asText();

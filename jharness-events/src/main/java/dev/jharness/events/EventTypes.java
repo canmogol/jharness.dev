@@ -22,6 +22,7 @@ public final class EventTypes {
         HOST.put("checkpoint.saved", List.of("path"));
         HOST.put("checkpoint.restored", List.of("files", "turns"));
         HOST.put("file.changed", List.of("path", "diff"));
+        HOST.put("folder.deleted", List.of("path", "files", "bytes"));
         HOST.put("settings.ignored", List.of("keys"));
         HOST.put("api.call", List.of("api", "status"));
         HOST.put("permission.decided", List.of("api", "kind", "allowed"));

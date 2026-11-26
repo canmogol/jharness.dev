@@ -340,6 +340,125 @@ public final class HostApi {
         });
     }
 
+    /** The most files one {@code deleteFolder} may remove (spec 056), so undo stays complete and the question readable. */
+    static final int MAX_DELETE_FILES = 1000;
+
+    @HostAccess.Export
+    public String deleteFile(String path) {
+        Path p;
+        String rel;
+        long size;
+        try {
+            FilePolicy.Target t = s.files().delete(path);
+            p = t.path();
+            rel = t.display();
+            if (Files.isDirectory(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                throw new IllegalArgumentException(rel + " is a folder; use api.deleteFolder");
+            }
+            if (!Files.isRegularFile(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                throw new IllegalArgumentException("no such file: " + rel);
+            }
+            size = Files.size(p);
+            if (size > Checkpoints.MAX_BYTES) {
+                throw new IllegalArgumentException(rel + " is " + size + " bytes; deleteFile deletes up to " + Checkpoints.MAX_BYTES
+                        + ", so that undo can bring it back");
+            }
+        } catch (RuntimeException | IOException e) {
+            return reject("deleteFile", e);
+        }
+        String before = currentText(p);
+        String diff = before == null ? "" : Diffs.unified(rel, before, null);
+        return call("deleteFile", Operation.Kind.WRITE, "delete " + rel + " (" + size + " bytes)",
+                Json.object().put("path", rel).put("bytes", size).put("diff", diff).put("deleted", true), () -> {
+                    if (!Files.isRegularFile(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                        throw new IllegalArgumentException("no such file: " + rel);
+                    }
+                    remove(p, rel);
+                    s.bus().publish(s.origin().get(), "file.changed", Json.object().put("path", rel).put("diff", diff).put("deleted", true));
+                    return Json.write(Json.object().put("path", rel).put("bytes", size));
+                });
+    }
+
+    @HostAccess.Export
+    public String deleteFolder(String path) {
+        Path p;
+        String rel;
+        List<Path> files = new java.util.ArrayList<>();
+        List<Path> folders = new java.util.ArrayList<>();
+        long bytes = 0;
+        try {
+            FilePolicy.Target t = s.files().delete(path);
+            p = t.path();
+            rel = t.display();
+            if (!Files.isDirectory(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                throw new IllegalArgumentException(Files.exists(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                        ? rel + " is not a folder; use api.deleteFile" : "no such folder: " + rel);
+            }
+            // Never follows links: a link inside could lead out of the workspace, and undo can't bring one back.
+            try (Stream<Path> walk = Files.walk(p)) {
+                for (Path x : (Iterable<Path>) walk::iterator) {
+                    String r = s.workspace().relative(x);
+                    if (s.files().denied(r) || r.equals(".git") || r.endsWith("/.git") || r.contains("/.git/") || r.startsWith(".git/")) {
+                        throw new IllegalArgumentException(rel + " holds " + r + ", which is off limits; the folder can't be deleted");
+                    }
+                    if (Files.isSymbolicLink(x)) {
+                        throw new IllegalArgumentException(rel + " holds the link " + r + "; delete it with api.deleteFile first");
+                    }
+                    if (Files.isDirectory(x, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                        folders.add(x);
+                    } else if (Files.isRegularFile(x, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                        long n = Files.size(x);
+                        if (n > Checkpoints.MAX_BYTES) {
+                            throw new IllegalArgumentException(r + " is " + n + " bytes; a folder can be deleted only if every file is up to "
+                                    + Checkpoints.MAX_BYTES + ", so that undo can bring it back");
+                        }
+                        bytes += n;
+                        files.add(x);
+                        if (files.size() > MAX_DELETE_FILES) {
+                            throw new IllegalArgumentException(rel + " has more than " + MAX_DELETE_FILES + " files; delete smaller folders");
+                        }
+                    } else {
+                        throw new IllegalArgumentException(rel + " holds " + r + ", which is not a file or folder");
+                    }
+                }
+            }
+        } catch (RuntimeException | IOException e) {
+            return reject("deleteFolder", e);
+        }
+        int count = files.size();
+        long total = bytes;
+        ObjectNode detail = Json.object().put("path", rel).put("files", count).put("bytes", total);
+        var first = detail.putArray("first");
+        files.stream().limit(20).forEach(f -> first.add(s.workspace().relative(f)));
+        String summary = "delete folder " + rel + "/ and its " + count + (count == 1 ? " file" : " files") + " (" + total + " bytes)"
+                + (count == 0 ? "" : ": " + String.join(", ", files.stream().limit(20).map(f -> s.workspace().relative(f)).toList())
+                        + (count > 20 ? ", …" : ""));
+        return call("deleteFolder", Operation.Kind.DELETE, summary, detail, () -> {
+            for (Path f : files) {
+                if (Files.isRegularFile(f, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    remove(f, s.workspace().relative(f));
+                }
+            }
+            // Deepest first, so each folder is empty when it goes.
+            for (int i = folders.size() - 1; i >= 0; i--) {
+                Files.deleteIfExists(folders.get(i));
+            }
+            s.bus().publish(s.origin().get(), "folder.deleted", Json.object().put("path", rel).put("files", count).put("bytes", total));
+            return Json.write(Json.object().put("path", rel).put("files", count).put("bytes", total));
+        });
+    }
+
+    /** Saves a checkpoint, then deletes the file (spec 056). */
+    private void remove(Path p, String rel) throws IOException {
+        if (s.checkpoints() != null) {
+            s.checkpoints().beforeChange(turn(), p, rel);
+        }
+        Files.delete(p);
+        if (s.checkpoints() != null) {
+            s.checkpoints().afterChange(turn(), p);
+        }
+    }
+
     @HostAccess.Export
     public String listFiles(String json) {
         ObjectNode a;

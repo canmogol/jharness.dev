@@ -33,7 +33,7 @@ public final class ProjectRules {
 
         ObjectNode toJson() {
             ObjectNode o = Json.object().put("kind", kind.wire());
-            o.put(kind == Operation.Kind.WRITE ? "path" : "op", key);
+            o.put(kind == Operation.Kind.WRITE || kind == Operation.Kind.DELETE ? "path" : "op", key);
             return o;
         }
     }
@@ -75,6 +75,8 @@ public final class ProjectRules {
                 r.rules.add(new Rule(Operation.Kind.BUILD, n.get("op").asText()));
             } else if (kind.equals("http-write") && n.path("op").isTextual()) {
                 r.rules.add(new Rule(Operation.Kind.HTTP_WRITE, n.get("op").asText()));
+            } else if (kind.equals("delete") && n.path("path").isTextual()) {
+                r.rules.add(new Rule(Operation.Kind.DELETE, n.get("path").asText()));
             } else if (kind.equals("mcp") && n.path("op").isTextual()) {
                 r.rules.add(new Rule(Operation.Kind.MCP, n.get("op").asText()));
             } else {
@@ -100,6 +102,7 @@ public final class ProjectRules {
             case BUILD -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.BUILD, op.detail().get("op").asText()) : null;
             case HTTP_WRITE -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.HTTP_WRITE, op.detail().get("op").asText()) : null;
             case MCP -> op.detail().hasNonNull("op") ? new Rule(Operation.Kind.MCP, op.detail().get("op").asText()) : null;
+            case DELETE -> op.detail().hasNonNull("path") ? new Rule(Operation.Kind.DELETE, op.detail().get("path").asText()) : null;
             default -> null;
         };
     }

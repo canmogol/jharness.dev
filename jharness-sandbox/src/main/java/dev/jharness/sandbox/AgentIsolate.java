@@ -47,6 +47,8 @@ public final class AgentIsolate implements AutoCloseable {
                 readFile: (path) => call('readFile', [t(path)]),
                 writeFile: (path, content) => call('writeFile', [t(path), t(content)]),
                 editFile: (path, oldText, newText) => call('editFile', [t(path), t(oldText), t(newText)]),
+                deleteFile: (path) => call('deleteFile', [t(path)]),
+                deleteFolder: (path) => call('deleteFolder', [t(path)]),
                 listFiles: (q) => call('listFiles', [s(q)]),
                 grep: (q) => call('grep', [s(q)]),
                 git: (q) => call('git', [s(q)]),

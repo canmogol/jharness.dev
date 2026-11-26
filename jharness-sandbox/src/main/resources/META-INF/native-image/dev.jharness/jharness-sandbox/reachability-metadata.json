@@ -29,6 +29,18 @@
           ]
         },
         {
+          "name": "deleteFile",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "deleteFolder",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
           "name": "listFiles",
           "parameterTypes": [
             "java.lang.String"

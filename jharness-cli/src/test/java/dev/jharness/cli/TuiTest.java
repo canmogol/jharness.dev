@@ -403,6 +403,23 @@ class TuiTest {
         assertTrue(last.contains("sub-2 (done after 0 steps): second job done") && last.endsWith("thanks"), "it came with the message: " + last);
     }
 
+    /** Spec 056: a folder delete asks in accept-edits mode, then the TUI says what went. */
+    @Test
+    void aFolderDeleteAsksAndIsShown() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws56"));
+        Files.createDirectories(ws.resolve("build"));
+        Files.writeString(ws.resolve("build/out.txt"), "x");
+        Tui tui = new Tui(terminal("clean\ny\n/exit\n"), null);
+        try (Session session = replaySession(tmp.resolve("home56"), ws, "{\"permissions\": {\"mode\": \"accept-edits\"}}", tui,
+                "```js\napi.deleteFolder('build')\n```", "Cleaned.")) {
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("Allow deleteFolder: delete folder build/ and its 1 file (1 bytes): build/out.txt?"), sc);
+        assertTrue(sc.contains("▸ deleted folder build/ (1 file)"), sc);
+        assertFalse(Files.exists(ws.resolve("build")));
+    }
+
     /** Spec 035: a user's slash command runs as a turn, and /commands and /help list it. */
     @Test
     void userSlashCommands() throws Exception {

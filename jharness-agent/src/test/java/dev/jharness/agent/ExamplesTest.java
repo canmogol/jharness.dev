@@ -50,9 +50,9 @@ class ExamplesTest {
 
     /** Small enough for a prompt, and enough to teach the patterns small models get wrong. */
     @Test
-    void thereAreElevenShortExamplesUsingOnlyRealApiMethods() throws IOException {
+    void thereAreTwelveShortExamplesUsingOnlyRealApiMethods() throws IOException {
         List<String> b = blocks();
-        assertEquals(11, b.size());
+        assertEquals(12, b.size());
         for (String code : b) {
             assertTrue(code.lines().count() <= 12, "short: " + code);
             Matcher m = Pattern.compile("\\bapi\\.([A-Za-z]+)\\(").matcher(code);
@@ -61,7 +61,7 @@ class ExamplesTest {
             }
         }
         assertTrue(new TreeSet<>(List.of(String.join("\n", b).split("\\W+"))).containsAll(
-                List.of("listFiles", "grep", "editFile", "tools", "tool", "git", "fetch", "spawnAgent", "emit", "writeFile")));
+                List.of("listFiles", "grep", "editFile", "deleteFile", "tools", "tool", "git", "fetch", "spawnAgent", "emit", "writeFile")));
     }
 
     @Test
@@ -77,6 +77,8 @@ class ExamplesTest {
         git(ws, "config", "user.name", "Test");
         git(ws, "add", ".");
         git(ws, "commit", "-q", "-m", "init");
+        // Not committed, so deleting it leaves git status as the other examples expect.
+        Files.writeString(ws.resolve("src/Old.java"), "class Old {}\n");
         // The test project's Maven is a stand-in, echo, so the tool examples run anywhere: it prints its arguments.
         Path tools = Files.createDirectories(home.resolve(".jharness/tools"));
         Files.writeString(tools.resolve("maven.json"), """
@@ -168,6 +170,7 @@ class ExamplesTest {
         assertTrue(all.contains("2 Markdown files to check"), "emit: " + all);
         assertTrue(events.stream().anyMatch(e -> e.get("type").asText().equals("agent.progress") && e.get("source").asText().equals("guest")));
         assertTrue(all.contains("could not write: "), "refused write: " + all);
+        assertTrue(all.contains("left in src: src/App.java") && !Files.exists(ws.resolve("src/Old.java")), "delete: " + all);
     }
 
     private static void git(Path dir, String... args) throws Exception {
