@@ -75,7 +75,7 @@ Record notable runs here: date, version, machine, result.
 | 2026-11-26 | 0.1.0-SNAPSHOT (spec 058) | macOS 14.3 arm64 | Not run: the viewer didn't change | 80x24, 120x40 and 50x16 pass, resizes included: the resize finding is fixed. The prompt starts at the bottom |
 | 2026-11-26 | 0.1.0-SNAPSHOT (spec 058) | Linux x86-64 | Not run: the viewer didn't change | Same as macOS |
 | 2026-11-26 | 0.1.0-SNAPSHOT (spec 067) | macOS 14.3 arm64 | Chromium 159 and Safari 17.3.1 pass (Allow Remote Automation on); Playwright's WebKit still crashes on start, as on 2026-11-25 | 80x24, 120x40 and 50x16 pass with the line above the input |
-| 2026-11-26 | 0.1.0-SNAPSHOT (spec 067) | Linux x86-64 | Chromium, Firefox and WebKit don't start: the system libraries are still missing (`libgtk-4-1`, `libxcb-shm0`, `libcairo2`); the terminal part passes | Same as macOS |
+| 2026-11-26 | 0.1.0-SNAPSHOT (spec 067) | Linux x86-64 | Chromium 159, Firefox 159 and WebKit 27.2 pass, after `playwright install-deps`. WebKit first reported a refused inline stylesheet: Playwright's screenshot injects a `<style>` that the viewer's CSP blocks, so the check now judges the page before the screenshot | Same as macOS |
 
 Notes:
 

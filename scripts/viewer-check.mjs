@@ -189,8 +189,11 @@ async function withPlaywright(pw, name, url, shot, timeout) {
       if (!loaded.has(f)) fails.push(f + " not loaded");
     }
     fails.push(...judge(await page.evaluate(pageFacts)));
-    await page.screenshot({ path: shot, fullPage: true });
-    return { version: browser.version(), fails };
+    // Playwright's WebKit screenshot injects a <style> (to hide the caret) that the page's CSP refuses, which would show
+    // as a console error; the page is judged before the screenshot.
+    const judged = [...fails];
+    await page.screenshot({ path: shot, fullPage: true, caret: "initial" });
+    return { version: browser.version(), fails: judged };
   } finally {
     await browser.close();
   }
