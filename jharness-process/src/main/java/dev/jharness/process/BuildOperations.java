@@ -419,6 +419,39 @@ public final class BuildOperations {
         return GitOperations.toJson(r);
     }
 
+    /** How a refused write reads in a tool's output: Linux's read-only binds, macOS's Seatbelt, or a plain mode bit. */
+    static final java.util.regex.Pattern WRITE_REFUSED = java.util.regex.Pattern.compile(
+            "read-only file system|operation not permitted|permission denied", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * The result {@code api.tool} returns (spec 060): with a {@code hint} when the run failed and its output looks like a
+     * refused write. The hint says where the tool may write, so the model tells the user instead of guessing.
+     */
+    public String toJson(String tool, ProcessResult r) {
+        String json = GitOperations.toJson(r);
+        String hint = writeHint(tool, r);
+        if (hint == null) {
+            return json;
+        }
+        ObjectNode o = Json.parseObject(json);
+        o.put("hint", hint);
+        return Json.write(o);
+    }
+
+    String writeHint(String tool, ProcessResult r) {
+        if (r.exitCode() == 0 || !WRITE_REFUSED.matcher(r.output()).find()) {
+            return null;
+        }
+        List<String> where = new ArrayList<>(List.of("the workspace (except .jharness/)", "a private temp folder ($TMPDIR)"));
+        for (Path c : caches(definition(tool))) {
+            where.add(c.startsWith(home) ? "~/" + home.relativize(c) : c.toString());
+        }
+        return "If this failed on a refused write: the OS sandbox lets " + tool + " write only to " + String.join(", ", where)
+                + ". Other folders, such as a default cache elsewhere in the home, are refused, and no api call can change that. "
+                + "Tell the user: the folders and variables come from the tool's definition (jharness tools show " + tool
+                + "), and jharness tools reset " + tool + " writes the one this JHarness ships.";
+    }
+
     /**
      * The detail for permission prompts and saved rules: the tool, where its definition came from and
      * the operation, keyed with the resolved executable so "always" doesn't carry over to another program.

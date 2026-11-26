@@ -201,6 +201,22 @@ class BuildOperationsTest {
         assertThrows(OperationException.class, () -> g.args("gofmt", req("{\"op\":\"check-folder\",\"folder\":\"-w\"}")));
     }
 
+    /** Spec 060: a failed run whose output reads like a refused write gets a hint with the folders it may write. */
+    @Test
+    void aRefusedWriteGetsAHint() {
+        BuildOperations g = goOps(false);
+        var refused = new ProcessResult(1, "go: open /Users/me/Library/Caches/go-build/x: operation not permitted\n", false, "", false, false, 5);
+        var hint = dev.jharness.events.Json.parse(g.toJson("go", refused)).get("hint").asText();
+        assertTrue(hint.contains("the OS sandbox lets go write only to the workspace (except .jharness/), a private temp folder ($TMPDIR), "
+                + "~/go/pkg, ~/.cache/go-build"), hint);
+        assertTrue(hint.contains("jharness tools show go") && hint.contains("jharness tools reset go"), hint);
+        assertTrue(g.toJson("go", new ProcessResult(1, "x.go:3: undefined: y\n", false, "", false, false, 5)).indexOf("hint") < 0, "other failures");
+        assertTrue(g.toJson("go", new ProcessResult(0, "read-only file system (in a test name)\n", false, "", false, false, 5)).indexOf("hint") < 0,
+                "success");
+        assertTrue(ops().toJson("npm", new ProcessResult(1, "EROFS: read-only file system, open '/home/u/x'", false, "", false, false, 5))
+                .contains("~/.npm"));
+    }
+
     /**
      * Spec 059 AC-02, AC-04, AC-05: Go gets the proxy, a module proxy without "direct", the checksum database, no VCS,
      * no toolchain downloads, no go env file, and caches in the home; offline, no module proxy at all.

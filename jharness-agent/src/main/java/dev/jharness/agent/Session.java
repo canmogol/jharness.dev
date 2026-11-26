@@ -198,6 +198,8 @@ public final class Session implements AutoCloseable {
         Optional<Executable> git = Executables.resolve("git", ws.root());
         GitOperations gitOps = git.map(g -> new GitOperations(runner, g, ws, settings.timeouts().process(), settings.timeouts().processMax(),
                 settings.offline(), tokens)).orElse(null);
+        // Spec 060: before seeding, so a first start, which writes every shipped tool, reports nothing.
+        ToolDefinitions.Updates toolUpdates = ToolDefinitions.updates(home);
         ToolDefinitions.seed(home);
         ToolDefinitions tools = ToolDefinitions.load(home, ws.root(), access.trusted() && access.projectTools());
         var toolsEvent = Json.object();
@@ -280,6 +282,15 @@ public final class Session implements AutoCloseable {
                     .put("savedModel", st.model()));
         }
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
+        s.toolUpdates = toolUpdates;
+        if (!toolUpdates.isEmpty()) {
+            var ev = Json.object();
+            var missing = ev.putArray("missing");
+            toolUpdates.missing().forEach(missing::add);
+            var differ = ev.putArray("differ");
+            toolUpdates.differ().forEach(differ::add);
+            bus.publish(turns.get(), "tools.updates", ev);
+        }
         String forkedFrom = resume == null ? null : resume.fork() ? resume.state().session() : resume.state().forkedFrom();
         loop.useStateSink(snap -> {
             try {
@@ -654,6 +665,13 @@ public final class Session implements AutoCloseable {
 
     public Path logPath() {
         return log.path();
+    }
+
+    private ToolDefinitions.Updates toolUpdates = new ToolDefinitions.Updates(List.of(), List.of());
+
+    /** Shipped tools the user lacks or has changed, reported once per shipped version (spec 060). */
+    public ToolDefinitions.Updates toolUpdates() {
+        return toolUpdates;
     }
 
     /** The saved session this one resumed or forked (spec 043), or null for a new one. */
