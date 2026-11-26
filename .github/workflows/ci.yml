@@ -80,6 +80,14 @@ jobs:
           go-version: "1.27.4"
           cache: false
 
+      # The runner images ship their tool cache writable by everyone, and JHarness refuses executables others can
+      # write to (spec 015), so it would see no go. Take that write bit away, as a user's own install has it.
+      - name: Tool cache not writable by others
+        run: |
+          ls -ld "$(dirname "$(command -v go)")"
+          chmod -R o-w "$RUNNER_TOOL_CACHE"
+          ls -ld "$(dirname "$(command -v go)")"
+
       - name: JVM tests
         run: mvn -B -ntp install
 

@@ -23,15 +23,28 @@ final class Keys extends InputStream {
         }
     }
 
-    /** True once the TUI ran what came before and is idle again: a short grace, then until no turn runs. */
+    /**
+     * True once the TUI ran what came before and is idle again. The input is read ahead, so the TUI may not have
+     * started the turn yet: after a short grace it waits until it has seen the TUI busy and idle again, or, for input
+     * that starts no turn (or a turn shorter than one poll), until 3 s have passed with the TUI idle.
+     */
     static BooleanSupplier settled(Supplier<Tui> tui) {
         long[] first = {0};
+        boolean[] seenBusy = {false};
         return () -> {
             if (first[0] == 0) {
                 first[0] = System.nanoTime();
             }
             Tui t = tui.get();
-            return System.nanoTime() - first[0] > 300_000_000L && t != null && t.idle();
+            if (t == null) {
+                return false;
+            }
+            if (!t.idle()) {
+                seenBusy[0] = true;
+                return false;
+            }
+            long waited = System.nanoTime() - first[0];
+            return waited > 300_000_000L && (seenBusy[0] || waited > 3_000_000_000L);
         };
     }
 

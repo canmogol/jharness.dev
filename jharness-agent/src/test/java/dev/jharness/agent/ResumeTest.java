@@ -125,7 +125,12 @@ class ResumeTest {
         String b = session(null, List.of("B."), s -> s.turn("b", d -> {}));
         assertEquals(b, SessionState.find(home, ws, null).session());
         assertEquals(a, SessionState.find(home, ws, a).session());
-        assertEquals(a, SessionState.find(home, ws, a.substring(0, a.length() - 2)).session(), "a unique start");
+        // Ids made in the same second differ only in their random end, so take the shortest start b doesn't share.
+        int n = a.length() - 3;
+        while (b.startsWith(a.substring(0, n))) {
+            n++;
+        }
+        assertEquals(a, SessionState.find(home, ws, a.substring(0, n)).session(), "a unique start");
         var many = assertThrows(IOException.class, () -> SessionState.find(home, ws, "s-"));
         assertTrue(many.getMessage().contains("matches 2 sessions"), many.getMessage());
         var gone = assertThrows(IOException.class, () -> SessionState.find(home, ws, "s-nope"));
