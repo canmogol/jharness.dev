@@ -167,4 +167,18 @@ class StatusLineTest {
         assertTrue(events.stream().anyMatch(e -> e.get("type").asText().equals("statusline.ready") && e.get("from").asText().equals("script")));
         assertTrue(events.stream().noneMatch(e -> e.get("type").asText().equals("sandbox.run_started") && e.path("agent").asText().equals("statusline")), "the script's isolate events stay off the log");
     }
+
+    /** Spec 065: examples/statusline.js, which docs/extensions.md shows, runs on a real snapshot. */
+    @Test
+    void theExampleScriptRuns() throws Exception {
+        try (StatusScript s = script(Files.readString(Path.of("..", "examples", "statusline.js")))) {
+            JsonNode snap = Json.object().put("model", "claude-opus-5-5").put("plan", true).put("busy", false).put("turn", 3)
+                    .put("costUsd", 0.4213)
+                    .<com.fasterxml.jackson.databind.node.ObjectNode>set("context", Json.object().put("percent", 41).put("estimated", false))
+                    .set("agents", Json.object().put("running", 1).put("held", 1));
+            StatusScript.Outcome o = s.run(snap);
+            assertTrue(o.ok(), String.valueOf(o));
+            assertEquals("claude-opus-5-5 | 41% | PLAN | 1 running, 1 waiting for you | $0.42 | turn 3", o.line());
+        }
+    }
 }

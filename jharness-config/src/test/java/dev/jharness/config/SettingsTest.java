@@ -243,4 +243,18 @@ class SettingsTest {
         assertEquals("2s", main.with(Map.of("sandbox.MaxCPUTime", "2s")).values().get("sandbox.MaxCPUTime"));
         assertThrows(ConfigException.class, () -> main.with(Map.of("sandbox.MaxThreads", "4")));
     }
+
+    /** Spec 065: the example in examples/settings.json, which docs/user-guide.md and docs/extensions.md show, is valid. */
+    @Test
+    void theExampleSettingsParse() throws Exception {
+        Settings s = Settings.parse(Files.readString(Path.of("..", "examples", "settings.json")), "examples/settings.json");
+        assertEquals("claude", s.models().defaultName());
+        assertEquals("ANTHROPIC_API_KEY", s.models().all().get("claude").apiKeyEnv());
+        assertEquals("http://localhost:11434/v1", s.models().all().get("local").baseUrl());
+        assertEquals(Map.of("github.com", "GITHUB_TOKEN"), s.git().credentials());
+        assertEquals(List.of("docs", "files"), s.mcp().servers().keySet().stream().sorted().toList());
+        assertEquals("DOCS_TOKEN", s.mcp().servers().get("docs").tokenSecret());
+        assertEquals(List.of("~/.npm"), s.mcp().servers().get("files").writable());
+        assertEquals(30, s.files().checkpointDays());
+    }
 }

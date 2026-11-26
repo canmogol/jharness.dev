@@ -1,0 +1,29 @@
+{
+  "model": "claude",
+  "models": {
+    "claude": {
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "notes": "Add a \"price\" from your provider's price list to see costs"
+    },
+    "local": {
+      "provider": "openai-compatible",
+      "baseUrl": "http://localhost:11434/v1",
+      "model": "qwen2.5-coder:7b",
+      "contextWindow": 32768,
+      "responseTimeout": "300s"
+    }
+  },
+  "permissions": { "mode": "ask" },
+  "agent": { "maxSteps": 100, "subagentsRunning": 4 },
+  "files": { "deny": ["*.p12", "secrets/**"], "checkpointDays": 30 },
+  "ui": { "events": "steps", "thinking": "hide", "statusLine": ["model", "context", "mode", "agents", "cost", "turn"] },
+  "git": { "credentials": { "github.com": "GITHUB_TOKEN" } },
+  "mcp": {
+    "servers": {
+      "files": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."], "writable": ["~/.npm"] },
+      "docs": { "url": "https://mcp.example.com/mcp", "tokenSecret": "DOCS_TOKEN" }
+    }
+  }
+}
