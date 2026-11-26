@@ -1,6 +1,15 @@
 # Changelog
 
-<!-- last-commit: 39a14fee0b6770529a37e8a5d09d19c4fcf75a4b -->
+<!-- last-commit: 5f1dd2af3925cf1dd8ea29709604eccbe3598791 -->
+
+## 2026-11-26 · 056 File and folder deletes
+
+- `api.deleteFile(path)` deletes one file. It is treated like `writeFile`: asked in `ask` mode, allowed in `accept-edits`, refused in plan mode, and the question shows the removed lines.
+- `api.deleteFolder(path)` deletes a folder and everything in it. It asks even in `accept-edits`, unless you answered "always" for that folder or the mode is `bypass`. The question says how many files and bytes go and lists the first 20.
+- Every deleted file is saved first, so `/undo` and `/rewind` bring it back; empty folders inside a deleted folder don't come back.
+- Always refused: the workspace itself, `.git`, `.jharness`, mounts, paths outside the workspace, denied files, and folders holding a denied file, a link, a file over 10 MB or more than 1,000 files.
+- The TUI prints `▸ deleted folder X/ (N files)`; `-p` lists deleted folders in `filesChanged`. New events: `folder.deleted`, and `file.changed` with `"deleted": true`. New security case INJ-11.
+- Decision: file and folder deletes (D-089, Q98).
 
 ## 2026-11-26 · 055 A main prompt that never blocks
 
