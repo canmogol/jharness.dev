@@ -161,6 +161,12 @@ jobs:
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/tl.jsonl" -p "tools" | tee "$tmp/tl.txt"
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json --type api.call > "$tmp/tl-log.jsonl"
           grep '"api":"tools"' "$tmp/tl-log.jsonl" | grep -q '"status":"ok"'
+          # Ranged and binary reads (spec 061): a non-default charset needs -H:+AddAllCharsets in the native binary.
+          printf 'caf\xe9 \x80\n' > "$tmp/ws/cp1252.txt"
+          printf '%s\n' '{"reply":"```js\nconst r = JSON.parse(api.readBytes(\"cp1252.txt\", {encoding: \"windows-1252\"})); const h = JSON.parse(api.readBytes(\"cp1252.txt\", {offset: 3, length: 1, encoding: \"hex\"})); if (r.content !== \"caf\u00e9 \u20ac\\n\" || h.content !== \"e9\") throw new Error(\"bad read: \" + r.content + h.content); \"reads ok\"\n```"}' '{"reply":"Reads checked."}' > "$tmp/rd.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/rd.jsonl" -p "reads" | tee "$tmp/rd.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json --type loop.result > "$tmp/rd-log.jsonl"
+          grep -q '"status":"ok"' "$tmp/rd-log.jsonl"
           # The Go tool (spec 059): go test and gofmt run in the native binary, in a trusted folder, with bypass approvals.
           mkdir -p "$tmp/gows"
           printf 'module example.com/calc\n\ngo 1.22\n' > "$tmp/gows/go.mod"

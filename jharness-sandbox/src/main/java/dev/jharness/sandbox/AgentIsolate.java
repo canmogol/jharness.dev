@@ -44,7 +44,8 @@ public final class AgentIsolate implements AutoCloseable {
               const t = (v) => v === undefined ? undefined : String(v);
               const api = Object.freeze({
                 readContext: () => call('readContext', []),
-                readFile: (path) => call('readFile', [t(path)]),
+                readFile: (path, opts) => call('readFile', [t(path), s(opts)]),
+                readBytes: (path, opts) => call('readBytes', [t(path), s(opts)]),
                 writeFile: (path, content) => call('writeFile', [t(path), t(content)]),
                 editFile: (path, oldText, newText) => call('editFile', [t(path), t(oldText), t(newText)]),
                 deleteFile: (path) => call('deleteFile', [t(path)]),

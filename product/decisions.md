@@ -103,6 +103,7 @@ Last updated: 2026-11-26
 | D-090 | Checkpoint cleanup: when a session opens, this project's checkpoints of other sessions untouched for `files.checkpointDays` (default 30, 0 for ever) are removed, without following links; `checkpoints.pruned` | Accepted |
 | D-091 | Input at the bottom: after the banner the cursor moves to the row above the status line (DSR 6, 200 ms limit, typed keys replayed); before a resize a line feed keeps a row free for the status line, through a `LineReaderImpl` subclass while the prompt reads | Accepted |
 | D-092 | Go tool: shipped `go.json` (build, test, vet, mod-tidy, mod-download, version) and `gofmt.json` (check); proxy through `env`; `GOPROXY=https://proxy.golang.org` with no `direct`, `GOVCS=*:off`, `-buildvcs=false`, `GOTOOLCHAIN=local`, `GOENV=off`; caches under `~/go/pkg` and `~/.cache/go-build`; `~/` env values are home folders; Go hosts in `examples/network.rules`, not shipped | Accepted |
+| D-094 | Ranged and binary reads: `api.readFile(path, {fromLine, lines})` or `{offset, length}` for parts of text files of any size; `api.readBytes(path, {offset, length, encoding})` for any file as base64, hex or a charset, with `size`, `nextOffset` and `eof`; at most 1 MB per call; strict decoding; all charsets in the native binary | Accepted |
 
 ---
 
@@ -1582,6 +1583,28 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-094 — Ranged and binary reads
+
+**Decision.** The agent can read any file, in parts (spec 061).
+
+- **`api.readFile(path)`** is unchanged: a whole UTF-8 file up to 1 MB, as a string. Over 1 MB, or not UTF-8, its error names the alternatives.
+- **`api.readFile(path, part)`**, still a string:
+  - `{fromLine, lines}`: whole lines from a 1-based line, up to 100,000 lines and 1 MB; "" past the end.
+  - `{offset, length}`: a byte range cut to whole UTF-8 characters at both ends.
+- **`api.readBytes(path, {offset, length, encoding})`** returns `{path, size, offset, length, nextOffset, eof, encoding, content}`:
+  - by default 1 MB from byte 0, as base64;
+  - `"hex"`;
+  - or any charset name Java knows, decoded strictly. A character cut at the end of the range is left for the next call, so `nextOffset` is always where to go on.
+- **Limits and rules.** At most 1 MB per call, and no limit on the file's size. Invalid bytes are an error, not replacement characters. The read rules, mounts and deny list apply. The native binary carries every charset (`-H:+AddAllCharsets`, about 6 MB).
+
+**Why.** A local model couldn't read a 12 MB file, and the user asked for reads from a given byte for N bytes, in other charsets, and of binary files (2026-11-26). Only strings and JSON cross the isolate boundary (D-005), so binary content comes as text: base64 is compact, and hex is easy to read byte by byte.
+
+**Rejected.** Changing `readFile` to return JSON (breaks every caller and example). Options on `readFile` that return JSON (two return shapes for one method). Replacing invalid bytes (silently wrong text). A setting for a larger limit (one call's result goes into the model's context; parts are better).
+
+**Source.** User report and requests, 2026-11-26; answers: a separate `readBytes`, base64 with hex, byte and line ranges, 1 MB per call, strict. Specifying 061-ranged-and-binary-reads.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1689,6 +1712,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q99 | How long are saved files for `/undo` kept? | 30 days after their session last changed them (`files.checkpointDays`, 0 for ever); removed when a session of the project opens | They were kept for ever, and deletes can save up to about 10 GB per session (user, 2026-11-26) | D-090 |
 | Q100 | Can the input start at the bottom of the terminal and stay there? | Yes: the cursor moves to the row above the status line at start (asked with DSR 6), and a line feed before each resize keeps the status row free | The prompt started under the banner, and a shrink drew the status line over it (user, 2026-11-26; spec 053 finding) | D-091 |
 | Q101 | Does each new build tool need JHarness code changes? | No: a tool is a JSON definition over typed fields with a built-in proxy method. Go needed one general change, `~/` home paths in `env` values; Rust and similar tools should need only a file | The user asked before adding Go (2026-11-26) | D-092 |
+| Q103 | How does the agent read files over 1 MB, in other charsets, or binary? | `api.readFile(path, {fromLine, lines})` or `{offset, length}`; `api.readBytes` as base64, hex or a charset, with `nextOffset`; 1 MB per call | A local model couldn't read a 12 MB file (user, 2026-11-26) | D-094 |
 
 ---
 

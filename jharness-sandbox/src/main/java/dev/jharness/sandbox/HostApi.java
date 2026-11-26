@@ -241,30 +241,61 @@ public final class HostApi {
     }
 
     @HostAccess.Export
-    public String readFile(String path) {
+    public String readFile(String path, String json) {
         Path p;
         String rel;
+        ObjectNode o;
         try {
             FilePolicy.Target t = s.files().read(path);
             p = t.path();
             rel = t.display();
+            o = args(json);
+            Reads.checkTextOptions(o);
         } catch (RuntimeException e) {
             return reject("readFile", e);
         }
-        return call("readFile", Operation.Kind.READ, "read " + rel, Json.object().put("path", rel), () -> {
+        String what = Reads.describe(o);
+        return call("readFile", Operation.Kind.READ, "read " + rel + what, Json.object().put("path", rel), () -> {
             if (!Files.isRegularFile(p)) {
                 throw new IllegalArgumentException(Files.isDirectory(p) ? rel + " is a folder" : "no such file: " + rel);
             }
+            if (!o.isEmpty()) {
+                // Spec 061: a part of the file, by lines or bytes, as UTF-8 text.
+                return Reads.text(p, rel, o);
+            }
             long size = Files.size(p);
             if (size > MAX_READ_BYTES) {
-                throw new IllegalArgumentException(rel + " is " + size + " bytes; readFile reads up to " + MAX_READ_BYTES);
+                throw new IllegalArgumentException(rel + " is " + size + " bytes; readFile reads up to " + MAX_READ_BYTES
+                        + " at a time: read it in parts with {fromLine, lines} or {offset, length}, or use api.readBytes for binary files");
             }
             try {
                 return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                         .decode(java.nio.ByteBuffer.wrap(Files.readAllBytes(p))).toString();
             } catch (CharacterCodingException e) {
-                throw new IllegalArgumentException(rel + " is not UTF-8 text");
+                throw new IllegalArgumentException(rel + " is not UTF-8 text; api.readBytes reads it as base64 or hex, or in another charset");
             }
+        });
+    }
+
+    @HostAccess.Export
+    public String readBytes(String path, String json) {
+        Path p;
+        String rel;
+        ObjectNode o;
+        try {
+            FilePolicy.Target t = s.files().read(path);
+            p = t.path();
+            rel = t.display();
+            o = args(json);
+            Reads.checkByteOptions(o);
+        } catch (RuntimeException e) {
+            return reject("readBytes", e);
+        }
+        return call("readBytes", Operation.Kind.READ, "read bytes of " + rel + Reads.describe(o), Json.object().put("path", rel), () -> {
+            if (!Files.isRegularFile(p)) {
+                throw new IllegalArgumentException(Files.isDirectory(p) ? rel + " is a folder" : "no such file: " + rel);
+            }
+            return Json.write(Reads.bytes(p, rel, o));
         });
     }
 

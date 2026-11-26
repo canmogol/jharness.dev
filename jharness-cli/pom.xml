@@ -69,6 +69,8 @@
                 <!-- The JDK HTTP client needs these URL handlers to reach the egress proxy (spec 011). -->
                 <buildArg>--enable-url-protocols=http,https</buildArg>
                 <buildArg>--enable-native-access=ALL-UNNAMED,org.graalvm.truffle</buildArg>
+                <!-- api.readBytes decodes any charset Java knows (spec 061); native images otherwise keep only the standard ones. -->
+                <buildArg>-H:+AddAllCharsets</buildArg>
               </buildArgs>
             </configuration>
           </plugin>
