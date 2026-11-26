@@ -103,6 +103,7 @@ Last updated: 2026-11-26
 | D-090 | Checkpoint cleanup: when a session opens, this project's checkpoints of other sessions untouched for `files.checkpointDays` (default 30, 0 for ever) are removed, without following links; `checkpoints.pruned` | Accepted |
 | D-091 | Input at the bottom: after the banner the cursor moves to the row above the status line (DSR 6, 200 ms limit, typed keys replayed); before a resize a line feed keeps a row free for the status line, through a `LineReaderImpl` subclass while the prompt reads | Accepted |
 | D-092 | Go tool: shipped `go.json` (build, test, vet, mod-tidy, mod-download, version) and `gofmt.json` (check); proxy through `env`; `GOPROXY=https://proxy.golang.org` with no `direct`, `GOVCS=*:off`, `-buildvcs=false`, `GOTOOLCHAIN=local`, `GOENV=off`; caches under `~/go/pkg` and `~/.cache/go-build`; `~/` env values are home folders; Go hosts in `examples/network.rules`, not shipped | Accepted |
+| D-093 | Tool update notices and write hints: at the start, shipped tools the user lacks or whose file differs are named once per shipped version (`~/.jharness/tools-notified.json`, `tools.updates`); a failed tool run that reads like a refused write gets a `hint` with the tool's writable folders | Accepted |
 | D-094 | Ranged and binary reads: `api.readFile(path, {fromLine, lines})` or `{offset, length}` for parts of text files of any size; `api.readBytes(path, {offset, length, encoding})` for any file as base64, hex or a charset, with `size`, `nextOffset` and `eof`; at most 1 MB per call; strict decoding; all charsets in the native binary | Accepted |
 
 ---
@@ -1583,6 +1584,21 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-093 — Tool update notices and write hints
+
+**Decision.** JHarness says when its shipped tools and yours differ, and tells the model where a tool may write (spec 060).
+
+- **Notices.** When a session opens and `~/.jharness/tools/` exists, each shipped tool that is missing there, or whose file differs from the shipped one, is named once per shipped version: under the banner in the TUI, on stderr in `-p`, and in a `tools.updates` event. Each line names the command: `jharness tools reset NAME`. `~/.jharness/tools-notified.json` (0600) keeps the shipped file's SHA-256 per tool, so a new JHarness that ships a different file reports it again. A first start writes every shipped tool and reports nothing. Nothing is updated by itself.
+- **Hints.** When a tool run exits non-zero and its output contains "read-only file system", "operation not permitted" or "permission denied", `api.tool`'s result gets a `hint`. It names the workspace (except `.jharness/`), the private temp folder and the tool's writable folders, says that no api call changes them, and names `jharness tools show NAME` and `jharness tools reset NAME` for the user.
+
+**Why.** A user updated JHarness, but their `~/.jharness/tools/` came from an earlier start, so the old Go definition stayed. Go then failed to write `~/Library/Caches/go-build`, and the model spent four steps looking for a way to set the cache (user report, 2026-11-26). Seeding only an empty folder (D-066) keeps the user's files theirs, but it left them unaware of new and changed shipped tools.
+
+**Rejected.** Updating untouched shipped files by themselves (a tool's behaviour would change without the user knowing). Reporting at every start (noise for a tool deleted on purpose). A hint for every failed run (it would mislead on ordinary build errors).
+
+**Source.** User report and request, 2026-11-26: the failed Go build in a local-model chat; "Do what you suggest as a small spec". Specifying 060-tool-update-notices.
+
+---
+
 ## D-094 — Ranged and binary reads
 
 **Decision.** The agent can read any file, in parts (spec 061).
@@ -1712,6 +1728,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q99 | How long are saved files for `/undo` kept? | 30 days after their session last changed them (`files.checkpointDays`, 0 for ever); removed when a session of the project opens | They were kept for ever, and deletes can save up to about 10 GB per session (user, 2026-11-26) | D-090 |
 | Q100 | Can the input start at the bottom of the terminal and stay there? | Yes: the cursor moves to the row above the status line at start (asked with DSR 6), and a line feed before each resize keeps the status row free | The prompt started under the banner, and a shrink drew the status line over it (user, 2026-11-26; spec 053 finding) | D-091 |
 | Q101 | Does each new build tool need JHarness code changes? | No: a tool is a JSON definition over typed fields with a built-in proxy method. Go needed one general change, `~/` home paths in `env` values; Rust and similar tools should need only a file | The user asked before adding Go (2026-11-26) | D-092 |
+| Q102 | How does a user learn that a newer JHarness ships new or changed tools? | At the start, once per shipped version, with the `jharness tools reset NAME` that takes it; and a failed run's `hint` names where the tool may write | An old `go.json` stayed after an update and the model couldn't tell why Go failed (user, 2026-11-26) | D-093 |
 | Q103 | How does the agent read files over 1 MB, in other charsets, or binary? | `api.readFile(path, {fromLine, lines})` or `{offset, length}`; `api.readBytes` as base64, hex or a charset, with `nextOffset`; 1 MB per call | A local model couldn't read a 12 MB file (user, 2026-11-26) | D-094 |
 
 ---

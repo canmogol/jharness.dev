@@ -623,7 +623,7 @@ public final class HostApi {
             return reject("tool", e);
         }
         return call("tool", Operation.Kind.BUILD, summary, detail,
-                () -> BuildOperations.toJson(outsideRunClock(() -> s.builds().run(tool, a))));
+                () -> s.builds().toJson(tool, outsideRunClock(() -> s.builds().run(tool, a))));
     }
 
     /** {@code api.tools()} (spec 028, D-067): the defined tools, their operations and fields, and whether each can run here. */

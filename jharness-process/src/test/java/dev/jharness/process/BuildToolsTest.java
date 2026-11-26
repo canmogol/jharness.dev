@@ -194,6 +194,28 @@ class BuildToolsTest {
         assertTrue(d.exitCode() != 0 || d.output().isBlank(), d.output());
     }
 
+    /** Spec 060: a Go test that writes outside the sandbox's folders fails, and the result says where go may write. */
+    @Test
+    void aRefusedWriteInTheSandboxGetsAHint() throws Exception {
+        String name = ".jharness-test-" + Long.toHexString(System.nanoTime());
+        Path target = Path.of(System.getProperty("user.home"), name);
+        Files.writeString(root.resolve("go.mod"), "module example.com/w\n\ngo 1.22\n");
+        Files.writeString(root.resolve("w_test.go"), """
+                package w
+
+                import ("os"; "testing")
+
+                func TestWrite(t *testing.T) {
+                	if err := os.WriteFile(os.Getenv("HOME") + "/%s", []byte("x"), 0o600); err != nil { t.Fatal(err) }
+                }
+                """.formatted(name));
+        ProcessResult r = run("go", "{\"op\":\"test\",\"timeoutMs\":300000}");
+        assertNotEquals(0, r.exitCode(), r.output());
+        assertFalse(Files.exists(target));
+        String json = ops.toJson("go", r);
+        assertTrue(json.contains("\"hint\":\"If this failed on a refused write: the OS sandbox lets go write only to"), r.output() + "\n" + json);
+    }
+
     /** Spec 059 AC-01: gofmt checks and changes nothing. */
     @Test
     void gofmtListsUnformattedFilesAndChangesNothing() throws Exception {

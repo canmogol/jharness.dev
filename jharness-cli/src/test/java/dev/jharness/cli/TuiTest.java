@@ -455,6 +455,31 @@ class TuiTest {
         assertFalse(screen().contains("\r\n\n\n"), "no move without an answer");
     }
 
+    /** Spec 060: a shipped tool missing from ~/.jharness/tools/ is named once at the start, with the command that adds it. */
+    @Test
+    void missingShippedToolsAreNamedOnce() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws60"));
+        Path home = tmp.resolve("home60");
+        dev.jharness.process.ToolDefinitions.seed(home);
+        Files.delete(dev.jharness.process.ToolDefinitions.userFolder(home).resolve("go.json"));
+        Path log;
+        for (int i = 0; i < 2; i++) {
+            screen.reset();
+            Tui tui = new Tui(terminal("/exit\n"), null);
+            try (Session session = replaySession(home, ws, "{}", tui, "unused")) {
+                log = session.logPath();
+                tui.run(session);
+            }
+            String sc = screen();
+            boolean shown = sc.contains("This JHarness ships a tool you don't have in ~/.jharness/tools/: go. Add it with: jharness tools reset go");
+            assertEquals(i == 0, shown, "run " + i + ": " + sc);
+            if (i == 0) {
+                assertTrue(dev.jharness.events.SessionLog.read(log).stream().anyMatch(e -> e.get("type").asText().equals("tools.updates")
+                        && e.get("missing").toString().equals("[\"go\"]")));
+            }
+        }
+    }
+
     /** Spec 056: a folder delete asks in accept-edits mode, then the TUI says what went. */
     @Test
     void aFolderDeleteAsksAndIsShown() throws Exception {
