@@ -1,6 +1,33 @@
 # Changelog
 
-<!-- last-commit: 5f1dd2af3925cf1dd8ea29709604eccbe3598791 -->
+<!-- last-commit: 88d4ba1d4e627d49734a7ae1f7d9aa880a8548dc -->
+
+## 2026-11-26 · 059 Go tool
+
+- Two new shipped tools:
+  - `go`: `build`, `test` and `vet` over one package pattern (default `./...`), `test` with a `run` filter, `mod-tidy`, `mod-download` and `version`.
+  - `gofmt`: `check` and `check-folder`, which change nothing.
+- Values can't start with `-`, so no go flag such as `-exec` or `-toolexec` gets in.
+- Go fetches modules only from `proxy.golang.org` through the egress proxy. It never starts git, a `toolchain` line in `go.mod` fails instead of downloading another Go, and `go env -w` settings are ignored.
+- The module and build caches are `~/go/pkg/mod` and `~/.cache/go-build` on every OS. Offline, builds use the cache or `vendor/`.
+- An existing `~/.jharness/tools/` gets the new files with `jharness tools reset go` and `jharness tools reset gofmt`.
+- `examples/network.rules` lists the Go, Maven and npm hosts to copy, with a private module proxy example; none are allowed by default.
+- Tool definitions: an `env` value that starts with `~/` is a folder in your home.
+- CI installs Go and runs it in the native binary.
+- Decision: Go tool (D-092, Q101).
+
+## 2026-11-26 · 058 Input at the bottom
+
+- On a real terminal the input starts on the row above the status line and stays at the bottom; output pushes the screen up from it.
+- A terminal that doesn't say where the cursor is within 200 ms keeps the prompt where it is. Keys typed meanwhile reach the first prompt.
+- Fix: when a window shrank, the status line was drawn over the prompt (found by the spec 053 check). `scripts/tui-tmux-check.py` now passes at every size and also checks the start row.
+- Decision: input at the bottom (D-091, Q100).
+
+## 2026-11-26 · 057 Checkpoint cleanup
+
+- When a session opens, this project's saved files for `/undo` from other sessions untouched for 30 days are removed. `"files": {"checkpointDays": N}` sets the days (0 to 3650; 0 keeps them for ever).
+- The current session, other projects and anything behind a link are never touched. A `checkpoints.pruned` event says what went.
+- Decision: checkpoint cleanup (D-090, Q99).
 
 ## 2026-11-26 · 056 File and folder deletes
 
