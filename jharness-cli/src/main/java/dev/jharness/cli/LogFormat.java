@@ -41,6 +41,7 @@ final class LogFormat {
             Map.entry("subagent.wait_ended", List.of("outcome")),
             Map.entry("question.waiting", List.of("summary")),
             Map.entry("folder.deleted", List.of("path", "files", "bytes")),
+            Map.entry("tools.updates", List.of("missing", "differ")),
             Map.entry("checkpoints.pruned", List.of("sessions", "bytes", "days")),
             Map.entry("question.wait_ended", List.of("api", "outcome")),
             Map.entry("subagent.completed", List.of("stopReason", "steps", "durationMs", "error")),

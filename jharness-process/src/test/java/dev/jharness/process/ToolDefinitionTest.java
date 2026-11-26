@@ -230,4 +230,30 @@ class ToolDefinitionTest {
         assertDoesNotThrow(() -> ToolDefinition.parse("x", "{\"executable\": \"x\", \"proxy\": \"none\", \"env\": {\"XCACHE\": \"~/.cache/x\"}, "
                 + "\"operations\": {\"run\": {\"args\": [\"run\"]}}}", ToolDefinition.Source.USER, "x.json", "h"));
     }
+
+    /** Spec 060: missing or different shipped tools are reported once per shipped version; a first start reports nothing. */
+    @Test
+    void shippedToolUpdatesAreReportedOnce() throws Exception {
+        assertTrue(ToolDefinitions.updates(home).isEmpty(), "no folder yet: the first start writes them all");
+        ToolDefinitions.seed(home);
+        assertTrue(ToolDefinitions.updates(home).isEmpty(), "all as shipped");
+        Path dir = ToolDefinitions.userFolder(home);
+        Files.delete(dir.resolve("go.json"));
+        Files.delete(dir.resolve("gofmt.json"));
+        Files.writeString(dir.resolve("maven.json"), ToolDefinitions.defaultText("maven").replace("\"clean\":", "\"cleanup\":"));
+        ToolDefinitions.Updates u = ToolDefinitions.updates(home);
+        assertEquals(List.of("go", "gofmt"), u.missing());
+        assertEquals(List.of("maven"), u.differ());
+        assertEquals(List.of("This JHarness ships tools you don't have in ~/.jharness/tools/: go, gofmt. Add one with: jharness tools reset NAME",
+                "Your ~/.jharness/tools/maven.json differs from the one this JHarness ships (jharness tools show maven); "
+                        + "jharness tools reset maven writes the shipped one in its place"), u.lines());
+        Path state = home.resolve(".jharness/tools-notified.json");
+        assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(state)));
+        assertTrue(ToolDefinitions.updates(home).isEmpty(), "reported once");
+        // A newer JHarness ships another go.json: reported again.
+        Files.writeString(state, Files.readString(state).replaceFirst("\"go\":\"[0-9a-f]+\"", "\"go\":\"0000\""));
+        assertEquals(List.of("go"), ToolDefinitions.updates(home).missing());
+        assertEquals(List.of("This JHarness ships a tool you don't have in ~/.jharness/tools/: go. Add it with: jharness tools reset go"),
+                new ToolDefinitions.Updates(List.of("go"), List.of()).lines());
+    }
 }

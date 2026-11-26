@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import dev.jharness.events.Json;
 import dev.jharness.process.ToolDefinition.DefinitionException;
 import dev.jharness.process.ToolDefinition.Source;
 
@@ -285,6 +286,74 @@ public final class ToolDefinitions {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /** The shipped tools this version has that the user lacks, and those whose file differs (spec 060). */
+    public record Updates(List<String> missing, List<String> differ) {
+
+        public boolean isEmpty() {
+            return missing.isEmpty() && differ.isEmpty();
+        }
+
+        /** The lines to show the user: what changed and the command that takes the shipped file. */
+        public List<String> lines() {
+            List<String> out = new ArrayList<>();
+            if (!missing.isEmpty()) {
+                out.add("This JHarness ships " + (missing.size() == 1 ? "a tool" : "tools") + " you don't have in ~/.jharness/tools/: "
+                        + String.join(", ", missing) + ". Add " + (missing.size() == 1 ? "it" : "one") + " with: jharness tools reset "
+                        + (missing.size() == 1 ? missing.getFirst() : "NAME"));
+            }
+            for (String n : differ) {
+                out.add("Your ~/.jharness/tools/" + n + ".json differs from the one this JHarness ships (jharness tools show " + n
+                        + "); jharness tools reset " + n + " writes the shipped one in its place");
+            }
+            return out;
+        }
+    }
+
+    /**
+     * Spec 060: the shipped tools that are missing from {@code ~/.jharness/tools/} or differ from the shipped file, each
+     * reported once per shipped version. What was reported is kept in {@code ~/.jharness/tools-notified.json}, as the
+     * shipped file's SHA-256 per tool; a folder that doesn't exist yet reports nothing (the first start writes it).
+     */
+    public static Updates updates(Path home) {
+        Path dir = userFolder(home);
+        if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
+            return new Updates(List.of(), List.of());
+        }
+        Path state = home.resolve(".jharness").resolve("tools-notified.json");
+        com.fasterxml.jackson.databind.node.ObjectNode seen;
+        try {
+            seen = Files.isRegularFile(state) ? Json.parseObject(Files.readString(state, StandardCharsets.UTF_8)) : Json.object();
+        } catch (IOException | IllegalArgumentException e) {
+            seen = Json.object();
+        }
+        List<String> missing = new ArrayList<>();
+        List<String> differ = new ArrayList<>();
+        boolean changed = false;
+        for (String n : DEFAULTS) {
+            String shipped = sha256(defaultText(n).getBytes(StandardCharsets.UTF_8));
+            Path f = dir.resolve(n + ".json");
+            boolean has = Files.isRegularFile(f, LinkOption.NOFOLLOW_LINKS);
+            boolean same = has && hashOf(f).equals(shipped);
+            if (same || shipped.equals(seen.path(n).asText(null))) {
+                continue;
+            }
+            (has ? differ : missing).add(n);
+            seen.put(n, shipped);
+            changed = true;
+        }
+        if (changed) {
+            try {
+                Path tmp = state.resolveSibling("tools-notified.json.tmp");
+                Files.writeString(tmp, Json.write(seen), StandardCharsets.UTF_8);
+                Files.setPosixFilePermissions(tmp, PosixFilePermissions.fromString("rw-------"));
+                Files.move(tmp, state, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException e) {
+                // Reported again next time.
+            }
+        }
+        return new Updates(List.copyOf(missing), List.copyOf(differ));
     }
 
     /** Whether the user's file for a shipped tool differs from the shipped default. */

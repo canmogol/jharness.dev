@@ -260,6 +260,20 @@ class MainTest {
         assertEquals("Started it.", dev.jharness.events.Json.parse(out.toString(java.nio.charset.StandardCharsets.UTF_8).strip()).get("reply").asText());
     }
 
+    /** Spec 060: in -p, a shipped tool the user lacks is named on stderr, once. */
+    @Test
+    void headlessNamesMissingShippedTools() throws Exception {
+        dev.jharness.process.ToolDefinitions.seed(home);
+        Files.delete(dev.jharness.process.ToolDefinitions.userFolder(home).resolve("gofmt.json"));
+        Path r = replay("Hi.");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "hi"));
+        assertTrue(err.toString().contains("jharness: This JHarness ships a tool you don't have in ~/.jharness/tools/: gofmt. Add it with: jharness tools reset gofmt"),
+                err.toString());
+        err.reset();
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", replay("Hi.").toString(), "-p", "hi"));
+        assertFalse(err.toString().contains("ships a tool"), err.toString());
+    }
+
     /** Spec 056: in -p, accept-edits lets a file delete through and denies a folder delete; bypass allows it; filesChanged lists both. */
     @Test
     void headlessDeletes() throws Exception {

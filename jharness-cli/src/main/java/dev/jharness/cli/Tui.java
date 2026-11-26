@@ -483,6 +483,7 @@ final class Tui {
             out.println("Project tools: " + String.join("; ", project.stream().map(dev.jharness.process.ToolDefinitions.ProjectTool::line).toList()));
         }
         session.tools().errors().forEach((n, err) -> raw.println(styler.error("Tool " + n + " is unavailable: " + err)));
+        session.toolUpdates().lines().forEach(l -> raw.println(styler.dim(TerminalSafe.escape(l))));
         session.describeHooks().stream().filter(l -> l.contains("  broken: ")).forEach(l -> raw.println(styler.error("Hook " + l)));
         // A command file named like a built-in is loaded now, so the clash shows at the start (spec 041 AC-02).
         session.commands(BUILT_IN).clashes().forEach(c -> raw.println(styler.error(TerminalSafe.escape("Command " + c.file()

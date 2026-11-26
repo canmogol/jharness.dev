@@ -336,6 +336,7 @@ public final class Main implements Callable<Integer> {
                     + " they are left out (start jharness in this folder to review them)");
         }
         try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()).trusted(trusted).agent(agentDef).projectTools(changed.isEmpty()).resume(from))) {
+            s.toolUpdates().lines().forEach(l -> err.println("jharness: " + l));
             if (!changed.isEmpty()) {
                 projectIgnored(s, changed, "headless runs can't ask about changed project tools");
             }
