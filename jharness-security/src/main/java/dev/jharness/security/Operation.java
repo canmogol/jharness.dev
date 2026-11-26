@@ -27,11 +27,13 @@ public record Operation(String api, Kind kind, String summary, ObjectNode detail
         /** The agent's own session state (spec 036): its todo list, or a plan it proposes; no file or process. */
         SESSION,
         /** An {@code api.mcp} tool call (spec 037): the server may do anything, so it asks by default. */
-        MCP;
+        MCP,
+        /** An {@code api.deleteFolder} (spec 056): asked even in accept-edits mode, unless a saved rule allows it. */
+        DELETE;
 
         /** True for kinds that change state and need approval by default (D-010). */
         public boolean changesState() {
-            return this == WRITE || this == GIT_WRITE || this == BUILD || this == HTTP_WRITE || this == MCP;
+            return this == WRITE || this == GIT_WRITE || this == BUILD || this == HTTP_WRITE || this == MCP || this == DELETE;
         }
 
         public String wire() {

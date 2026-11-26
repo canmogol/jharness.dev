@@ -35,7 +35,7 @@ public record AgentDefinition(String name, String source, Path dir, String descr
     public static final Pattern NAME = Pattern.compile("[a-z0-9][a-z0-9-]{0,39}");
 
     /** The {@code api} methods an agent may list in {@code tools}; {@code readContext} is always allowed. */
-    public static final Set<String> API = Set.of("readContext", "readFile", "writeFile", "editFile", "listFiles", "grep", "git",
+    public static final Set<String> API = Set.of("readContext", "readFile", "writeFile", "editFile", "deleteFile", "deleteFolder", "listFiles", "grep", "git",
             "tool", "tools", "mcp", "todos", "proposePlan", "http", "fetch", "emit", "spawnAgent", "models", "agents", "stopAgent");
 
     static final Set<String> KEYS = Set.of("description", "model", "tools", "maxSteps", "plan");

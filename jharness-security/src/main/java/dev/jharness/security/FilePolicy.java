@@ -94,6 +94,27 @@ public final class FilePolicy {
         return new Target(real, rel, rel, false);
     }
 
+    /**
+     * A path the agent may delete (spec 056): as {@link #write}, and never the workspace root or {@code .git}, nor
+     * anything under it.
+     */
+    public Target delete(String path) {
+        Target t = write(path);
+        String rel = t.relative();
+        if (rel.isEmpty() || rel.equals(".")) {
+            throw new Workspace.PathException(path + " is the workspace itself, which the agent can't delete");
+        }
+        if (rel.equals(".git") || rel.startsWith(".git/") || rel.endsWith("/.git") || rel.contains("/.git/")) {
+            throw new Workspace.PathException(path + " is git's own data, which the agent can't delete");
+        }
+        return t;
+    }
+
+    /** Whether a workspace-relative path is on the deny list (spec 056: a folder to delete must hold none). */
+    public boolean denied(String relative) {
+        return deny.denied(relative);
+    }
+
     /** Whether a result path (workspace-relative, or absolute in a mount) is hidden by the deny list. */
     public boolean hidden(String resultPath) {
         Optional<Workspace> mount = mountFor(resultPath);

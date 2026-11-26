@@ -33,6 +33,7 @@ final class HeadlessResult {
         switch (e.type()) {
             case "model.completed" -> usage.add(e.type(), e.agent(), b);
             case "file.changed" -> files.add(b.path("path").asText());
+            case "folder.deleted" -> files.add(b.path("path").asText() + "/");
             case "permission.decided" -> {
                 if (!b.path("allowed").asBoolean(true)) {
                     denied.add(Json.object().put("agent", e.agent()).put("api", b.path("api").asText()).put("summary", b.path("summary").asText())

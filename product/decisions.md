@@ -99,6 +99,7 @@ Last updated: 2026-11-26
 | D-086 | Manual checks: `scripts/viewer-check.mjs` (the web viewer in Chromium, Firefox, WebKit with Playwright, and Safari through safaridriver) and `scripts/tui-tmux-check.py` (the TUI at several sizes in tmux); never in CI; run after viewer or terminal UI changes and before each release, on Linux and macOS | Accepted |
 | D-087 | Subagents never block the main chat: `api.waitAgent` is removed; a finished background subagent's reply starts a main turn by itself (at an empty prompt; `agent.autoTurns`, default 10 in a row); `-p` runs until no background subagent is left; held questions never interrupt and `/answer [NAME]` asks one in place | Accepted; automatic turns run behind a live prompt since D-088 |
 | D-088 | The main prompt never blocks: on terminals that aren't dumb, main turns run on a worker while the prompt reads; output prints above it a line at a time; messages sent during a turn are queued and go next as one; Esc on the prompt stops the turn; the main agent's questions are held as notices (`question.waiting`) and `/answer main` asks them; commands that change the conversation wait for the turn; dumb terminals keep foreground turns | Accepted |
+| D-089 | Deletes: `api.deleteFile` (a `write`, as `writeFile`) and `api.deleteFolder` (kind `delete`: asked even in accept-edits unless a saved rule or bypass allows it); checkpoints make both undoable; the root, `.git`, `.jharness`, mounts, denied files and folders with links, denied files, files over 10 MB or more than 1,000 files are refused | Accepted |
 
 ---
 
@@ -1493,6 +1494,26 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-089 — File and folder deletes
+
+**Decision.** Agents delete inside the workspace with two api methods (spec 056).
+
+- **`api.deleteFile(path)`** removes one file. Its operation is a `write` with the path, so every mode and saved write rule treats it as `writeFile`. The question and `file.changed` (with `"deleted": true`) show the removal as a diff.
+- **`api.deleteFolder(path)`** removes a folder and everything in it. Its operation kind is `delete`: asked in `ask` and `accept-edits`, allowed in `bypass`, refused in plan mode; "always" saves `{"kind": "delete", "path": …}` for that folder. The question gives the file count, the bytes and the first 20 paths. One `folder.deleted` event follows.
+- **Undo.** Every file gets a checkpoint before it goes, so `/undo` and `/rewind` restore it, folders included; empty folders inside aren't restored.
+- **Refused before any question**, so approval can't override them:
+  - the workspace root, `.git` (anywhere) and `.jharness`;
+  - mounts, paths outside the workspace and denied paths;
+  - folders that hold a denied file, a symlink, a file over 10 MB (the checkpoint limit) or more than 1,000 files.
+
+**Why.** Agents need to remove files and folders in the project (user request, 2026-11-26), and an empty `writeFile` isn't a delete. Two names keep a model from removing a tree when it meant a file. A folder can take much more than a file, so it asks even when edits are accepted. The limits keep every allowed delete fully undoable, and the walk never follows links out of the workspace.
+
+**Rejected.** One `delete(path)` for both (a typo removes a tree). `delete(path, {recursive})` (the same risk behind a flag). Folders following the write rules (accept-edits would remove trees silently). Deleting through `git rm` or a build tool (no checkpoint, no question of its own).
+
+**Source.** User request and answers, 2026-11-26: "Agents will need to delete files and folders inside the project folder"; `deleteFile` and `deleteFolder`; folders always ask. Specifying 056-file-and-folder-deletes.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1596,6 +1617,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q95 | How are the web viewer and the TUI checked in real browsers and terminals? | `scripts/viewer-check.mjs` (Playwright: Chromium, Firefox, WebKit; Safari through safaridriver) and `scripts/tui-tmux-check.py` (tmux, several sizes), by hand after viewer or TUI changes and before releases, never in CI | The viewer's 403s slipped past tests that fetched files by hand; browsers in CI would cost minutes per run | D-086 |
 | Q96 | Should a turn wait for a subagent? | No: `api.waitAgent` is removed; a background subagent's reply starts a main turn (at most `agent.autoTurns` in a row, default 10); `-p` runs until none is left; `/answer` asks a held question in place | The main chat stayed blocked behind a wait while the subagent waited for the user, who couldn't type (user report, 2026-11-25) | D-087 |
 | Q97 | Should the main prompt close while the main agent works? | No: turns run behind a live prompt; output above it a line at a time; typed messages queue and go next; Esc stops the turn; the main agent's questions are held for `/answer main` | Keys typed during a turn were lost, and automatic turns closed the prompt without the user asking (user, 2026-11-26) | D-088 |
+| Q98 | How do agents delete files and folders? | `api.deleteFile` as a write; `api.deleteFolder` always asks outside bypass; both undoable; root, `.git`, `.jharness`, mounts, secrets, links and huge folders refused | Agents needed deletes, and a folder delete is the riskiest file change there is (user, 2026-11-26) | D-089 |
 
 ---
 

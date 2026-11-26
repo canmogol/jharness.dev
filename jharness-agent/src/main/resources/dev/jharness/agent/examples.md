@@ -21,6 +21,13 @@ api.editFile("src/App.java", "return 41;", "return 42;");
 JSON.parse(api.git({op: "diff", paths: ["src/App.java"]})).output;
 ```
 
+Delete a file that is no longer needed, then check what is left (a whole folder goes with `api.deleteFolder`):
+
+```js
+api.deleteFile("src/Old.java");
+"left in src: " + JSON.parse(api.listFiles({path: "src"})).files.join(", ");
+```
+
 Find a tool that can run the tests, run them, and keep only the lines about failures:
 
 ```js

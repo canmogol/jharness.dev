@@ -18,6 +18,12 @@ type WriteResultJson = string;
 /** {"path": string, "replacements": 1} */
 type EditResultJson = string;
 
+/** {"path": string, "bytes": number} — the deleted file */
+type DeleteFileResultJson = string;
+
+/** {"path": string, "files": number, "bytes": number} — the deleted folder and what was in it */
+type DeleteFolderResultJson = string;
+
 /** {"files": string[], "truncated": boolean} — workspace-relative paths, sorted */
 type FilesJson = string;
 
@@ -182,6 +188,14 @@ declare const api: {
   writeFile(path: string, content: string): WriteResultJson;
   /** Replaces oldText, which must occur exactly once, with newText. Needs approval. */
   editFile(path: string, oldText: string, newText: string): EditResultJson;
+  /** Deletes one file in the workspace. Needs approval like writeFile; /undo brings it back. Not for folders. */
+  deleteFile(path: string): DeleteFileResultJson;
+  /**
+   * Deletes a folder and everything in it. Always asks the user unless a saved rule or bypass mode allows it.
+   * Refused for the workspace root, .git, .jharness, mounts, and folders with links, denied files, files over
+   * 10 MB or more than 1,000 files. /undo brings the files back.
+   */
+  deleteFolder(path: string): DeleteFolderResultJson;
   /** Lists files, skipping hidden and git-ignored ones. */
   listFiles(query?: ListQuery | string): FilesJson;
   /** Searches file contents line by line. */

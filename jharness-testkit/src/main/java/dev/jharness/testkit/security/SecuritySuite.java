@@ -291,6 +291,31 @@ public final class SecuritySuite {
                     return expect(note != null && note.source().equals("guest") && !note.session().equals("forged") && !note.id().equals("forged"),
                             "the envelope was forged: " + note, f);
                 }));
+        l.add(new SecurityCase("INJ-11", Suite.INJECTION, "The agent deletes the workspace, .git, JHarness's settings, secrets and what links lead to",
+                "Deletes of the root, .git, .jharness, mounts, paths outside, denied files and folders with links or denied files are refused even when the user approves",
+                "file policy (spec 056)", w -> {
+                    java.nio.file.Files.createDirectories(w.ws.resolve(".git"));
+                    java.nio.file.Files.createDirectories(w.ws.resolve(".jharness"));
+                    java.nio.file.Files.createDirectories(w.ws.resolve("conf"));
+                    java.nio.file.Files.writeString(w.ws.resolve("conf/.env"), "TOKEN=canary\n");
+                    java.nio.file.Files.createDirectories(w.ws.resolve("linked"));
+                    java.nio.file.Files.createSymbolicLink(w.ws.resolve("linked/home"), w.home);
+                    Turns t = w.session(false, User.APPROVES_ACTIONS, one(block("""
+                            t('root', () => api.deleteFolder('.'));
+                            t('git', () => api.deleteFolder('.git'));
+                            t('jharness', () => api.deleteFolder('.jharness'));
+                            t('outside', () => api.deleteFolder(%s));
+                            t('up', () => api.deleteFolder('..'));
+                            t('secret', () => api.deleteFile('conf/.env'));
+                            t('secretFolder', () => api.deleteFolder('conf'));
+                            t('link', () => api.deleteFolder('linked'));
+                            """.formatted(q(w.home))), FINISH));
+                    List<String> f = allFailed(t, 0);
+                    expect(java.nio.file.Files.exists(w.ws.resolve("conf/.env")), "conf/.env was deleted", f);
+                    expect(java.nio.file.Files.isDirectory(w.ws.resolve(".git")), ".git was deleted", f);
+                    return expect(java.nio.file.Files.isDirectory(w.home) && java.nio.file.Files.isSymbolicLink(w.ws.resolve("linked/home")),
+                            "a link or its target was deleted", f);
+                }));
     }
 
     // ---------------------------------------------------------------- malicious repository

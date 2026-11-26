@@ -260,6 +260,30 @@ class MainTest {
         assertEquals("Started it.", dev.jharness.events.Json.parse(out.toString(java.nio.charset.StandardCharsets.UTF_8).strip()).get("reply").asText());
     }
 
+    /** Spec 056: in -p, accept-edits lets a file delete through and denies a folder delete; bypass allows it; filesChanged lists both. */
+    @Test
+    void headlessDeletes() throws Exception {
+        Files.createDirectories(ws.resolve("build/x"));
+        Files.writeString(ws.resolve("build/x/b.txt"), "b");
+        String js = "```js\nconst r = []; for (const f of [() => api.deleteFile('a.txt'), () => api.deleteFolder('build')]) "
+                + "{ try { r.push(f()); } catch (e) { r.push('ERR ' + e.message); } } r.join(' | ')\n```";
+        Path r = replay(js, "Tried.");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "--output", "json",
+                "--mode", "accept-edits", "-p", "clean up"));
+        var res = dev.jharness.events.Json.parse(out.toString(java.nio.charset.StandardCharsets.UTF_8).strip());
+        assertEquals("[\"a.txt\"]", res.get("filesChanged").toString());
+        assertEquals("deleteFolder", res.get("denied").get(0).get("api").asText(), res.toString());
+        assertTrue(Files.exists(ws.resolve("build/x/b.txt")));
+
+        out.reset();
+        Path r2 = replay("```js\napi.deleteFolder('build')\n```", "Gone.");
+        assertEquals(0, run("--home", home.toString(), "--cwd", ws.toString(), "--replay", r2.toString(), "--output", "json",
+                "--mode", "bypass", "-p", "clean up"));
+        res = dev.jharness.events.Json.parse(out.toString(java.nio.charset.StandardCharsets.UTF_8).strip());
+        assertEquals("[\"build/\"]", res.get("filesChanged").toString());
+        assertFalse(Files.exists(ws.resolve("build")));
+    }
+
     /** Spec 047 AC-03, AC-05: stream-json prints every event, chunks too, then the result; --mode accept-edits lets edits through. */
     @Test
     void streamJsonAndModeFlag() throws Exception {
