@@ -56,8 +56,8 @@ class StatusLineTest {
         assertFalse(s.apply(event("main", 3, "model.delta", Json.object().put("text", "x"))), "streamed chunks never refresh");
         assertFalse(s.apply(event("sub-1", 1, "model.completed", Json.object().put("provider", "p").put("model", "m").put("stopReason", "s")
                 .put("inputTokens", 5))), "a subagent's count isn't the main context");
-        assertEquals("claude (claude-opus-5-5) · 41% of 200K · ask · 1 running, 1 held · cache 77K read · turn 3 · shop", s.line(UiSettings.STATUS_ITEMS));
-        assertEquals("turn 3 · 41% of 200K", s.line(List.of("turn", "context")));
+        assertEquals("claude (claude-opus-5-5) · 41% of 200K · ask · 1 running, 1 held · cache 77K read · turn 3 · working · shop", s.line(UiSettings.STATUS_ITEMS));
+        assertEquals("turn 3 · working · 41% of 200K", s.line(List.of("turn", "context")));
         s.plan = true;
         assertTrue(s.line(List.of("mode")).equals("[plan]"));
         assertTrue(s.apply(event("sub-1", 1, "subagent.completed", Json.object().put("stopReason", "done").put("steps", 1).put("durationMs", 5))));
@@ -69,6 +69,12 @@ class StatusLineTest {
         assertEquals(3, snap.get("turn").asInt());
         assertTrue(snap.get("busy").asBoolean());
         assertTrue(snap.get("line").asText().contains("1 held"));
+        // Spec 055: a held main-agent question counts as held; the turn's end clears "working".
+        assertTrue(s.apply(event("main", 3, "question.waiting", Json.object().put("api", "writeFile").put("summary", "write a.txt"))));
+        assertEquals(2, s.snapshot(UiSettings.STATUS_ITEMS).get("agents").get("held").asInt());
+        assertTrue(s.apply(event("main", 3, "question.wait_ended", Json.object().put("api", "writeFile").put("outcome", "asked"))));
+        assertTrue(s.apply(event("main", 3, "turn.completed", Json.object().put("stopReason", "done").put("steps", 1))));
+        assertEquals("turn 3", s.line(List.of("turn")));
         assertEquals("1.5K", StatusState.kilo(1_500));
         assertEquals("33K", StatusState.kilo(32_768));
         assertEquals("1M", StatusState.kilo(1_000_000));

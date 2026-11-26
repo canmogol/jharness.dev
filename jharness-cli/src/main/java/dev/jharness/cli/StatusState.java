@@ -37,6 +37,8 @@ final class StatusState {
     String workspace = "";
     /** Background subagents and whether each is held on a question. */
     final Map<String, Boolean> agents = new LinkedHashMap<>();
+    /** The main agent's questions held during a background turn (spec 055). */
+    int mainHeld;
 
     /** Updates the values from one event; true when the line may look different. */
     synchronized boolean apply(Event e) {
@@ -119,6 +121,8 @@ final class StatusState {
             case "subagent.completed" -> {
                 return agents.remove(e.agent()) != null;
             }
+            case "question.waiting" -> mainHeld++;
+            case "question.wait_ended" -> mainHeld = Math.max(0, mainHeld - 1);
             default -> {
                 return false;
             }
@@ -135,7 +139,7 @@ final class StatusState {
                 .put("estimated", contextEstimated).put("compactAt", compactAt);
         o.put("mode", mode).put("plan", plan);
         long held = agents.values().stream().filter(x -> x).count();
-        var a = o.putObject("agents").put("running", agents.size() - held).put("held", held);
+        var a = o.putObject("agents").put("running", agents.size() - held).put("held", held + mainHeld);
         var names = a.putArray("names");
         agents.keySet().forEach(names::add);
         o.putObject("cache").put("readTokens", cacheRead).put("writeTokens", cacheWrite).put("inputTokens", inputTokens)
@@ -160,16 +164,17 @@ final class StatusState {
                         : (contextEstimated ? "~" : "") + Math.round(100.0 * contextTokens / contextWindow) + "% of " + kilo(contextWindow);
                 case "mode" -> plan ? "[plan]" : mode;
                 case "agents" -> {
-                    long held = agents.values().stream().filter(x -> x).count();
-                    long running = agents.size() - held;
-                    if (agents.isEmpty()) {
+                    long subHeld = agents.values().stream().filter(x -> x).count();
+                    long running = agents.size() - subHeld;
+                    long held = subHeld + mainHeld;
+                    if (running == 0 && held == 0) {
                         yield null;
                     }
                     yield (running > 0 ? running + " running" : "") + (running > 0 && held > 0 ? ", " : "") + (held > 0 ? held + " held" : "");
                 }
                 case "cache" -> cacheRead > 0 ? "cache " + kilo(cacheRead) + " read" : null;
                 case "cost" -> priced ? Usage.dollars(cost) : null;
-                case "turn" -> turn > 0 ? "turn " + turn : null;
+                case "turn" -> turn > 0 ? "turn " + turn + (busy ? " · working" : "") : busy ? "working" : null;
                 case "workspace" -> workspace.isEmpty() ? null : workspace;
                 default -> null;
             };

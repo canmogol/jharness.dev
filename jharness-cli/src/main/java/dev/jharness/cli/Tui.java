@@ -42,7 +42,7 @@ final class Tui {
               /agent          list custom agents (start one with jharness --agent NAME)
               /agents         list this session's subagents
               /agents NAME    show a subagent's last 20 events
-              /answer [NAME]  answer a background subagent's held question and stay in the main chat
+              /answer [NAME]  answer a held question (main, or a background subagent's) and stay in the main chat
               /commands       list your slash commands from ~/.jharness/commands/ and the project's .jharness/commands/
               /compact        summarize the conversation now to free context
               /context        show how full the model's context is
@@ -72,7 +72,7 @@ final class Tui {
             Keys:
               @PATH           attach a file or folder to the prompt (Tab completes the path)
               Shift+Enter, Alt+Enter, Ctrl-J  new line; Enter sends
-              Esc             stop the running turn
+              Esc             stop the running turn (messages sent while it runs wait for it to end)
             """;
 
     /** Each command in {@link #HELP} and its first description line, for Tab completion (spec 024). */
@@ -114,6 +114,13 @@ final class Tui {
      */
     private final PrintWriter out;
     private final PrintWriter raw;
+    /** Under {@link #raw}: whole lines above the prompt while a turn runs in the background (spec 055). */
+    private final AboveWriter above;
+    /**
+     * Whether the prompt stays live during main turns (spec 055): every terminal but a dumb one. A main turn then runs on
+     * {@link #worker} while the prompt reads.
+     */
+    private final boolean live;
     private final Styler styler;
     private final StringBuilder pending = new StringBuilder();
     private TerminalPrompter prompter;
@@ -149,11 +156,14 @@ final class Tui {
         // Tab lists the choices; Tab again cycles through them, highlighted (spec 041 AC-03).
         b.option(LineReader.Option.AUTO_LIST, true).option(LineReader.Option.AUTO_MENU, true).option(LineReader.Option.MENU_COMPLETE, false);
         this.reader = b.build();
-        this.raw = terminal.writer();
+        this.live = !terminal.getType().startsWith("dumb");
+        this.above = new AboveWriter(terminal.writer(), reader);
+        this.raw = new PrintWriter(above, false);
         this.out = new PrintWriter(new TerminalSafe.SafeWriter(raw), false);
         this.styler = Styler.forTerminal(terminal, env);
-        if (!terminal.getType().startsWith("dumb")) {
+        if (live) {
             multiLine();
+            escKey();
         }
         slashTab();
     }
@@ -212,7 +222,10 @@ final class Tui {
                 return n == 0 ? subagentNames(s) : List.of();
             }
             case "/answer" -> {
-                return n == 0 && s != null ? s.heldSubagents() : List.of();
+                if (n > 0 || s == null) {
+                    return List.of();
+                }
+                return mainHeld.getAsBoolean() ? plus(List.of("main"), s.heldSubagents()) : s.heldSubagents();
             }
             case "/stop" -> {
                 return n == 0 ? plus(subagentNames(s), "all") : List.of();
@@ -258,6 +271,15 @@ final class Tui {
         out.add(b);
         return List.copyOf(out);
     }
+
+    private static List<String> plus(List<String> a, List<String> b) {
+        var out = new java.util.ArrayList<String>(a);
+        out.addAll(b);
+        return List.copyOf(out);
+    }
+
+    /** Whether the running TUI holds a main-agent question (spec 055), for Tab completion. */
+    private static volatile java.util.function.BooleanSupplier mainHeld = () -> false;
 
     /** The hosts, suffixes and ranges named in both rules files, for {@code /network remove}. */
     private static List<String> ruleTargets(Session s) {
@@ -311,6 +333,28 @@ final class Tui {
             main.bind(new Reference("jharness-newline"), "\u001b[13;" + mod + "u");
         }
         reader.setVariable(LineReader.SECONDARY_PROMPT_PATTERN, ". ");
+    }
+
+    /**
+     * Esc on the prompt stops the running main turn and denies its held question (spec 055 AC-03, AC-04). A lone Esc
+     * also starts Alt keys, so JLine waits briefly to tell them apart.
+     */
+    private void escKey() {
+        reader.getWidgets().put("jharness-esc", () -> {
+            Session s = current;
+            if (busy && s != null) {
+                // Not on this thread: it holds JLine's lock, and stopping the isolate waits for the turn, which may be
+                // printing above the prompt under that lock.
+                TerminalPrompter p = prompter();
+                Thread.ofPlatform().daemon().name("esc").start(() -> {
+                    p.cancelHeld();
+                    s.loop().interrupt();
+                });
+            }
+            return true;
+        });
+        reader.getKeyMaps().get(LineReader.MAIN).bind(new Reference("jharness-esc"), "\u001b");
+        reader.setVariable(LineReader.AMBIGUOUS_BINDING, 150L);
     }
 
     /** The trust question (AC-01, AC-02); end of input means no. */
@@ -438,6 +482,19 @@ final class Tui {
                 + " is not used: /" + c.name() + " is a built-in command"))));
         startStatus(session);
         out.flush();
+        // Spec 055: the main agent's questions during a background turn wait as notices.
+        prompter().holds = new TerminalPrompter.Holds() {
+            @Override
+            public void waiting(dev.jharness.security.Operation op) {
+                session.publish("question.waiting", dev.jharness.events.Json.object().put("api", op.api()).put("summary", op.summary()));
+            }
+
+            @Override
+            public void ended(dev.jharness.security.Operation op, String outcome) {
+                session.publish("question.wait_ended", dev.jharness.events.Json.object().put("api", op.api()).put("outcome", outcome));
+            }
+        };
+        mainHeld = prompter()::holding;
         // Spec 054: a finished background subagent wakes an empty main prompt, so the main agent takes a turn with its reply.
         reader.getWidgets().put("jharness-deliver", () -> {
             Thread t = promptThread;
@@ -450,7 +507,9 @@ final class Tui {
         try {
             loop(session);
         } finally {
+            stopTurns(session);
             session.onSubagentFinished(null);
+            mainHeld = () -> false;
             stopStatus();
             if (viewer != null) {
                 viewer.close();
@@ -487,6 +546,8 @@ final class Tui {
         status = Status.getStatus(terminal);
         reader.getWidgets().put("jharness-status", () -> {
             status.update(statusLines);
+            // Called from the status thread while the prompt reads, which flushes only after a key (spec 055).
+            terminal.flush();
             return true;
         });
         // When the prompt isn't reading, a resize is ours to handle; while it reads, JLine resizes the status itself.
@@ -554,7 +615,9 @@ final class Tui {
 
     private void loop(Session session) {
         while (true) {
-            if (talking == null && session.deliveryPending() && autoTurn(session)) {
+            if (live) {
+                maybeAutoTurn(session);
+            } else if (talking == null && session.deliveryPending() && autoTurn(session)) {
                 continue;
             }
             String line;
@@ -583,13 +646,184 @@ final class Tui {
                 }
                 continue;
             }
-            if (talking == null) {
-                autoRun = 0;
-                autoCapped = false;
-            }
-            TurnResult r = talking != null ? talkTurn(session, t) : turn(session, t);
-            ended(r);
+            send(session, t);
         }
+    }
+
+    /**
+     * A message for the agent the prompt talks to. On a live terminal a main-agent message runs on the worker, or waits
+     * in the queue while a turn runs (spec 055 AC-02); otherwise the turn runs here.
+     */
+    private void send(Session session, String t) {
+        if (talking != null) {
+            ended(talkTurn(session, t));
+            return;
+        }
+        if (!live) {
+            autoRun = 0;
+            autoCapped = false;
+            ended(turn(session, t));
+            return;
+        }
+        synchronized (turns) {
+            if (stopping) {
+                return;
+            }
+            if (busy) {
+                queued.add(t);
+                raw.println(styler.dim(TerminalSafe.escape("▸ queued: " + cut(t, 80) + " (it goes to the main agent when this turn ends; Esc stops the turn)")));
+                out.flush();
+                return;
+            }
+            autoRun = 0;
+            autoCapped = false;
+            startWorker(session, t);
+        }
+    }
+
+    /** Guards {@link #busy}, {@link #queued}, {@link #stopping} and {@link #worker} (spec 055). */
+    private final Object turns = new Object();
+    /** Whether a main turn runs on the worker; the prompt reads meanwhile. */
+    private volatile boolean busy;
+    /** Messages sent during the running turn, in order; they go next, as one message. */
+    private final List<String> queued = new java.util.ArrayList<>();
+    /** Set when the session ends: no turn starts any more. */
+    private boolean stopping;
+    private Thread worker;
+
+    /** Whether no main turn runs (spec 055); for tests. */
+    boolean idle() {
+        return !busy;
+    }
+
+    /** Under {@link #turns}: marks the TUI busy and starts the worker with a message, or with null for an automatic turn. */
+    private void startWorker(Session session, String first) {
+        busy = true;
+        above.above(true);
+        prompter().hold = true;
+        worker = Thread.ofPlatform().daemon().name("main-turn").start(() -> work(session, first));
+    }
+
+    /**
+     * The worker (spec 055): runs a turn, then the queued messages as the next one, then automatic turns while replies are
+     * pending (spec 054), until there is nothing to do.
+     */
+    private void work(Session session, String first) {
+        String text = first;
+        try {
+            while (true) {
+                if (text != null) {
+                    ended(turn(session, text));
+                } else {
+                    autoTurn(session);
+                }
+                synchronized (turns) {
+                    if (!stopping && !queued.isEmpty()) {
+                        text = String.join("\n\n", queued);
+                        queued.clear();
+                        autoRun = 0;
+                        autoCapped = false;
+                        continue;
+                    }
+                    if (!stopping && wantsAutoTurn(session)) {
+                        text = null;
+                        continue;
+                    }
+                    finishWork();
+                    return;
+                }
+            }
+        } catch (RuntimeException e) {
+            synchronized (turns) {
+                finishWork();
+            }
+            raw.println(styler.error(TerminalSafe.escape("[error: " + e + "]")));
+            out.flush();
+        }
+    }
+
+    /** Under {@link #turns}: the worker is done. */
+    private void finishWork() {
+        busy = false;
+        // The prompt kept reading, so the status line is redrawn here, without "working".
+        StatusLine sl = statusLine;
+        if (sl != null) {
+            sl.refreshNow();
+        }
+        prompter().hold = false;
+        try {
+            above.endLine();
+        } catch (IOException e) {
+            // The terminal is gone.
+        }
+        above.above(false);
+        turns.notifyAll();
+    }
+
+    /** Under {@link #turns}: whether an automatic turn should run now; at the limit, says so once (spec 054 AC-03). */
+    private boolean wantsAutoTurn(Session session) {
+        if (talking != null || !session.deliveryPending()) {
+            return false;
+        }
+        int max = session.settings().agent().autoTurns();
+        if (autoRun < max) {
+            return true;
+        }
+        if (max > 0 && !autoCapped) {
+            raw.println(styler.error("▸ the main agent went on by itself " + max + (max == 1 ? " time" : " times")
+                    + " in a row (agent.autoTurns); the next replies wait for your message"));
+            out.flush();
+        }
+        autoCapped = true;
+        return false;
+    }
+
+    /** Starts an automatic turn on the worker if a reply is pending and nothing runs (spec 055). */
+    private void maybeAutoTurn(Session session) {
+        synchronized (turns) {
+            if (!busy && !stopping && wantsAutoTurn(session)) {
+                startWorker(session, null);
+            }
+        }
+    }
+
+    /** {@code /exit}, Ctrl-D or the end of input (spec 055 AC-05): the running turn stops, and the session ends after it. */
+    private void stopTurns(Session session) {
+        Thread w;
+        synchronized (turns) {
+            stopping = true;
+            queued.clear();
+            w = worker;
+            if (busy) {
+                raw.println(styler.dim("Stopping the main agent's turn."));
+                out.flush();
+            }
+        }
+        if (w == null) {
+            return;
+        }
+        prompter().cancelHeld();
+        session.loop().interrupt();
+        try {
+            w.join(30_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Commands that change the conversation or take the prompt, which wait while a main turn runs (spec 055 AC-05). */
+    private boolean waitsForTurn(String cmd, String arg) {
+        boolean waits = switch (cmd) {
+            case "/compact", "/diff", "/undo", "/rewind", "/plan", "/follow" -> true;
+            case "/model" -> !arg.isEmpty();
+            case "/switch" -> !arg.isEmpty() && !arg.equals("main");
+            default -> false;
+        };
+        if (waits && busy) {
+            out.println(cmd + " waits until the main agent's turn ends (Esc stops it).");
+            return true;
+        }
+        return false;
     }
 
     private void ended(TurnResult r) {
@@ -647,6 +881,13 @@ final class Tui {
      * the message being typed, which brings it along.
      */
     private void subagentFinished() {
+        if (live) {
+            Session s = current;
+            if (s != null) {
+                maybeAutoTurn(s);
+            }
+            return;
+        }
         // The prompt may be about to start reading; give it a moment.
         for (int i = 0; i < 100 && promptThread != null && !reader.isReading(); i++) {
             try {
@@ -669,10 +910,18 @@ final class Tui {
     /** The {@code > } prompt, with modified keys reported only while it reads (spec 014 AC-01). */
     private String readPrompt() {
         promptThread = Thread.currentThread();
-        boolean keys = !terminal.getType().startsWith("dumb");
+        boolean keys = live;
+        out.flush();
+        try {
+            above.endLine();
+        } catch (IOException e) {
+            // The terminal is gone; readLine says so.
+        }
+        // The key mode goes straight to the terminal, never into a line above the prompt.
+        PrintWriter direct = terminal.writer();
         if (keys) {
-            raw.print(MODIFY_KEYS_ON);
-            out.flush();
+            direct.print(MODIFY_KEYS_ON);
+            direct.flush();
         }
         try {
             String t = talking;
@@ -681,42 +930,26 @@ final class Tui {
             return reader.readLine(plan + (t == null ? "> " : t + "> "));
         } finally {
             if (keys) {
-                raw.print(MODIFY_KEYS_OFF);
-                out.flush();
+                direct.print(MODIFY_KEYS_OFF);
+                direct.flush();
             }
         }
     }
 
     /**
-     * Runs a turn with Esc watched (not on dumb terminals, which have no raw input). A null text runs the turn with the
-     * finished subagents' replies (spec 054), or returns null when there are none.
+     * Runs a main turn. On a live terminal it runs on the worker while the prompt reads, and Esc on the prompt stops it
+     * (spec 055); dumb terminals have no raw keys, so there is no Esc. A null text runs the turn with the finished
+     * subagents' replies (spec 054), or returns null when there are none.
      */
     private TurnResult turn(Session session, String text) {
-        boolean watch = !terminal.getType().startsWith("dumb");
-        Attributes saved = null;
-        EscWatcher w = null;
-        if (watch) {
-            saved = terminal.getAttributes();
-            Attributes a = new Attributes(saved);
-            a.setLocalFlag(Attributes.LocalFlag.ICANON, false);
-            a.setLocalFlag(Attributes.LocalFlag.ECHO, false);
-            a.setControlChar(Attributes.ControlChar.VMIN, 0);
-            a.setControlChar(Attributes.ControlChar.VTIME, 1);
-            terminal.setAttributes(a);
-            w = new EscWatcher(terminal.reader(), session.loop()::interrupt);
-            prompter().watcher = w;
-        }
         styler.reset();
-        prompter().idle = false;
+        prompter().enter();
         try {
             return text == null ? session.deliveryTurn(this::stream) : session.turn(text, this::stream);
         } finally {
-            prompter().idle = true;
-            flushPending();
-            if (w != null) {
-                prompter().watcher = null;
-                w.close();
-                terminal.setAttributes(saved);
+            prompter().leave();
+            synchronized (this) {
+                flushPending();
             }
         }
     }
@@ -841,6 +1074,10 @@ final class Tui {
     boolean command(Session session, String line) {
         String[] parts = line.split("\\s+", 2);
         parts[0] = ALIASES.getOrDefault(parts[0], parts[0]);
+        if (waitsForTurn(parts[0], parts.length > 1 ? parts[1].strip() : "")) {
+            out.flush();
+            return true;
+        }
         switch (parts[0]) {
             case "/exit" -> {
                 return false;
@@ -1009,11 +1246,8 @@ final class Tui {
         } else if (x.prompt() != null && !x.prompt().isBlank()) {
             raw.println(styler.dim("/" + name + " → " + (x.prompt().length() > 100 ? x.prompt().substring(0, 100).replace('\n', ' ') + "…"
                     : x.prompt().replace('\n', ' '))));
-            TurnResult r = talking != null ? talkTurn(session, x.prompt()) : turn(session, x.prompt());
-            out.println();
-            if (!r.stopReason().equals("done")) {
-                raw.println(styler.error("[" + r.stopReason() + (r.error() == null ? "" : ": " + r.error()) + "]"));
-            }
+            out.flush();
+            send(session, x.prompt());
         }
         return true;
     }
@@ -1174,9 +1408,9 @@ final class Tui {
      * user in the main chat. The subagent asks on its own thread; this one waits for the answer.
      */
     private void answer(Session session, String name) {
-        List<String> held = session.heldSubagents();
+        List<String> held = prompter().holding() ? plus(List.of("main"), session.heldSubagents()) : session.heldSubagents();
         if (held.isEmpty()) {
-            out.println("No subagent is waiting for an answer.");
+            out.println("No question is waiting for an answer.");
             return;
         }
         String n = name.isEmpty() ? held.getFirst() : name;
@@ -1184,7 +1418,7 @@ final class Tui {
             out.println(n + " isn't waiting for an answer. Waiting: " + String.join(", ", held) + ".");
             return;
         }
-        out.println(n + " asks:");
+        out.println(n.equals("main") ? "The main agent asks:" : n + " asks:");
         out.flush();
         // As while /switch watches a subagent: the terminal in raw mode, so the question's prompt and the status line
         // are drawn as in a turn.
@@ -1202,11 +1436,15 @@ final class Tui {
             w = new EscWatcher(terminal.reader(), () -> {});
             prompter().watcher = w;
         }
-        prompter().idle = false;
+        prompter().enter();
         try {
-            session.answer(n);
+            if (n.equals("main")) {
+                prompter().answerHeld();
+            } else {
+                session.answer(n);
+            }
         } finally {
-            prompter().idle = true;
+            prompter().leave();
             synchronized (this) {
                 flushPending();
             }
@@ -1216,7 +1454,7 @@ final class Tui {
                 terminal.setAttributes(saved);
             }
         }
-        List<String> more = session.heldSubagents();
+        List<String> more = prompter().holding() ? plus(List.of("main"), session.heldSubagents()) : session.heldSubagents();
         out.println(more.isEmpty() ? "Back to the main chat." : "Back to the main chat. Still waiting: " + String.join(", ", more) + " (/answer).");
         out.flush();
     }
@@ -1251,8 +1489,9 @@ final class Tui {
         following = name;
         boolean running = session.runningSubagents().contains(name);
         if (running) {
-            // A held question (spec 033) is asked as soon as attend() wakes it, so the prompter must be ready first.
-            prompter().idle = false;
+            // A held question (spec 033) is asked as soon as attend() wakes it, so the prompter must be ready first;
+            // watch() leaves it.
+            prompter().enter();
         }
         session.attend(name);
         Session.Subagent a = session.subagents().stream().filter(x -> x.name().equals(name)).findFirst().orElseThrow();
@@ -1287,14 +1526,14 @@ final class Tui {
             prompter().watcher = w;
         }
         styler.reset();
-        prompter().idle = false;
+        prompter().enter();
         try {
             // Its reply streams through the followed-agent events, so the callback prints nothing.
             return session.talk(name, text, d -> {});
         } catch (IllegalArgumentException e) {
             return new TurnResult("", "error", 0, e.getMessage());
         } finally {
-            prompter().idle = true;
+            prompter().leave();
             synchronized (this) {
                 flushPending();
             }
@@ -1322,7 +1561,6 @@ final class Tui {
             w = new EscWatcher(terminal.reader(), onEsc);
             prompter().watcher = w;
         }
-        prompter().idle = false;
         try {
             while (session.runningSubagents().contains(name)) {
                 Thread.sleep(100);
@@ -1330,7 +1568,8 @@ final class Tui {
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
         } finally {
-            prompter().idle = true;
+            // switchTo() entered.
+            prompter().leave();
             synchronized (this) {
                 flushPending();
             }
@@ -1417,6 +1656,13 @@ final class Tui {
                 String text = waitingLine(e, who);
                 if (text != null) {
                     raw.println(text);
+                }
+            }
+            case "question.waiting" -> raw.println(styler.error(TerminalSafe.escape("▸ the main agent is waiting for you: "
+                    + e.body().get("summary").asText() + " (/answer main to answer; Esc stops the turn)")));
+            case "question.wait_ended" -> {
+                if (e.body().get("outcome").asText().equals("stopped")) {
+                    raw.println(styler.error("▸ that question was denied"));
                 }
             }
             case "loop.code" -> {

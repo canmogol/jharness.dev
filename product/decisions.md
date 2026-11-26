@@ -3,7 +3,7 @@
 Decision log for JHarness. Each entry records what was decided, why, and what was rejected.
 Status values: **Accepted** (settled), **Proposed** (recommended, not yet confirmed), **Open** (needs an answer before the related work starts).
 
-Last updated: 2026-11-25
+Last updated: 2026-11-26
 
 ---
 
@@ -97,7 +97,8 @@ Last updated: 2026-11-25
 | D-084 | Usage tracking: a profile's `price` (US dollars per million tokens, set by the user; no shipped list) puts `costUsd` on each `model.completed`; `/usage`, `jharness usage`, the headless result and a `cost` status item add the logged events up, by agent and session | Accepted |
 | D-085 | Evals: small repository tasks with hidden checks in `evals/tasks/`, run by the maintainer script `scripts/eval.py` through headless `jharness -p --output json`; a check must fail before the run; CI runs recorded solutions; live scores per release in `docs/evals.md` | Accepted |
 | D-086 | Manual checks: `scripts/viewer-check.mjs` (the web viewer in Chromium, Firefox, WebKit with Playwright, and Safari through safaridriver) and `scripts/tui-tmux-check.py` (the TUI at several sizes in tmux); never in CI; run after viewer or terminal UI changes and before each release, on Linux and macOS | Accepted |
-| D-087 | Subagents never block the main chat: `api.waitAgent` is removed; a finished background subagent's reply starts a main turn by itself (at an empty prompt; `agent.autoTurns`, default 10 in a row); `-p` runs until no background subagent is left; held questions never interrupt and `/answer [NAME]` asks one in place | Accepted |
+| D-087 | Subagents never block the main chat: `api.waitAgent` is removed; a finished background subagent's reply starts a main turn by itself (at an empty prompt; `agent.autoTurns`, default 10 in a row); `-p` runs until no background subagent is left; held questions never interrupt and `/answer [NAME]` asks one in place | Accepted; automatic turns run behind a live prompt since D-088 |
+| D-088 | The main prompt never blocks: on terminals that aren't dumb, main turns run on a worker while the prompt reads; output prints above it a line at a time; messages sent during a turn are queued and go next as one; Esc on the prompt stops the turn; the main agent's questions are held as notices (`question.waiting`) and `/answer main` asks them; commands that change the conversation wait for the turn; dumb terminals keep foreground turns | Accepted |
 
 ---
 
@@ -1468,6 +1469,28 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** User report and review of the blocked chat, 2026-11-25: "I don't want the main chat blocked"; "Start a main turn" when a subagent finishes; "why do we even have the `api.waitAgent`? What do you think if we remove it?" Recommended design accepted, specifying 054-subagents-dont-block. Changes D-065 (`waitAgent`, pull-only delivery, `-p` stopping subagents at once) and D-072 (`/answer`).
 
+**Later.** D-088 (2026-11-26) keeps the prompt live during main turns, so an automatic turn no longer closes it, and "a finish while the user types" no longer applies: the reply starts a turn behind the prompt whenever no turn runs.
+
+---
+
+## D-088 — A main prompt that never blocks
+
+**Decision.** On a terminal that isn't dumb, the main prompt reads at all times; main turns run in the background (spec 055).
+
+- **Turns on a worker.** A message starts a main turn on a `main-turn` thread, and the prompt keeps reading. Automatic turns (D-087) start there too whenever no turn runs, with the same limit.
+- **Output.** While a turn runs, output goes above the prompt through JLine's `printAbove`, a whole line at a time, so the line being typed is never broken. The status line's `turn` item says `working`.
+- **The queue.** A message sent during a turn is queued with a line that says so. When the turn ends, the queued messages go as one message, in order and separated by blank lines, before any automatic turn. A user command whose prompt runs as a turn is queued the same way.
+- **Esc.** Esc on the prompt stops the running turn (a lone Esc after a 150 ms wait, since Esc also starts Alt keys); the queue then goes. With no turn running it does nothing.
+- **Questions.** The main agent's questions during a background turn (approvals, network hosts, a proposed plan) are held. They show a notice and count as held on the status line, with `question.waiting` and `question.wait_ended` (`asked` or `stopped`) events. `/answer main`, or `/answer` with no name, asks one with the normal prompt; Esc denies it and stops the turn. A held question reads the terminal only while `/answer` has parked the prompt, so two readers never compete.
+- **Commands.** While a turn runs, `/compact`, `/diff`, `/undo`, `/rewind`, `/model NAME`, `/plan`, `/switch NAME` and `/follow` say they wait for the turn and do nothing; the others work. `/exit` and Ctrl-D stop the turn and quit.
+- **Dumb terminals** have no raw keys and no redraw, so their turns stay in the foreground, as before.
+
+**Why.** "When I'm on the main chat, I don't want the main chat to block, never" (user, 2026-11-26). After D-087 the prompt still closed for every main turn, automatic ones included, and keys typed then were lost.
+
+**Rejected.** Sending a typed message into the running turn (steering; harder to follow, later if wanted). Asking the main agent's questions on the prompt as soon as it is empty (still takes the prompt the user may be about to use). Streaming tokens above the prompt (fragile redraws across terminals). Keeping foreground turns behind a setting (the user asked for "never").
+
+**Source.** User request and answers, 2026-11-26: queue typed messages, notices with `/answer` for the main agent's questions, line-by-line output. Specifying 055-live-main-prompt. Changes D-087 (automatic turns behind the prompt) and the Esc watcher of US-2.5 for main turns.
+
 ---
 
 ## Questions and answers
@@ -1572,6 +1595,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q94 | How are evals run and scored? | Repository tasks with hidden checks in `evals/tasks/`, run by `scripts/eval.py` through headless JSON output; a check must fail first; CI runs recorded solutions; live scores per release | Shows whether releases get better or worse, without the binary starting check commands | D-085 |
 | Q95 | How are the web viewer and the TUI checked in real browsers and terminals? | `scripts/viewer-check.mjs` (Playwright: Chromium, Firefox, WebKit; Safari through safaridriver) and `scripts/tui-tmux-check.py` (tmux, several sizes), by hand after viewer or TUI changes and before releases, never in CI | The viewer's 403s slipped past tests that fetched files by hand; browsers in CI would cost minutes per run | D-086 |
 | Q96 | Should a turn wait for a subagent? | No: `api.waitAgent` is removed; a background subagent's reply starts a main turn (at most `agent.autoTurns` in a row, default 10); `-p` runs until none is left; `/answer` asks a held question in place | The main chat stayed blocked behind a wait while the subagent waited for the user, who couldn't type (user report, 2026-11-25) | D-087 |
+| Q97 | Should the main prompt close while the main agent works? | No: turns run behind a live prompt; output above it a line at a time; typed messages queue and go next; Esc stops the turn; the main agent's questions are held for `/answer main` | Keys typed during a turn were lost, and automatic turns closed the prompt without the user asking (user, 2026-11-26) | D-088 |
 
 ---
 

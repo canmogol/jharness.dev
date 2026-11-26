@@ -70,6 +70,8 @@ Record notable runs here: date, version, machine, result.
 | 2026-11-25 | 0.1.0-SNAPSHOT (spec 053) | Linux x86-64 | Browsers need their system libraries (`playwright install-deps`, sudo); the terminal check passes | Same resize finding as macOS |
 | 2026-11-25 | 0.1.0-SNAPSHOT (spec 054) | macOS 14.3 arm64 | Not run: the viewer didn't change | 120x40 passes; the resize finding is unchanged |
 | 2026-11-25 | 0.1.0-SNAPSHOT (spec 054) | Linux x86-64 | Not run: the viewer didn't change | Same as macOS |
+| 2026-11-26 | 0.1.0-SNAPSHOT (spec 055) | macOS 14.3 arm64 | Not run: the viewer didn't change | 120x40 passes; the resize finding is unchanged. Typing during a turn, the queue, Esc, `/answer main`, a waiting command and `/exit` during a turn pass in tmux |
+| 2026-11-26 | 0.1.0-SNAPSHOT (spec 055) | Linux x86-64 | Not run: the viewer didn't change | Same as macOS |
 
 Notes:
 

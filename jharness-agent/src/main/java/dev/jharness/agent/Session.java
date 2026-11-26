@@ -580,6 +580,11 @@ public final class Session implements AutoCloseable {
         subagents.onFinished(r);
     }
 
+    /** Publishes a host event in the main agent's current turn (spec 055: the TUI's held questions). */
+    public void publish(String type, com.fasterxml.jackson.databind.node.ObjectNode body) {
+        bus.publish(turns.get(), type, body);
+    }
+
     /** The background subagents holding a question for the user, oldest first. */
     public List<String> heldSubagents() {
         return subagents.held();

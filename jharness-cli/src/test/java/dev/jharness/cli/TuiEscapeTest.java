@@ -37,9 +37,14 @@ class TuiEscapeTest {
     final ByteArrayOutputStream screen = new ByteArrayOutputStream();
 
     private Terminal xterm(String input) throws Exception {
+        return xterm(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /** An xterm whose keys come from a stream, such as {@link Keys} (spec 055). */
+    private Terminal xterm(java.io.InputStream input) throws Exception {
         var raw = new org.jline.terminal.Attributes();
         raw.setInputFlag(org.jline.terminal.Attributes.InputFlag.ICRNL, false);
-        return new ExternalTerminal(null, "test", "xterm-256color", new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
+        return new ExternalTerminal(null, "test", "xterm-256color", input,
                 screen, StandardCharsets.UTF_8, Terminal.SignalHandler.SIG_DFL, false, raw, new org.jline.terminal.Size(200, 50));
     }
 
@@ -69,8 +74,12 @@ class TuiEscapeTest {
         for (boolean color : List.of(true, false)) {
             screen.reset();
             Path ws = Files.createDirectories(tmp.resolve("ws-" + color + "-\u001b[2J"));
-            Terminal t = color ? xterm("go\ry\r/events all\rgo again\r/exit\r") : dumb("go\ny\n/events all\ngo again\n/exit\n");
-            Tui tui = new Tui(t, null, java.util.Map.of());
+            // On a live xterm the question waits as a notice until /answer main (spec 055).
+            Tui[] h = new Tui[1];
+            Terminal t = color ? xterm(new Keys("go\r", Keys.held(() -> h[0]), "/answer main\r", Keys.pause(300), "y\r", Keys.settled(() -> h[0]),
+                    "/events all\r", "go again\r", Keys.settled(() -> h[0]), "/exit\r"))
+                    : dumb("go\ny\n/events all\ngo again\n/exit\n");
+            Tui tui = h[0] = new Tui(t, null, java.util.Map.of());
             List<com.fasterxml.jackson.databind.JsonNode> lines = List.of(
                     Json.object().put("thinking", "idea " + HOSTILE + "\n").put("reply", "Reply " + HOSTILE + "\n```js\napi.writeFile('a.txt', '" + JS + "')\n```"),
                     Json.object().put("reply", "Done " + HOSTILE),
@@ -87,11 +96,9 @@ class TuiEscapeTest {
             assertTrue(sc.contains("Done " + SHOWN), sc);
             assertTrue(sc.contains("+" + SHOWN), "the diff in the question: " + sc);
             assertTrue(sc.contains("ws-" + color + "-\\e[2J"), "the workspace name: " + sc);
-            if (!color) {
-                // On a raw terminal the Esc watcher reads input during the turn, so only the dumb run gets this far.
-                assertTrue(sc.contains("· model.completed"), "events shown inline: " + sc);
-                assertTrue(sc.contains("line 1: Error: " + SHOWN), "the step error: " + sc);
-            } else {
+            assertTrue(sc.contains("· model.completed"), "events shown inline: " + sc);
+            assertTrue(sc.contains("line 1: Error: " + SHOWN), "the step error: " + sc);
+            if (color) {
                 assertTrue(sc.contains("\u001b[36m▸ step 1"), "styling still works: " + sc);
             }
         }

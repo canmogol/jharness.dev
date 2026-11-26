@@ -43,10 +43,28 @@ class TuiTest {
 
     /** An xterm in raw mode, as JLine reads a real one: Enter is \r, Ctrl-J is \n. */
     private Terminal xterm(String input) throws Exception {
+        return xterm(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /** An xterm whose keys come from a stream, such as {@link Keys} (spec 055). */
+    private Terminal xterm(java.io.InputStream input) throws Exception {
         var raw = new org.jline.terminal.Attributes();
         raw.setInputFlag(org.jline.terminal.Attributes.InputFlag.ICRNL, false);
-        return new ExternalTerminal(null, "test", "xterm-256color", new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
+        return new ExternalTerminal(null, "test", "xterm-256color", input,
                 screen, StandardCharsets.UTF_8, Terminal.SignalHandler.SIG_DFL, false, raw, new org.jline.terminal.Size(200, 50));
+    }
+
+    /** A live TUI on an xterm: each message is sent after the previous turn ended, then /exit (spec 055). */
+    private Tui live(String... messages) throws Exception {
+        Tui[] h = new Tui[1];
+        java.util.List<Object> script = new java.util.ArrayList<>();
+        for (String m : messages) {
+            script.add(m);
+            script.add(Keys.settled(() -> h[0]));
+        }
+        script.add("/exit\r");
+        h[0] = new Tui(xterm(new Keys(script.toArray())), null, java.util.Map.of());
+        return h[0];
     }
 
     private String screen() {
@@ -297,7 +315,7 @@ class TuiTest {
         assertTrue(sc.contains("sub-1 asks:\n") && sc.contains("Allow writeFile: write c.txt (5 bytes)?"), sc);
         assertTrue(sc.contains("Back to the main chat."), sc);
         assertFalse(sc.contains("sub-1> "), "the prompt stays the main one: " + sc);
-        assertTrue(sc.contains("No subagent is waiting for an answer."), sc);
+        assertTrue(sc.contains("No question is waiting for an answer."), sc);
         assertEquals("saved", Files.readString(ws.resolve("c.txt")));
     }
 
@@ -465,8 +483,7 @@ class TuiTest {
     @Test
     void altEnterAndCtrlJAddLines() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws5"));
-        Terminal t = xterm("first\u001b\rsecond\nthird\r/exit\r");
-        Tui tui = new Tui(t, null, java.util.Map.of());
+        Tui tui = live("first\u001b\rsecond\nthird\r");
         Path log;
         try (Session session = replaySession(tmp.resolve("home5"), ws, "{}", tui, "Got **three** lines.")) {
             log = session.logPath();
@@ -482,8 +499,7 @@ class TuiTest {
     void shiftEnterAddsLinesAndTheKeyModeIsOnOnlyWhileThePromptReads() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws14"));
         // Shift+Enter (modifyOtherKeys), Shift+Enter (CSI u), Ctrl+Enter (modifyOtherKeys), then Enter.
-        Terminal t = xterm("a\u001b[27;2;13~b\u001b[13;2uc\u001b[27;5;13~d\r/exit\r");
-        Tui tui = new Tui(t, null, java.util.Map.of());
+        Tui tui = live("a\u001b[27;2;13~b\u001b[13;2uc\u001b[27;5;13~d\r");
         Path log;
         try (Session session = replaySession(tmp.resolve("home14"), ws, "{}", tui, "Four lines.")) {
             log = session.logPath();
@@ -666,7 +682,7 @@ class TuiTest {
     @Test
     void statusLineOnRealTerminalsOnly() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("shopws"));
-        Tui tui = new Tui(xterm("hello\r/exit\r"), null, java.util.Map.of());
+        Tui tui = live("hello\r");
         try (Session session = Session.open(tmp.resolve("home-st"), ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
                 (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi."), bus, turns))) {
             tui.run(session);
@@ -684,7 +700,7 @@ class TuiTest {
         assertFalse(screen().contains("· shopws"), "never on a dumb terminal: " + screen());
 
         screen.reset();
-        Tui off = new Tui(xterm("hello\r/exit\r"), null, java.util.Map.of());
+        Tui off = live("hello\r");
         try (Session session = Session.open(tmp.resolve("home-st3"), ws, Settings.parse("{\"ui\":{\"statusLine\":false}}", "t"),
                 Session.Access.prompter(off.prompter()), (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi."), bus, turns))) {
             off.run(session);
@@ -696,7 +712,7 @@ class TuiTest {
         Files.createDirectories(home.resolve(".jharness"));
         Path js = Files.writeString(home.resolve(".jharness/statusline.js"), "function status(s) { return 'custom turn ' + s.turn + ' in ' + s.workspace; }");
         Files.setPosixFilePermissions(js, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
-        Tui scripted = new Tui(xterm("hello\r/exit\r"), null, java.util.Map.of());
+        Tui scripted = live("hello\r");
         try (Session session = Session.open(home, ws, Settings.defaults(), Session.Access.prompter(scripted.prompter()),
                 (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi."), bus, turns))) {
             scripted.run(session);
@@ -712,7 +728,7 @@ class TuiTest {
         Files.createDirectories(home.resolve(".jharness"));
         Path js = Files.writeString(home.resolve(".jharness/statusline.js"), "function status(s) { return {not: 'a string'}; }");
         Files.setPosixFilePermissions(js, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
-        Tui tui = new Tui(xterm("hello\r/exit\r"), null, java.util.Map.of());
+        Tui tui = live("hello\r");
         Path log;
         try (Session session = Session.open(home, ws, Settings.defaults(), Session.Access.prompter(tui.prompter()),
                 (bus, turns) -> ReplayProvider.ofReplies(List.of("Hi."), bus, turns))) {
