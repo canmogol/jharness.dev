@@ -51,6 +51,33 @@ class UndoTest {
         }
     }
 
+    /** Spec 057: opening a session removes this project's checkpoints older than files.checkpointDays, with an event. */
+    @Test
+    void oldCheckpointsArePrunedAtStart() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws"));
+        Path home = tmp.resolve("home");
+        Path old = Checkpoints.rootFor(home, ws.toRealPath(), "s-old");
+        Files.createDirectories(old.resolve("1/blobs"));
+        Files.writeString(old.resolve("1/blobs/1"), "saved");
+        var t = java.nio.file.attribute.FileTime.from(java.time.Instant.now().minus(java.time.Duration.ofDays(8)));
+        try (var walk = Files.walk(old)) {
+            for (Path x : walk.toList()) {
+                Files.setLastModifiedTime(x, t);
+            }
+        }
+        Path log;
+        try (Session s = Session.open(home, ws, Settings.parse("{\"files\": {\"checkpointDays\": 7}}", "t"), Session.Access.gate(PermissionGate.allowAll()),
+                (bus, turns) -> ReplayProvider.ofReplies(List.of("hi"), bus, turns))) {
+            log = s.logPath();
+        }
+        assertFalse(Files.exists(old));
+        var ev = dev.jharness.events.SessionLog.read(log).stream().filter(e -> e.get("type").asText().equals("checkpoints.pruned")).toList();
+        assertEquals(1, ev.size());
+        assertEquals(1, ev.getFirst().get("sessions").asInt());
+        assertEquals(5, ev.getFirst().get("bytes").asInt());
+        assertEquals(7, ev.getFirst().get("days").asInt());
+    }
+
     @Test
     void userEditBlocksUndo() throws Exception {
         Path ws = Files.createDirectories(tmp.resolve("ws"));
