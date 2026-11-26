@@ -1,6 +1,28 @@
 # Changelog
 
-<!-- last-commit: 426c8d46a91766474b3873f3d946472dd577f680 -->
+<!-- last-commit: 778ce684569546a5574a1cba879897c09dd25a6b -->
+
+## 2026-11-26 · 064 /clear
+
+- `/clear` empties the conversation so the model starts fresh, and leaves your files as they are, unlike `/rewind 0`. The session, its log, plan mode, subagents and usage go on; the agent's todo list goes with the conversation.
+- `/undo` and `/rewind` stop at the clear, as after `/compact`, and `--resume` keeps that limit. While a turn runs, `/clear` waits. New event: `conversation.cleared`.
+- Decision: /clear (D-097, Q106; note on D-088).
+
+## 2026-11-26 · 063 Capabilities overview
+
+- The README opens with "What it does": what JHarness can do, and one line for each terminal command and command-line option.
+- The agent gets the same text in its system prompt (about 1,000 tokens), so it can point you to the right command.
+- A test fails when a command has no line or the README differs; `scripts/sync-guide.py` copies the guide into the README.
+- Decision: capabilities overview (D-096, Q105).
+
+## 2026-11-26 · 062 Releases
+
+- A pushed tag `vX.Y.Z` that matches the pom's version builds linux-amd64, linux-aarch64 and macos-aarch64 and publishes a GitHub release. It carries the archives, `SHA256SUMS`, `install.sh` and build attestations (`gh attestation verify FILE --repo canmogol/jharness.dev`), and commits the Homebrew formula to `canmogol/homebrew-jharness`.
+- Install with `curl -fsSL https://raw.githubusercontent.com/canmogol/jharness.dev/master/scripts/install.sh | sh`. It checks the SHA-256 and installs to `~/.local/bin` without sudo. Homebrew: `brew install canmogol/jharness/jharness`.
+- The version lives only in the poms; `jharness --version` and the `User-Agent` read it. `scripts/set-version.sh` changes it, and `docs/releasing.md` describes a release.
+- Fix: macOS release builds use a UTF-8 locale, so non-ASCII text prints correctly.
+- v0.0.1, a preview, is the first release. 0.1.0 waits for the v0.1 gate.
+- Decision: releases (D-095, Q104).
 
 ## 2026-11-26 · 061 Ranged and binary reads
 
