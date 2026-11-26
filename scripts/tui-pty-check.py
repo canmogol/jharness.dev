@@ -5,8 +5,9 @@ Usage: tui-pty-check.py <jharness-binary>
 
 Sets up a temporary home and workspace, then types:
   0. "n" Enter                   -> don't trust the new folder (the trust question comes first)
-  1. "change a.txt" Enter        -> the recorded reply writes a.txt; its approval waits as a notice (spec 055)
-  2. "/answer main" Enter, "y"   -> the question is asked; approve once; the step runs and the final reply shows
+  1. "change a.txt" Enter        -> the recorded reply writes a.txt; on the main chat its approval takes the prompt at once
+                                    (spec 067), with no notice and no /answer
+  2. "y"                         -> approve once; the step runs and the final reply shows
   3. "/help" Enter               -> the command list
   4. "/undo" Enter               -> a.txt is back to "old"
   5. "spin" Enter, then Esc      -> the recorded reply loops forever; Esc stops it
@@ -82,7 +83,7 @@ def main():
     # A real terminal has a size; without one JLine shortens every prompt.
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
     transcript = read_available(fd, 8.0)
-    steps = [(b"n\r", 2.0), (b"change a.txt\r", 4.0), (b"/answer main\r", 1.5), (b"y\r", 4.0), (b"/help\r", 1.0), (b"/undo\r", 1.5),
+    steps = [(b"n\r", 2.0), (b"change a.txt\r", 4.0), (b"y\r", 4.0), (b"/help\r", 1.0), (b"/undo\r", 1.5),
              (b"spin\r", 2.5), (b"\x1b", 2.5),
              (b"bg\r", 5.0), (b"/follow\r", 1.5), (b"\x1b", 1.5), (b"/stop all\r", 4.0),
              (b"/switch sub-1\r", 1.0), (b"hi\r", 2.0), (b"/switch main\r", 1.0), (b"/\t", 1.5), (b"\x15", 0.5), (b"\x04", 3.0)]
@@ -108,7 +109,7 @@ def main():
     checks = {
         "trust": "Do you trust " in text and "loosen JHarness rules" in text,
         "banner": "/help for commands" in text,
-        "held": "the main agent is waiting for you: write a.txt" in text,
+        "at-once": "The main agent asks:" in text and "the main agent is waiting for you" not in text,
         "asked": "Allow writeFile: write a.txt (3 bytes)?" in text,
         "prompt": "> " in text and "[y] once" in text,
         "step": "step 1: ok" in text,

@@ -17,7 +17,7 @@ public record UiSettings(String events, String thinking, List<String> statusLine
     public static final List<String> EVENT_LEVELS = List.of("none", "steps", "all");
     public static final List<String> THINKING = List.of("hide", "show");
     /** The status line's built-in items, in their default order. */
-    public static final List<String> STATUS_ITEMS = List.of("model", "context", "mode", "agents", "cache", "cost", "turn", "workspace");
+    public static final List<String> STATUS_ITEMS = List.of("model", "context", "agent", "mode", "agents", "cache", "cost", "turn", "workspace");
 
     public UiSettings {
         statusLine = List.copyOf(statusLine);

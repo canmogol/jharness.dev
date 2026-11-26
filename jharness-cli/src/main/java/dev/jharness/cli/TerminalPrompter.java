@@ -158,15 +158,33 @@ final class TerminalPrompter implements Prompter {
         }
     }
 
+    /** Spec 067: the output under the TUI, which holds other threads' text while a question is shown; null for none. */
+    volatile AboveWriter output;
+
     /** One question at a time: a turn's own questions and the proxy's can come from different threads. */
     private synchronized Answer askNow(Operation op) {
         EscWatcher w = watcher;
         if (w != null) {
             w.pause();
         }
+        AboveWriter o = output;
+        if (o != null) {
+            o.hold();
+        }
+        // Spec 067: y, a and n are answers, not messages, so they stay out of the prompt's history.
+        Object history = reader.getVariable(LineReader.DISABLE_HISTORY);
+        reader.setVariable(LineReader.DISABLE_HISTORY, true);
         try {
             return question(op);
         } finally {
+            reader.setVariable(LineReader.DISABLE_HISTORY, history == null ? false : history);
+            if (o != null) {
+                try {
+                    o.release();
+                } catch (java.io.IOException e) {
+                    // The terminal is gone.
+                }
+            }
             if (w != null) {
                 w.resume();
             }

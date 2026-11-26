@@ -110,6 +110,7 @@ Last updated: 2026-11-26
 | D-097 | `/clear` empties the main agent's conversation and todo list; files, the session and log, plan mode, subagents and usage stay; undo and rewind stop at the clear; no confirmation; it waits during a turn | Accepted |
 | D-098 | User docs: one user guide page (`docs/user-guide.md`) with a settings reference; `docs/api.md` generated from `api.d.ts` and checked by a test; `docs/extensions.md` quotes example files from `examples/` that tests load; the README links to them | Accepted |
 | D-099 | Compaction asks for the larger of the profile's `summaryTokens` (default 4,096) and `maxTokens`, and retries once with twice the room when a thinking model runs out empty; an `openai-compatible` profile without `contextWindow` asks the server (vLLM, llama.cpp, LM Studio, Ollama) at start, and a smaller server value wins over a set one | Accepted |
+| D-100 | TUI polish: a dim line above the input; an `agent` status item; styles closed on every line; other output held while a question is shown; answers kept out of the history; the main agent's questions take the prompt at once while it talks to the main agent (changes D-088) | Accepted |
 
 ---
 
@@ -1502,6 +1503,8 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 **Source.** User request and answers, 2026-11-26: queue typed messages, notices with `/answer` for the main agent's questions, line-by-line output. Specifying 055-live-main-prompt. Changes D-087 (automatic turns behind the prompt) and the Esc watcher of US-2.5 for main turns.
 
+**Note (D-100, spec 067).** While the prompt talks to the main agent, its questions no longer wait for `/answer main`: they take the prompt at once and the text being typed comes back. The notice and `/answer main` remain for when the prompt talks to a subagent.
+
 ---
 
 ## D-089 — File and folder deletes
@@ -1727,6 +1730,24 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-100 — TUI polish: the line above the input, the agent item, questions at once
+
+**Decision.** Five changes to the terminal UI (spec 067).
+
+- **Line above the input.** A dim `─` line, one column short of the width, sits above the prompt on live terminals and follows a resize.
+- **Agent item.** The status line's `agent` item, on by default after the context, names the agent the prompt talks to: `main` or a subagent after `/switch`.
+- **Questions at once.** While the prompt talks to the main agent, the main agent's questions take the prompt at once, as `/answer main` would. The text being typed comes back in the next prompt. While the prompt talks to a subagent, the main agent's questions wait with a notice, as before. Background subagents' questions always wait for `/answer`.
+- **Readable questions.** Other threads' output waits while a question is shown and prints after the answer. Answers stay out of the prompt's history.
+- **Styles per line.** Styled text is closed on every line, so output cut into lines above the prompt never colors the input.
+
+**Why.** The user's report and requests with screenshots (2026-11-26): typing turned gray and italic while thinking streamed, output ran through a subagent's question, `y` came back with the up arrow, and they wanted the line, the agent's name and questions at once.
+
+**Rejected.** Keeping `/answer main` for the main chat (the user asked for questions at once). Blocking other threads while a question is shown (risks deadlock; their text is held instead). A setting to hide the line (not asked for).
+
+**Source.** User requests, 2026-11-26; defaults accepted while away. Specifying 067-tui-polish. Changes D-088 (main questions on the main chat).
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1841,6 +1862,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q106 | How does the user start the model fresh without losing files or the session? | `/clear`: the conversation and todo list go; files, session, log, plan mode and subagents stay; undo stops at the clear | `/rewind 0` restores files; a new session loses the log (user, 2026-11-26) | D-097 |
 | Q107 | How do users and extension authors learn JHarness? | One user guide page, an `api` reference generated from `api.d.ts`, and an extension guide built on tested examples | The README had grown into an unordered manual; the roadmap needs a guide and references for v0.1 | D-098 |
 | Q108 | Why does compaction fail with a local thinking model, and how does JHarness learn a local model's context? | The summary asks for the larger of `summaryTokens` and `maxTokens` and retries once; the server is asked for the loaded context, and a smaller one wins | "the summary was empty" with qwen3.6 in LM Studio, and `of 33K` for a 144K model (user, 2026-11-26) | D-099 |
+| Q109 | Should the main agent's question wait for `/answer` while the user is on the main chat? | No: it takes the prompt at once and the typing comes back; it waits only while the prompt talks to a subagent | "if that agent asks me a question, just show the question right away" (user, 2026-11-26) | D-100 |
 
 ---
 

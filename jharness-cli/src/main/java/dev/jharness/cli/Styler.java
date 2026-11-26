@@ -139,8 +139,32 @@ final class Styler {
         return sb.toString();
     }
 
+    /**
+     * Styles each line on its own (spec 067): output above the prompt is cut at newlines, and a style left open across a
+     * cut would color the prompt and what the user types.
+     */
     private String paint(String code, String text) {
         String t = TerminalSafe.text(text);
-        return color ? code + t + RESET : t;
+        if (!color) {
+            return t;
+        }
+        if (t.indexOf('\n') < 0) {
+            return t.isEmpty() ? t : code + t + RESET;
+        }
+        StringBuilder b = new StringBuilder(t.length() + 16);
+        int from = 0;
+        while (true) {
+            int nl = t.indexOf('\n', from);
+            String line = nl < 0 ? t.substring(from) : t.substring(from, nl);
+            if (!line.isEmpty()) {
+                b.append(code).append(line).append(RESET);
+            }
+            if (nl < 0) {
+                break;
+            }
+            b.append('\n');
+            from = nl + 1;
+        }
+        return b.toString();
     }
 }

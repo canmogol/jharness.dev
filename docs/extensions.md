@@ -239,7 +239,7 @@ function status(s) {
 
 - `profile`, `provider` and `model`;
 - `context`: `tokens`, `window`, `percent`, `estimated` and `compactAt`;
-- `mode` and `plan`;
+- `mode`, `plan`, and `agent`, the agent the prompt talks to (`main` or a subagent's name);
 - `agents`: `running`, `held` and `names`;
 - `cache`: `readTokens`, `writeTokens`, `inputTokens` and `readTotal`;
 - `costUsd` (or null), `turn`, `busy` and `workspace`;

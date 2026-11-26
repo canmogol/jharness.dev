@@ -74,4 +74,19 @@ class StylerTest {
         return TerminalBuilder.builder().system(false).type(type).dumb(type.equals("dumb"))
                 .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()).build();
     }
+
+    /** Spec 067: each line is styled on its own, so a line cut off above the prompt never leaves a style open. */
+    @Test
+    void everyLineClosesItsStyle() {
+        Styler s = new Styler(true);
+        String t = s.thinking("For each agent:\nDo not\n\nmore");
+        for (String line : t.split("\n", -1)) {
+            if (!line.isEmpty()) {
+                assertTrue(line.endsWith("\u001b[0m"), "closed: " + line.replace("\u001b", "<ESC>"));
+                assertTrue(line.startsWith("\u001b["), "opened: " + line.replace("\u001b", "<ESC>"));
+            }
+        }
+        assertEquals(4, t.split("\n", -1).length, "the newlines stay");
+        assertEquals("", s.thinking(""));
+    }
 }

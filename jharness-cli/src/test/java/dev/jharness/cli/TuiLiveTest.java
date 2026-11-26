@@ -112,48 +112,45 @@ class TuiLiveTest {
         assertEquals(List.of("go", "instead do this"), turns.stream().map(t -> t.get("prompt").asText()).toList());
     }
 
-    /** AC-04: the main agent's question is a notice; /answer main asks it; the turn goes on. */
+    /**
+     * Spec 067 (changes 055 AC-04): on the main chat, the main agent's question takes the prompt at once; what was typed
+     * comes back afterwards, and the answer stays out of the history.
+     */
     @Test
-    void answerMainAsksAHeldQuestion() throws Exception {
-        live("write it\r", Keys.held(() -> tui[0]), "/help\r", "/answer main\r", Keys.pause(300), "y\r",
-                shows("Written."), settled(), "/exit\r");
+    void aMainQuestionShowsAtOnceAndTheTypingComesBack() throws Exception {
+        live("write it\r", running(), "draft", shows("Allow writeFile"), Keys.pause(300), "y\r", shows("Written."), settled(),
+                " two\r", shows("Second."), settled(), "/exit\r");
         Path ws;
         Path log;
-        try (Session s = open("answer", "{}", "```js\napi.writeFile('a.txt', 'new')\n```", "Written.")) {
+        try (Session s = open("answer", "{}", "```js\nconst t = Date.now(); while (Date.now() - t < 800) {}\napi.writeFile('a.txt', 'new')\n```",
+                "Written.", "Second.")) {
             ws = s.workspace().root();
             log = s.logPath();
             tui[0].run(s);
         }
         String sc = screen();
-        assertTrue(sc.contains("▸ the main agent is waiting for you: write a.txt (3 bytes) (/answer main to answer; Esc stops the turn)"), sc);
-        assertTrue(sc.contains("Commands:"), "other commands work meanwhile: " + sc);
+        assertFalse(sc.contains("/answer main to answer"), "no notice on the main chat: " + sc);
         assertTrue(sc.contains("The main agent asks:"), sc);
-        assertTrue(sc.contains("Allow writeFile: write a.txt (3 bytes)?"), sc);
-        assertTrue(sc.indexOf("Allow writeFile") > sc.indexOf("/answer main"), "asked only after /answer: " + sc);
         assertEquals("new", Files.readString(ws.resolve("a.txt")));
-        assertTrue(sc.contains("Back to the main chat."), sc);
+        var turns = started(log);
+        assertEquals(List.of("write it", "draft two"), turns.stream().map(t -> t.get("prompt").asText()).toList(), "the typing came back");
+        assertFalse(tui[0].historyLines().contains("y"), "an answer isn't a message: " + tui[0].historyLines());
+        assertTrue(tui[0].historyLines().contains("write it"), tui[0].historyLines().toString());
         var events = SessionLog.read(log);
-        assertTrue(events.stream().anyMatch(e -> e.get("type").asText().equals("question.waiting") && e.get("api").asText().equals("writeFile")));
         assertTrue(events.stream().anyMatch(e -> e.get("type").asText().equals("question.wait_ended") && e.get("outcome").asText().equals("asked")));
     }
 
-    /** AC-04: Esc denies a held question and stops the turn. */
+    /** Spec 067: n at the question denies it; the turn goes on without the change. */
     @Test
-    void escDeniesAHeldQuestion() throws Exception {
-        live("write it\r", Keys.held(() -> tui[0]), "\u001b", settled(), "/exit\r");
+    void noDeniesTheQuestion() throws Exception {
+        live("write it\r", shows("Allow writeFile"), Keys.pause(300), "n\r", shows("Not written."), settled(), "/exit\r");
         Path ws;
-        Path log;
-        try (Session s = open("deny", "{}", "```js\napi.writeFile('a.txt', 'new')\n```", "Not written.")) {
+        try (Session s = open("deny", "{}", "```js\ntry { api.writeFile('a.txt', 'new') } catch (e) { 'denied' }\n```", "Not written.")) {
             ws = s.workspace().root();
-            log = s.logPath();
             tui[0].run(s);
         }
-        String sc = screen();
-        assertTrue(sc.contains("▸ that question was denied"), sc);
         assertFalse(Files.exists(ws.resolve("a.txt")));
-        assertFalse(sc.contains("Allow writeFile"), "never asked: " + sc);
-        assertTrue(SessionLog.read(log).stream().anyMatch(e -> e.get("type").asText().equals("question.wait_ended")
-                && e.get("outcome").asText().equals("stopped")));
+        assertFalse(tui[0].historyLines().contains("n"), tui[0].historyLines().toString());
     }
 
     /** AC-05: commands that change the conversation wait; others work; /exit stops the turn and quits. */
