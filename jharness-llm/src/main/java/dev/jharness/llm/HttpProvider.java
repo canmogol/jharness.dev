@@ -52,6 +52,11 @@ abstract class HttpProvider implements ModelProvider {
     }
 
     @Override
+    public int summaryTokens() {
+        return profile.summaryTokens();
+    }
+
+    @Override
     public void cancel() {
         cancelled = true;
         synchronized (waitLock) {

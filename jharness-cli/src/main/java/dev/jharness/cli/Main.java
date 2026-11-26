@@ -345,6 +345,9 @@ public final class Main implements Callable<Integer> {
         }
         try (Session s = open(h, ws, settings, Session.Access.prompter(Prompter.none()).trusted(trusted).agent(agentDef).projectTools(changed.isEmpty()).resume(from))) {
             s.toolUpdates().lines().forEach(l -> err.println("jharness: " + l));
+            if (s.contextNotice() != null && !s.contextNotice().startsWith("Context window:")) {
+                err.println("jharness: " + s.contextNotice());
+            }
             if (!changed.isEmpty()) {
                 projectIgnored(s, changed, "headless runs can't ask about changed project tools");
             }

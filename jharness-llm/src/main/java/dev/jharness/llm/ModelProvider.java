@@ -27,6 +27,19 @@ public interface ModelProvider {
         return 0;
     }
 
+    /** The summary a compaction asks for, in tokens (spec 066); a thinking model's reasoning needs room on top. */
+    default int summaryTokens() {
+        return dev.jharness.config.ModelProfile.DEFAULT_SUMMARY_TOKENS;
+    }
+
+    /**
+     * Spec 066: asks the server once how much context it loaded the model with, publishes {@code model.context_window},
+     * and returns a line for the user, or null when there is nothing to say. Providers that know their window do nothing.
+     */
+    default String discoverContext() {
+        return null;
+    }
+
     /** Stops a running {@link #stream} from another thread; it then throws {@link ModelException}. */
     default void cancel() {
     }
