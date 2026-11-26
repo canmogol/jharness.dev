@@ -403,6 +403,58 @@ class TuiTest {
         assertTrue(last.contains("sub-2 (done after 0 steps): second job done") && last.endsWith("thanks"), "it came with the message: " + last);
     }
 
+    /**
+     * Spec 058 AC-01, AC-02: the prompt starts on the row above the status line. The terminal says the cursor is on row 5
+     * of 50, so it moves down 44 rows to row 49; keys typed before that answer still reach the prompt.
+     */
+    @Test
+    void thePromptStartsAtTheBottom() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws58"));
+        Tui tui = new Tui(xterm("he\u001b[5;1Rllo\r"), null, java.util.Map.of());
+        Path log;
+        try (Session session = replaySession(tmp.resolve("home58"), ws, "{}", tui, "Hi.")) {
+            log = session.logPath();
+            tui.run(session);
+        }
+        String sc = screen();
+        assertTrue(sc.contains("\u001b[6n"), "asked where the cursor is: " + sc.replace("\u001b", "<ESC>"));
+        String after = sc.substring(sc.indexOf("\u001b[6n") + 4).replace("\r", "");
+        int n = 0;
+        while (n < after.length() && after.charAt(n) == '\n') {
+            n++;
+        }
+        assertEquals(44, n, "moved to row 49: " + sc.replace("\u001b", "<ESC>"));
+        var started = dev.jharness.events.SessionLog.read(log).stream().filter(e -> e.get("type").asText().equals("turn.started")).toList();
+        assertEquals("hello", started.getFirst().get("prompt").asText(), "keys around the answer were kept");
+    }
+
+    /** Spec 058 AC-03: a terminal that never answers holds the start up for at most a moment, and the prompt stays put. */
+    @Test
+    void aTerminalThatDoesntAnswerIsntWaitedFor() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws58b"));
+        var keys = new java.io.PipedOutputStream();
+        var raw = new org.jline.terminal.Attributes();
+        raw.setInputFlag(org.jline.terminal.Attributes.InputFlag.ICRNL, false);
+        Terminal t = new ExternalTerminal(null, "test", "xterm-256color", new java.io.PipedInputStream(keys), screen, StandardCharsets.UTF_8,
+                Terminal.SignalHandler.SIG_DFL, false, raw, new org.jline.terminal.Size(200, 50));
+        Tui tui = new Tui(t, null, java.util.Map.of());
+        try (Session session = replaySession(tmp.resolve("home58b"), ws, "{}", tui, "unused")) {
+            Thread run = new Thread(() -> tui.run(session));
+            long start = System.nanoTime();
+            run.start();
+            long end = System.currentTimeMillis() + 10_000;
+            while (!screen().contains("> ") && System.currentTimeMillis() < end) {
+                Thread.sleep(10);
+            }
+            assertTrue(System.nanoTime() - start < 3_000_000_000L, "the prompt came without an answer");
+            keys.write("/exit\r".getBytes(StandardCharsets.UTF_8));
+            keys.flush();
+            run.join(10_000);
+            assertFalse(run.isAlive());
+        }
+        assertFalse(screen().contains("\r\n\n\n"), "no move without an answer");
+    }
+
     /** Spec 056: a folder delete asks in accept-edits mode, then the TUI says what went. */
     @Test
     void aFolderDeleteAsksAndIsShown() throws Exception {
