@@ -50,7 +50,7 @@ import dev.jharness.security.Operation;
  */
 public final class HttpOperations {
 
-    public static final String USER_AGENT = "JHarness/0.1.0-SNAPSHOT";
+    public static final String USER_AGENT = "JHarness/" + dev.jharness.events.Version.CURRENT;
     static final int MAX_URL = 8192;
     static final int MAX_BODY_BYTES = 1 << 20;
     static final int MAX_HEADERS = 50;

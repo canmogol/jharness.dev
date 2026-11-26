@@ -48,7 +48,7 @@ class MainTest {
     @Test
     void versionAndHelp() {
         assertEquals(0, run("--version"));
-        assertTrue(out.toString().contains("jharness 0.1.0"));
+        assertTrue(out.toString().contains("jharness " + dev.jharness.events.Version.CURRENT), out.toString());
         assertEquals(0, run("--help"));
         assertTrue(out.toString().contains("--model"));
         assertFalse(out.toString().contains("--replay"), "test options are hidden");

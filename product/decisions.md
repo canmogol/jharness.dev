@@ -105,6 +105,7 @@ Last updated: 2026-11-26
 | D-092 | Go tool: shipped `go.json` (build, test, vet, mod-tidy, mod-download, version) and `gofmt.json` (check); proxy through `env`; `GOPROXY=https://proxy.golang.org` with no `direct`, `GOVCS=*:off`, `-buildvcs=false`, `GOTOOLCHAIN=local`, `GOENV=off`; caches under `~/go/pkg` and `~/.cache/go-build`; `~/` env values are home folders; Go hosts in `examples/network.rules`, not shipped | Accepted |
 | D-093 | Tool update notices and write hints: at the start, shipped tools the user lacks or whose file differs are named once per shipped version (`~/.jharness/tools-notified.json`, `tools.updates`); a failed tool run that reads like a refused write gets a `hint` with the tool's writable folders | Accepted |
 | D-094 | Ranged and binary reads: `api.readFile(path, {fromLine, lines})` or `{offset, length}` for parts of text files of any size; `api.readBytes(path, {offset, length, encoding})` for any file as base64, hex or a charset, with `size`, `nextOffset` and `eof`; at most 1 MB per call; strict decoding; all charsets in the native binary | Accepted |
+| D-095 | Releases: the pom is the one source of the version (a filtered resource); a tag `vX.Y.Z` that matches it builds all targets and publishes at once, with `SHA256SUMS`, GitHub build attestations and `install.sh`; the workflow commits the formula to the tap `canmogol/homebrew-jharness`; `install.sh` checks SHA-256 and installs to `~/.local/bin` | Accepted |
 
 ---
 
@@ -1621,6 +1622,32 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-095 — Releases
+
+**Decision.** A tag publishes a release (spec 062).
+
+- **Version.** The poms hold the version, and nothing else does. Maven writes it into `version.properties`, from which `jharness --version` and the `User-Agent` read it. `scripts/set-version.sh` sets it in every module. A release is a PR that sets `X.Y.Z` and adds the notes in `docs/releases/vX.Y.Z.md`; the maintainer then pushes the tag `vX.Y.Z`. The workflow refuses a tag that doesn't match the pom.
+- **Workflow.**
+  1. `release.yml` builds the native binary on linux-amd64, linux-aarch64 and macos-aarch64, with a UTF-8 locale, and smoke-checks each.
+  2. It packs `jharness-TARGET.tar.gz` and writes `SHA256SUMS`.
+  3. It attests every file with GitHub build provenance (`gh attestation verify`).
+  4. It publishes the release at once, with no draft step.
+  5. It commits `Formula/jharness.rb` to `canmogol/homebrew-jharness` with a fine-grained token (`HOMEBREW_TAP_TOKEN`). Without the token it warns and goes on.
+- **Install.** `scripts/install.sh` (also attached to each release):
+  - picks the target, a Rosetta shell counting as Apple silicon;
+  - downloads over HTTPS only and checks the SHA-256, installing nothing on a mismatch;
+  - installs to `~/.local/bin` without sudo, in one move.
+
+  `brew install canmogol/jharness/jharness` works through the tap. File names carry no version, so `releases/latest/download/` always gives the newest.
+
+**Why.** The mission asks for one-command installs on macOS and Linux, and the roadmap for releases with checksums, a Homebrew tap and an install script. Attestations prove where each file came from without a key to keep; the signing key for `jharness update` comes with that item.
+
+**Rejected.** The tag setting the version (the source wouldn't say its version). A draft release to review (the user chose publish at once). The formula as a release file to copy by hand (one manual step per release). A signing key now (decided with `jharness update`).
+
+**Source.** User answers, 2026-11-26: the pom is the source and the tag must match; checksums and attestations; the workflow commits to the tap; publish at once. Specifying 062-releases.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1730,6 +1757,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q101 | Does each new build tool need JHarness code changes? | No: a tool is a JSON definition over typed fields with a built-in proxy method. Go needed one general change, `~/` home paths in `env` values; Rust and similar tools should need only a file | The user asked before adding Go (2026-11-26) | D-092 |
 | Q102 | How does a user learn that a newer JHarness ships new or changed tools? | At the start, once per shipped version, with the `jharness tools reset NAME` that takes it; and a failed run's `hint` names where the tool may write | An old `go.json` stayed after an update and the model couldn't tell why Go failed (user, 2026-11-26) | D-093 |
 | Q103 | How does the agent read files over 1 MB, in other charsets, or binary? | `api.readFile(path, {fromLine, lines})` or `{offset, length}`; `api.readBytes` as base64, hex or a charset, with `nextOffset`; 1 MB per call | A local model couldn't read a 12 MB file (user, 2026-11-26) | D-094 |
+| Q104 | How is a release made and installed? | A PR sets the pom's version; a matching tag builds all targets and publishes with `SHA256SUMS`, attestations and `install.sh`; the formula goes to the tap; `install.sh` checks SHA-256 | v0.1 needs one-command installs on macOS and Linux | D-095 |
 
 ---
 
