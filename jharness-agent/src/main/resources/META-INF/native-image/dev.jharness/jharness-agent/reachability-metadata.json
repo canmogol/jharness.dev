@@ -1,6 +1,7 @@
 {
   "resources": [
     { "glob": "dev/jharness/agent/system-prompt.md" },
-    { "glob": "dev/jharness/agent/examples.md" }
+    { "glob": "dev/jharness/agent/examples.md" },
+    { "glob": "dev/jharness/agent/guide.md" }
   ]
 }

@@ -40,6 +40,7 @@ public final class SystemPrompt {
         return resource("system-prompt.md")
                 .replace("{{API}}", AgentIsolate.apiDeclaration().strip())
                 .replace("{{EXAMPLES}}", resource("examples.md").strip())
+                .replace("{{GUIDE}}", guide())
                 .replace("{{CONTEXT}}", contextJson == null ? "{}" : contextJson)
                 + memory + agent(agent);
     }
@@ -172,5 +173,10 @@ public final class SystemPrompt {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** JHarness's capabilities and commands (spec 063), the same text as the README's "What it does" section. */
+    public static String guide() {
+        return resource("guide.md").strip();
     }
 }

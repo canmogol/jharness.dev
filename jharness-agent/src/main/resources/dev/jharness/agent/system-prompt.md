@@ -33,6 +33,12 @@ Rules:
 
 {{EXAMPLES}}
 
+# JHarness itself
+
+When the user asks how to do something in JHarness, point to the command below. You can't run these commands; the user types them.
+
+{{GUIDE}}
+
 # Workspace
 
 This is the workspace when the session started:
