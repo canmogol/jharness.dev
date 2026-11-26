@@ -167,6 +167,69 @@ class BuildOperationsTest {
         assertFalse(ops().args("maven", req("{\"op\":\"test\"}"), Path.of("/s.xml")).toString().contains("s3cr3t"));
     }
 
+    private BuildOperations goOps(boolean offline) {
+        return new BuildOperations(runner, ws, Timeouts.defaults(), true, ToolDefinitions.defaults(),
+                Map.of("go", new Executable("go", Path.of("/opt/go/bin/go")), "gofmt", new Executable("gofmt", Path.of("/opt/go/bin/gofmt"))),
+                home, null, offline);
+    }
+
+    /** Spec 059 AC-01: Go's operations as argv; values that start with "-" (or leave the module) are refused. */
+    @Test
+    void goOperationsAndTheirArguments() throws Exception {
+        BuildOperations g = goOps(false);
+        assertEquals(List.of("build", "./..."), g.args("go", req("{\"op\":\"build\"}")));
+        assertEquals(List.of("test", "./..."), g.args("go", req("{\"op\":\"test\"}")));
+        assertEquals(List.of("test", "-run", "^TestParse$", "./internal/store"),
+                g.args("go", req("{\"op\":\"test\",\"run\":\"^TestParse$\",\"packages\":\"./internal/store\"}")));
+        assertEquals(List.of("test", "-run", "TestStore/empty", "example.com/m/api/..."),
+                g.args("go", req("{\"op\":\"test\",\"run\":\"TestStore/empty\",\"packages\":\"example.com/m/api/...\"}")));
+        assertEquals(List.of("vet", "."), g.args("go", req("{\"op\":\"vet\",\"packages\":\".\"}")));
+        assertEquals(List.of("mod", "tidy"), g.args("go", req("{\"op\":\"mod-tidy\"}")));
+        assertEquals(List.of("mod", "download"), g.args("go", req("{\"op\":\"mod-download\"}")));
+        assertEquals(List.of("version"), g.args("go", req("{\"op\":\"version\"}")));
+        for (String bad : List.of("-exec=sh", "-toolexec=/tmp/x", "-ldflags=-X", "--", "../other/...", "./../x", "/abs/path", "a b", "./...;x")) {
+            assertThrows(OperationException.class, () -> g.args("go", req("{\"op\":\"build\",\"packages\":" + Json.MAPPER.writeValueAsString(bad) + "}")),
+                    "packages " + bad);
+        }
+        for (String bad : List.of("-v", "-exec=sh", "-toolexec", "-", "a b")) {
+            assertThrows(OperationException.class, () -> g.args("go", req("{\"op\":\"test\",\"run\":" + Json.MAPPER.writeValueAsString(bad) + "}")),
+                    "run " + bad);
+        }
+        assertThrows(OperationException.class, () -> g.args("go", req("{\"op\":\"mod-tidy\",\"packages\":\"./...\"}")), "mod tidy takes no packages");
+        assertThrows(OperationException.class, () -> g.args("go", req("{\"op\":\"generate\"}")), "no go generate");
+        assertEquals(List.of("-l", "."), g.args("gofmt", req("{\"op\":\"check\"}")));
+        assertThrows(OperationException.class, () -> g.args("gofmt", req("{\"op\":\"check-folder\",\"folder\":\"-w\"}")));
+    }
+
+    /**
+     * Spec 059 AC-02, AC-04, AC-05: Go gets the proxy, a module proxy without "direct", the checksum database, no VCS,
+     * no toolchain downloads, no go env file, and caches in the home; offline, no module proxy at all.
+     */
+    @Test
+    void goEnvironment() {
+        var route = new ChildSandbox.ProxyRoute(4321, tmp.resolve("net/proxy.sock"), "jharness", "s3cr3t");
+        BuildOperations g = goOps(false);
+        Map<String, String> env = g.env("go", g.executable("go"), route, tmp);
+        assertEquals("http://jharness:s3cr3t@127.0.0.1:4321", env.get("HTTPS_PROXY"));
+        assertEquals("http://jharness:s3cr3t@127.0.0.1:4321", env.get("https_proxy"));
+        assertEquals("https://proxy.golang.org", env.get("GOPROXY"));
+        assertFalse(env.get("GOPROXY").contains("direct"));
+        assertEquals("sum.golang.org", env.get("GOSUMDB"));
+        assertEquals("local", env.get("GOTOOLCHAIN"));
+        assertEquals("-buildvcs=false", env.get("GOFLAGS"));
+        assertEquals("*:off", env.get("GOVCS"));
+        assertEquals("off", env.get("GOENV"));
+        assertEquals(home.resolve("go").toString(), env.get("GOPATH"));
+        assertEquals(home.resolve("go/pkg/mod").toString(), env.get("GOMODCACHE"));
+        assertEquals(home.resolve(".cache/go-build").toString(), env.get("GOCACHE"));
+        assertTrue(env.get("PATH").startsWith("/opt/go/bin:"), env.get("PATH"));
+        assertDoesNotThrow(() -> ProcessRunner.checkEnv(env));
+        assertEquals(List.of(home.resolve("go/pkg"), home.resolve(".cache/go-build")), g.caches("go"));
+        BuildOperations off = goOps(true);
+        assertEquals("off", off.env("go", off.executable("go"), route, tmp).get("GOPROXY"));
+        assertNull(g.env("gofmt", g.executable("gofmt"), route, tmp).get("HTTPS_PROXY"), "gofmt has no network");
+    }
+
     @Test
     void offlineModeRunsToolsOffline() {
         var exes = Map.of("maven", new Executable("mvn", Path.of("/opt/maven/bin/mvn")),

@@ -151,7 +151,7 @@ class ToolDefinitionTest {
     @Test
     void theShippedDefaultsAreSeededOnceAndThenTheFolderIsTheUsers() throws Exception {
         List<Path> written = ToolDefinitions.seed(home);
-        assertEquals(3, written.size());
+        assertEquals(5, written.size(), "go, gofmt, gradle, maven and npm");
         Path dir = ToolDefinitions.userFolder(home);
         assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(dir)));
         assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(dir.resolve("maven.json"))));
@@ -160,7 +160,7 @@ class ToolDefinitionTest {
         Files.writeString(dir.resolve("maven.json"), Files.readString(dir.resolve("maven.json")).replace("\"install\":", "\"x-install\":"));
         assertTrue(ToolDefinitions.seed(home).isEmpty(), "never seeded again");
         ToolDefinitions t = ToolDefinitions.load(home, root, false);
-        assertEquals(List.of("gradle", "maven"), List.copyOf(t.tools().keySet()), "a deleted file removes the tool");
+        assertEquals(List.of("go", "gofmt", "gradle", "maven"), List.copyOf(t.tools().keySet()), "a deleted file removes the tool");
         assertTrue(t.get("maven").operations().containsKey("x-install"));
         assertTrue(ToolDefinitions.differsFromDefault(home, "maven"));
         assertFalse(ToolDefinitions.differsFromDefault(home, "gradle"));
@@ -177,15 +177,15 @@ class ToolDefinitionTest {
         Files.writeString(pd.resolve("gradle.json"), "{\"executable\":\"gradle\",\"proxy\":\"java-options\",\"operations\":{\"build\":{\"args\":[\"build\"]}}}");
         Files.writeString(pd.resolve("broken.json"), "{\"executable\":\"bash\",\"proxy\":\"none\",\"operations\":{\"x\":{\"args\":[\"x\"]}}}");
         ToolDefinitions off = ToolDefinitions.load(home, root, false);
-        assertEquals(List.of("gradle", "maven", "npm"), List.copyOf(off.tools().keySet()), "unused: only the user's");
+        assertEquals(List.of("go", "gofmt", "gradle", "maven", "npm"), List.copyOf(off.tools().keySet()), "unused: only the user's");
         assertTrue(off.project().isEmpty());
         ToolDefinitions on = ToolDefinitions.load(home, root, true);
-        assertEquals(List.of("go", "gradle", "maven"), List.copyOf(on.tools().keySet()));
+        assertEquals(List.of("go", "gofmt", "gradle", "maven"), List.copyOf(on.tools().keySet()));
         assertEquals(ToolDefinition.Source.PROJECT, on.get("gradle").source());
         assertEquals(List.of("build"), List.copyOf(on.get("gradle").operations().keySet()));
         assertTrue(on.errors().get("broken").contains("shells and command runners"), on.errors().toString());
         List<String> lines = ToolDefinitions.describeProject(home, root).stream().map(ToolDefinitions.ProjectTool::line).toList();
-        assertTrue(lines.contains("go: runs go (build, test, vet)"), lines.toString());
+        assertTrue(lines.contains("go: runs go (build, test, vet), replaces yours"), lines.toString());
         assertTrue(lines.contains("gradle: runs gradle (build), replaces yours"), lines.toString());
         assertTrue(lines.contains("npm: turns off your npm tool"), lines.toString());
         assertTrue(lines.stream().anyMatch(l -> l.startsWith("broken: ") && l.contains("bash")), lines.toString());
@@ -216,5 +216,18 @@ class ToolDefinitionTest {
         assertEquals("[[\"tests\",\"skipTests\"]]", Json.write(maven.get("conflicts")));
         var npm = ToolDefinitions.defaults().get("npm").describe();
         assertTrue(npm.get("fields").get("script").get("required").asBoolean());
+    }
+
+    /** Spec 059: an env value that starts with ~/ must stay below the home. */
+    @Test
+    void homePathsInEnvStayBelowTheHome() {
+        for (String v : List.of("~/", "~/../etc", "~/a/../../b", "~//x")) {
+            String json = "{\"executable\": \"x\", \"proxy\": \"none\", \"env\": {\"XCACHE\": " + Json.MAPPER.valueToTree(v) + "}, "
+                    + "\"operations\": {\"run\": {\"args\": [\"run\"]}}}";
+            var e = assertThrows(ToolDefinition.DefinitionException.class, () -> ToolDefinition.parse("x", json, ToolDefinition.Source.USER, "x.json", "h"), v);
+            assertTrue(e.getMessage().contains("below your home"), e.getMessage());
+        }
+        assertDoesNotThrow(() -> ToolDefinition.parse("x", "{\"executable\": \"x\", \"proxy\": \"none\", \"env\": {\"XCACHE\": \"~/.cache/x\"}, "
+                + "\"operations\": {\"run\": {\"args\": [\"run\"]}}}", ToolDefinition.Source.USER, "x.json", "h"));
     }
 }

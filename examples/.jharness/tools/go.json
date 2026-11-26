@@ -1,0 +1,41 @@
+{
+  "description": "Go. build, test and vet run the project's own code (tests, cgo). Modules come only through proxy.golang.org, never by git, and the go.mod toolchain line never downloads another Go.",
+  "executable": "go",
+  "proxy": "env",
+  "env": {
+    "GOPROXY": "https://proxy.golang.org",
+    "GOSUMDB": "sum.golang.org",
+    "GOTOOLCHAIN": "local",
+    "GOFLAGS": "-buildvcs=false",
+    "GOVCS": "*:off",
+    "GOENV": "off",
+    "GOPATH": "~/go",
+    "GOMODCACHE": "~/go/pkg/mod",
+    "GOCACHE": "~/.cache/go-build"
+  },
+  "writable": ["~/go/pkg", "~/.cache/go-build"],
+  "offline": { "env": { "GOPROXY": "off" } },
+  "operations": {
+    "build":        { "args": ["build", "{packages}"] },
+    "test":         { "args": ["test", "{run}", "{packages}"] },
+    "vet":          { "args": ["vet", "{packages}"] },
+    "mod-tidy":     { "args": ["mod", "tidy"] },
+    "mod-download": { "args": ["mod", "download"] },
+    "version":      { "args": ["version"] }
+  },
+  "fields": {
+    "packages": {
+      "type": "string",
+      "pattern": "\\.|\\./\\.\\.\\.|(\\./)?[A-Za-z0-9_][A-Za-z0-9_.+~-]{0,99}(/[A-Za-z0-9_][A-Za-z0-9_.+~-]{0,99}){0,19}(/\\.\\.\\.)?",
+      "default": "./...",
+      "args": ["{}"],
+      "description": "One package pattern, such as ./..., ./internal/store or example.com/m/api/...; default ./..."
+    },
+    "run": {
+      "type": "string",
+      "pattern": "[A-Za-z0-9_^(\\[][A-Za-z0-9_^$.*+?|()\\[\\]/-]{0,199}",
+      "args": ["-run", "{}"],
+      "description": "Tests to run, as go test -run takes them, such as ^TestParse$ or TestStore/empty"
+    }
+  }
+}

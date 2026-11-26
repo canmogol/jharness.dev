@@ -74,6 +74,12 @@ jobs:
           sudo chmod -R o-w /usr/local/bin /usr/local/lib/node_modules
           ls -ld /usr/local/bin "$(readlink -f "$(command -v npm)")"
 
+      # The Go tool (spec 059): the JVM tests and the native step run the real go and gofmt.
+      - uses: actions/setup-go@v6.0.0
+        with:
+          go-version: "1.27.4"
+          cache: false
+
       - name: JVM tests
         run: mvn -B -ntp install
 
@@ -155,6 +161,18 @@ jobs:
           "$bin" --home "$tmp/home" --cwd "$tmp/ws" --replay "$tmp/tl.jsonl" -p "tools" | tee "$tmp/tl.txt"
           "$bin" log --home "$tmp/home" --cwd "$tmp/ws" last --json --type api.call > "$tmp/tl-log.jsonl"
           grep '"api":"tools"' "$tmp/tl-log.jsonl" | grep -q '"status":"ok"'
+          # The Go tool (spec 059): go test and gofmt run in the native binary, in a trusted folder, with bypass approvals.
+          mkdir -p "$tmp/gows"
+          printf 'module example.com/calc\n\ngo 1.22\n' > "$tmp/gows/go.mod"
+          printf 'package calc\n\nfunc Add(a, b int) int { return a + b }\n' > "$tmp/gows/calc.go"
+          printf 'package calc\n\nimport "testing"\n\nfunc TestAdd(t *testing.T) { if Add(2, 2) != 4 { t.Fatal("2+2") } }\n' > "$tmp/gows/calc_test.go"
+          printf '{"projects": {"%s": {"trusted": true}}}\n' "$(cd "$tmp/gows" && pwd -P)" > "$tmp/home/.jharness/trusted.json"
+          printf '%s\n' '{"reply":"```js\nconst t = JSON.parse(api.tool(\"go\", {op: \"test\", run: \"^TestAdd$\", timeoutMs: 300000})); const f = JSON.parse(api.tool(\"gofmt\", {op: \"check\"})); \"go test exit \" + t.exitCode + \": \" + t.output.trim() + \" | gofmt exit \" + f.exitCode\n```"}' '{"reply":"Go checked."}' > "$tmp/go.jsonl"
+          "$bin" --home "$tmp/home" --cwd "$tmp/gows" --replay "$tmp/go.jsonl" --mode bypass -p "go" | tee "$tmp/go.txt"
+          "$bin" log --home "$tmp/home" --cwd "$tmp/gows" last --json --type process.completed > "$tmp/go-log.jsonl"
+          cat "$tmp/go-log.jsonl"
+          grep '"executable":"go"' "$tmp/go-log.jsonl" | grep '"exitCode":0' | grep -q 'ok'
+          grep '"executable":"gofmt"' "$tmp/go-log.jsonl" | grep -q '"exitCode":0'
           # JS hooks (spec 034): the shipped guard hook blocks a hand edit of a lock file in the native binary.
           mkdir -p "$tmp/home/.jharness/hooks" && cp examples/.jharness/hooks/guard.js "$tmp/home/.jharness/hooks/"
           printf '%s\n' '{"reply":"```js\ntry { api.writeFile(\"package-lock.json\", \"{}\"); \"written\" } catch (e) { e.message }\n```"}' '{"reply":"Hook checked."}' > "$tmp/hk.jsonl"

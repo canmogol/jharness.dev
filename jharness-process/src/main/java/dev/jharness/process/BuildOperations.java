@@ -321,7 +321,13 @@ public final class BuildOperations {
         if (offline) {
             env.putAll(d.offlineEnv());
         }
+        // A value that starts with ~/ is a folder in the home (spec 059), such as a cache the definition makes writable.
+        env.replaceAll((k, v) -> d.env().containsKey(k) || d.offlineEnv().containsKey(k) ? homePath(v) : v);
         return env;
+    }
+
+    private String homePath(String v) {
+        return v.startsWith("~/") ? home.resolve(v.substring(2)).toString() : v;
     }
 
     Map<String, String> env(String tool, Executable exe, ChildSandbox.ProxyRoute route, Path tmp) {

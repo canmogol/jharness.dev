@@ -608,6 +608,10 @@ public final class ToolDefinition {
             if (!e.getValue().isTextual() || e.getValue().asText().indexOf('\0') >= 0 || e.getValue().asText().length() > 4096) {
                 throw new DefinitionException(where + "." + e.getKey() + " must be a string of at most 4096 characters");
             }
+            String v = e.getValue().asText();
+            if (v.startsWith("~/") && (v.length() == 2 || v.contains("..") || v.contains("//"))) {
+                throw new DefinitionException(where + "." + e.getKey() + ": " + v + " must be a folder below your home");
+            }
             out.put(e.getKey(), e.getValue().asText());
         }
         return out;

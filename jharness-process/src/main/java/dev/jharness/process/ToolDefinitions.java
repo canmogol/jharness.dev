@@ -31,7 +31,7 @@ import dev.jharness.process.ToolDefinition.Source;
 public final class ToolDefinitions {
 
     /** The shipped defaults, built from {@code examples/.jharness/tools/}. */
-    public static final List<String> DEFAULTS = List.of("gradle", "maven", "npm");
+    public static final List<String> DEFAULTS = List.of("go", "gofmt", "gradle", "maven", "npm");
     static final long MAX_FILE_BYTES = 64 * 1024;
 
     /** A project tool for the trust question: name, executable, operations, and the user's tool it replaces. */

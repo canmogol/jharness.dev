@@ -1,0 +1,17 @@
+{
+  "description": "gofmt as a check: lists the Go files whose formatting differs. It changes nothing.",
+  "executable": "gofmt",
+  "proxy": "none",
+  "operations": {
+    "check":        { "args": ["-l", "."] },
+    "check-folder": { "args": ["-l", "{folder}"] }
+  },
+  "fields": {
+    "folder": {
+      "type": "folder",
+      "required": true,
+      "args": ["{}"],
+      "description": "A folder in the workspace to check"
+    }
+  }
+}

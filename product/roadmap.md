@@ -110,6 +110,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Manual browser and terminal-size checks of the viewer and TUI, never in CI (D-086, spec 053)
 - [x] Usage tracking (tokens, cost) (spec 049)
 - [x] Evals on real repo tasks (spec 051)
+- [x] Go tool: shipped `go.json` and `gofmt.json`, modules only through the egress proxy and proxy.golang.org, no git, no toolchain downloads (D-092, spec 059)
 - [ ] GitHub releases with checksums, Homebrew tap, install script
 - [ ] macOS code signing and notarization
 - [ ] `jharness update` with signature verification

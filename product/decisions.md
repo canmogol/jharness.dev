@@ -100,6 +100,7 @@ Last updated: 2026-11-26
 | D-087 | Subagents never block the main chat: `api.waitAgent` is removed; a finished background subagent's reply starts a main turn by itself (at an empty prompt; `agent.autoTurns`, default 10 in a row); `-p` runs until no background subagent is left; held questions never interrupt and `/answer [NAME]` asks one in place | Accepted; automatic turns run behind a live prompt since D-088 |
 | D-088 | The main prompt never blocks: on terminals that aren't dumb, main turns run on a worker while the prompt reads; output prints above it a line at a time; messages sent during a turn are queued and go next as one; Esc on the prompt stops the turn; the main agent's questions are held as notices (`question.waiting`) and `/answer main` asks them; commands that change the conversation wait for the turn; dumb terminals keep foreground turns | Accepted |
 | D-089 | Deletes: `api.deleteFile` (a `write`, as `writeFile`) and `api.deleteFolder` (kind `delete`: asked even in accept-edits unless a saved rule or bypass allows it); checkpoints make both undoable; the root, `.git`, `.jharness`, mounts, denied files and folders with links, denied files, files over 10 MB or more than 1,000 files are refused | Accepted |
+| D-092 | Go tool: shipped `go.json` (build, test, vet, mod-tidy, mod-download, version) and `gofmt.json` (check); proxy through `env`; `GOPROXY=https://proxy.golang.org` with no `direct`, `GOVCS=*:off`, `-buildvcs=false`, `GOTOOLCHAIN=local`, `GOENV=off`; caches under `~/go/pkg` and `~/.cache/go-build`; `~/` env values are home folders; Go hosts in `examples/network.rules`, not shipped | Accepted |
 
 ---
 
@@ -1514,6 +1515,39 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-092 — Go tool
+
+**Decision.** Go is a shipped tool definition, like Maven, Gradle and npm (spec 059).
+
+- **Operations.**
+  - `go.json`: `build`, `test` and `vet` over one package pattern (default `./...`), `test` with a `-run` filter, `mod-tidy`, `mod-download` and `version`.
+  - `gofmt.json`: `check` (`gofmt -l .`) and `check-folder`, a second tool because a definition has one executable and `go fmt` rewrites files.
+  - Patterns refuse values that start with `-` or leave the module.
+  - No `generate`, `run`, `install` or `get`.
+- **Proxy.** The existing `env` method sets `HTTPS_PROXY` and friends; no Go-specific code.
+- **No other way out.**
+  - `GOPROXY=https://proxy.golang.org`, without `direct`, so Go never fetches with git.
+  - `GOSUMDB=sum.golang.org`.
+  - `GOVCS=*:off`.
+  - `GOFLAGS=-buildvcs=false`, since `go build` otherwise runs git to stamp versions.
+  - `GOTOOLCHAIN=local`, since a `toolchain` line would download and run another Go.
+  - `GOENV=off`, since `go env -w` settings could add flags.
+- **Caches.** `GOPATH=~/go`, `GOMODCACHE=~/go/pkg/mod` and `GOCACHE=~/.cache/go-build` on every OS (macOS's default is under `~/Library`, which tools may not write); `~/go/pkg` and `~/.cache/go-build` are writable. For this, an `env` value that starts with `~/` is now a folder in the home, and must stay below it.
+- **Offline.** `GOPROXY=off`; builds use the module cache or `vendor/`.
+- **Hosts.** Not shipped: JHarness ships no allow rules for any tool, and an unlisted host asks at the proxy, where "always" saves it. `examples/network.rules` lists `proxy.golang.org`, `sum.golang.org` and `golang.org` with the Maven and npm hosts. Private modules come through the user's own module proxy, put first in `GOPROXY`, with `GONOSUMDB`, never `GOPRIVATE` or `GONOPROXY`, which mean git.
+
+**Why.** The user asked for a Go tool like the Maven and npm ones, with downloads through the egress proxy and no direct fetches (2026-11-26). Go's defaults start git (`direct`, VCS stamping) and can run a downloaded toolchain, both outside the process rules (D-049, constitution Article IV). Shipping allow rules would widen every user's egress for one ecosystem.
+
+**Rejected.**
+- A per-operation executable for `gofmt` (a format change for one case).
+- A list field type for several packages (one pattern covers a tree).
+- Shipped allow rules for the Go hosts.
+- `GOPRIVATE` for private modules (it means git).
+
+**Source.** User request and answers, 2026-11-26: a separate gofmt tool, hosts in an example file, Go under `~/sdk` and in CI, one package pattern. Specifying 059-go-tool.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1618,6 +1652,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q96 | Should a turn wait for a subagent? | No: `api.waitAgent` is removed; a background subagent's reply starts a main turn (at most `agent.autoTurns` in a row, default 10); `-p` runs until none is left; `/answer` asks a held question in place | The main chat stayed blocked behind a wait while the subagent waited for the user, who couldn't type (user report, 2026-11-25) | D-087 |
 | Q97 | Should the main prompt close while the main agent works? | No: turns run behind a live prompt; output above it a line at a time; typed messages queue and go next; Esc stops the turn; the main agent's questions are held for `/answer main` | Keys typed during a turn were lost, and automatic turns closed the prompt without the user asking (user, 2026-11-26) | D-088 |
 | Q98 | How do agents delete files and folders? | `api.deleteFile` as a write; `api.deleteFolder` always asks outside bypass; both undoable; root, `.git`, `.jharness`, mounts, secrets, links and huge folders refused | Agents needed deletes, and a folder delete is the riskiest file change there is (user, 2026-11-26) | D-089 |
+| Q101 | Does each new build tool need JHarness code changes? | No: a tool is a JSON definition over typed fields with a built-in proxy method. Go needed one general change, `~/` home paths in `env` values; Rust and similar tools should need only a file | The user asked before adding Go (2026-11-26) | D-092 |
 
 ---
 
