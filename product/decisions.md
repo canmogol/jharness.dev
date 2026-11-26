@@ -98,7 +98,7 @@ Last updated: 2026-11-26
 | D-085 | Evals: small repository tasks with hidden checks in `evals/tasks/`, run by the maintainer script `scripts/eval.py` through headless `jharness -p --output json`; a check must fail before the run; CI runs recorded solutions; live scores per release in `docs/evals.md` | Accepted |
 | D-086 | Manual checks: `scripts/viewer-check.mjs` (the web viewer in Chromium, Firefox, WebKit with Playwright, and Safari through safaridriver) and `scripts/tui-tmux-check.py` (the TUI at several sizes in tmux); never in CI; run after viewer or terminal UI changes and before each release, on Linux and macOS | Accepted |
 | D-087 | Subagents never block the main chat: `api.waitAgent` is removed; a finished background subagent's reply starts a main turn by itself (at an empty prompt; `agent.autoTurns`, default 10 in a row); `-p` runs until no background subagent is left; held questions never interrupt and `/answer [NAME]` asks one in place | Accepted; automatic turns run behind a live prompt since D-088 |
-| D-088 | The main prompt never blocks: on terminals that aren't dumb, main turns run on a worker while the prompt reads; output prints above it a line at a time; messages sent during a turn are queued and go next as one; Esc on the prompt stops the turn; the main agent's questions are held as notices (`question.waiting`) and `/answer main` asks them; commands that change the conversation wait for the turn; dumb terminals keep foreground turns | Accepted |
+| D-088 | The main prompt never blocks: on terminals that aren't dumb, main turns run on a worker while the prompt reads; output prints above it a line at a time; messages sent during a turn are queued and go next as one; Esc on the prompt stops the turn; the main agent's questions are held as notices (`question.waiting`) and `/answer main` asks them; commands that change the conversation wait for the turn; dumb terminals keep foreground turns | Accepted; `/clear` also waits since D-097 |
 | D-089 | Deletes: `api.deleteFile` (a `write`, as `writeFile`) and `api.deleteFolder` (kind `delete`: asked even in accept-edits unless a saved rule or bypass allows it); checkpoints make both undoable; the root, `.git`, `.jharness`, mounts, denied files and folders with links, denied files, files over 10 MB or more than 1,000 files are refused | Accepted |
 | D-090 | Checkpoint cleanup: when a session opens, this project's checkpoints of other sessions untouched for `files.checkpointDays` (default 30, 0 for ever) are removed, without following links; `checkpoints.pruned` | Accepted |
 | D-091 | Input at the bottom: after the banner the cursor moves to the row above the status line (DSR 6, 200 ms limit, typed keys replayed); before a resize a line feed keeps a row free for the status line, through a `LineReaderImpl` subclass while the prompt reads | Accepted |
@@ -107,6 +107,7 @@ Last updated: 2026-11-26
 | D-094 | Ranged and binary reads: `api.readFile(path, {fromLine, lines})` or `{offset, length}` for parts of text files of any size; `api.readBytes(path, {offset, length, encoding})` for any file as base64, hex or a charset, with `size`, `nextOffset` and `eof`; at most 1 MB per call; strict decoding; all charsets in the native binary | Accepted |
 | D-095 | Releases: the pom is the one source of the version (a filtered resource); a tag `vX.Y.Z` that matches it builds all targets and publishes at once, with `SHA256SUMS`, GitHub build attestations and `install.sh`; the workflow commits the formula to the tap `canmogol/homebrew-jharness`; `install.sh` checks SHA-256 and installs to `~/.local/bin` | Accepted |
 | D-096 | A capabilities and commands guide (`guide.md`, one line per command) is the README's "What it does" section and part of the system prompt, so the agent can point the user to commands; `GuideTest` keeps it complete and in step | Accepted |
+| D-097 | `/clear` empties the main agent's conversation and todo list; files, the session and log, plan mode, subagents and usage stay; undo and rewind stop at the clear; no confirmation; it waits during a turn | Accepted |
 
 ---
 
@@ -1665,6 +1666,28 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-097 — /clear
+
+**Decision.** `/clear` lets the model start fresh without touching files (spec 064).
+
+- **What goes.** Every message of the main agent's conversation, and its todo list. The next request carries only the user's new message.
+- **What stays.**
+  - The files, unlike `/rewind 0`.
+  - The session id and its log, which keeps the whole conversation, and the turn count.
+  - Plan mode, which the user turned on.
+  - Background and idle subagents; a finished one's reply still comes with its task.
+  - The usage counters.
+- **Undo.** `/undo` and `/rewind` stop at the clear ("turns up to N were cleared"), as at a compaction (spec 039), so they never restore files from turns the model no longer knows. The saved state holds the empty conversation, so `--resume` continues after it with the same limit.
+- **Use.** No confirmation; it says how many messages went and that files are unchanged. While a main turn runs it waits, like `/undo` and `/compact` (D-088). While talking to a subagent it clears the main agent's conversation and says so. A `conversation.cleared` event records it.
+
+**Why.** The user wanted to empty the conversation and start the model fresh, keeping the files and the same session (2026-11-26). `/rewind 0` also restores files, and a new session loses the log and the usage.
+
+**Rejected.** Letting undo restore files from before the clear (undo and the conversation out of step). Stopping subagents (the user can `/stop all`). A y/n confirmation (the log keeps everything). Resetting plan mode or the usage counters.
+
+**Source.** User request and answers, 2026-11-26. Specifying 064-clear. Adds `/clear` to the commands that wait in D-088.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1776,6 +1799,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q103 | How does the agent read files over 1 MB, in other charsets, or binary? | `api.readFile(path, {fromLine, lines})` or `{offset, length}`; `api.readBytes` as base64, hex or a charset, with `nextOffset`; 1 MB per call | A local model couldn't read a 12 MB file (user, 2026-11-26) | D-094 |
 | Q104 | How is a release made and installed? | A PR sets the pom's version; a matching tag builds all targets and publishes with `SHA256SUMS`, attestations and `install.sh`; the formula goes to the tap; `install.sh` checks SHA-256 | v0.1 needs one-command installs on macOS and Linux | D-095 |
 | Q105 | Does the agent know JHarness's own commands? | Yes: the system prompt carries the same guide as the README, one line per command; the agent points the user to them and can't run them | It couldn't answer "how do I resume?" (user, 2026-11-26) | D-096 |
+| Q106 | How does the user start the model fresh without losing files or the session? | `/clear`: the conversation and todo list go; files, session, log, plan mode and subagents stay; undo stops at the clear | `/rewind 0` restores files; a new session loses the log (user, 2026-11-26) | D-097 |
 
 ---
 

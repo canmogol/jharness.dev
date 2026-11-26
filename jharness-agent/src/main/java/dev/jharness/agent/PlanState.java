@@ -123,6 +123,15 @@ final class PlanState implements Planning {
         return Json.write(out);
     }
 
+    /** {@code /clear} (spec 064): the agent's todo list belonged to the cleared conversation. */
+    void clearTodos(String agent) {
+        if (lists.remove(agent) != null) {
+            var e = Json.object();
+            e.set("items", Json.array());
+            bus.publish(new Origin(agent, 0), "todo.updated", e);
+        }
+    }
+
     @Override
     public String proposePlan(String agent, String plan) {
         if (!agent.equals("main")) {

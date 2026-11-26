@@ -84,6 +84,13 @@ final class StatusState {
                 cacheWrite = b.path("cacheWriteTokens").asInt();
                 cacheReadTotal += cacheRead;
             }
+            case "conversation.cleared" -> {
+                if (!main) {
+                    return false;
+                }
+                contextTokens = 0;
+                contextEstimated = true;
+            }
             case "context.compacted" -> {
                 if (!main) {
                     return false;

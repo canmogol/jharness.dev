@@ -157,7 +157,7 @@ class TuiLiveTest {
     /** AC-05: commands that change the conversation wait; others work; /exit stops the turn and quits. */
     @Test
     void commandsDuringATurn() throws Exception {
-        live("go\r", running(), "/undo\r", "/model other\r", "/switch sub-1\r", "/usage\r", shows("/switch waits"), "/exit\r");
+        live("go\r", running(), "/undo\r", "/clear\r", "/model other\r", "/switch sub-1\r", "/usage\r", shows("/switch waits"), "/exit\r");
         long start = System.nanoTime();
         try (Session s = open("cmds", "{}", "```js\nconst t = Date.now(); while (Date.now() - t < 20000) {}\n'slept'\n```", "unused")) {
             tui[0].run(s);
@@ -166,6 +166,7 @@ class TuiLiveTest {
         String sc = screen();
         assertTrue(sc.contains("/undo waits until the main agent's turn ends (Esc stops it)."), sc);
         assertTrue(sc.contains("/model waits until"), sc);
+        assertTrue(sc.contains("/clear waits until the main agent's turn ends (Esc stops it)."), sc);
         assertTrue(sc.contains("/switch waits until"), sc);
         assertTrue(sc.contains("Usage this session:") || sc.contains("No model requests yet."), "/usage works meanwhile: " + sc);
         assertTrue(sc.contains("Stopping the main agent's turn."), sc);

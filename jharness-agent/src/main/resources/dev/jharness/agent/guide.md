@@ -14,6 +14,7 @@ Commands in the terminal UI (the user types them; the agent can't):
 | `/agent` | List custom agents (start one with `jharness --agent NAME`) |
 | `/agents [NAME]` | List this session's subagents, or show one's last 20 events |
 | `/answer [NAME]` | Answer a held question (the main agent's or a background subagent's) and stay in the main chat |
+| `/clear` | Empty the conversation so the model starts fresh; files stay as they are |
 | `/commands` | List the user's and the project's slash commands |
 | `/compact` | Summarize the conversation now to free context |
 | `/context` | Show how full the model's context is |
