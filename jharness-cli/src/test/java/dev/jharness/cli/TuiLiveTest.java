@@ -32,6 +32,8 @@ class TuiLiveTest {
 
     /** A turn that takes about 1.5 s, then its reply. */
     static final String SLOW = "```js\nconst t = Date.now(); while (Date.now() - t < 1500) {}\n'slept'\n```";
+    /** A step only Esc ends: JLine takes about 1 s to tell a lone Esc from a key sequence, more on a slow runner. */
+    static final String UNTIL_ESC = "```js\nconst t = Date.now(); while (Date.now() - t < 20000) {}\n'slept'\n```";
 
     private Tui live(Object... keys) {
         var raw = new org.jline.terminal.Attributes();
@@ -99,7 +101,7 @@ class TuiLiveTest {
     void escStopsTheTurnAndTheQueueGoesNext() throws Exception {
         live("go\r", shows("running 2 lines"), "instead do this\r", shows("▸ queued"), "\u001b", shows("Done instead."), settled(), "/exit\r");
         Path log;
-        try (Session s = open("esc", "{}", SLOW, "Done instead.")) {
+        try (Session s = open("esc", "{}", UNTIL_ESC, "Done instead.")) {
             log = s.logPath();
             tui[0].run(s);
         }
