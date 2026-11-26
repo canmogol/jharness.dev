@@ -26,7 +26,8 @@ public record Settings(ModelProfiles models, SandboxSettings sandbox, Timeouts t
         PermissionSettings permissions, FileSettings files, UiSettings ui, HttpSettings http, GitSettings git, boolean offline,
         McpSettings mcp, ReviewerSettings reviewer) {
 
-    private static final Set<String> TOP = Set.of("model", "models", "sandbox", "timeouts", "agent", "permissions", "files", "ui", "http", "git", "offline",
+    /** The top-level keys; docs/user-guide.md names each one (spec 065, DocsTest). */
+    public static final Set<String> TOP = Set.of("model", "models", "sandbox", "timeouts", "agent", "permissions", "files", "ui", "http", "git", "offline",
             "mcp", "reviewer");
 
     public static Settings defaults() {

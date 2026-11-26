@@ -108,6 +108,7 @@ Last updated: 2026-11-26
 | D-095 | Releases: the pom is the one source of the version (a filtered resource); a tag `vX.Y.Z` that matches it builds all targets and publishes at once, with `SHA256SUMS`, GitHub build attestations and `install.sh`; the workflow commits the formula to the tap `canmogol/homebrew-jharness`; `install.sh` checks SHA-256 and installs to `~/.local/bin` | Accepted |
 | D-096 | A capabilities and commands guide (`guide.md`, one line per command) is the README's "What it does" section and part of the system prompt, so the agent can point the user to commands; `GuideTest` keeps it complete and in step | Accepted |
 | D-097 | `/clear` empties the main agent's conversation and todo list; files, the session and log, plan mode, subagents and usage stay; undo and rewind stop at the clear; no confirmation; it waits during a turn | Accepted |
+| D-098 | User docs: one user guide page (`docs/user-guide.md`) with a settings reference; `docs/api.md` generated from `api.d.ts` and checked by a test; `docs/extensions.md` quotes example files from `examples/` that tests load; the README links to them | Accepted |
 
 ---
 
@@ -1688,6 +1689,23 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-098 — User guide, api reference and extension guide
+
+**Decision.** Three documents for users and extension authors (spec 065).
+
+- **User guide.** `docs/user-guide.md`, one long page with a contents list, ordered by task, ending with troubleshooting and a settings reference that names every top-level key. The README's long "Build and run" text moved there; the README keeps the overview (D-096), install, build from source and links.
+- **`api` reference.** `docs/api.md` is generated from `api.d.ts`, the file the model gets, by `scripts/api-reference.sh`. `ApiReferenceTest` fails when they differ, so the reference can't drift from what the model is told.
+- **Extension guide.** `docs/extensions.md` covers custom agents, slash commands, hooks, tool definitions, MCP servers and the status line script. Each has an example in `examples/` that a test loads; the guide quotes the files between `<!-- file: PATH -->` markers, and `DocsTest` checks the quotes match.
+- **Kept honest.** `DocsTest` checks links, headings, `examples/` paths, the quotes and the settings keys.
+
+**Why.** The roadmap's last docs item for v0.1. The user chose one page over several, a generated reference over a hand-written one, and one tested example per extension (2026-11-26).
+
+**Rejected.** A guide split into several pages (harder to search, more links to keep). A hand-written `api` reference (drifts from `api.d.ts`). Reference-only extension docs without examples. A documentation site generator (a new tool to keep).
+
+**Source.** User answers, 2026-11-26. Specifying 065-docs.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1800,6 +1818,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q104 | How is a release made and installed? | A PR sets the pom's version; a matching tag builds all targets and publishes with `SHA256SUMS`, attestations and `install.sh`; the formula goes to the tap; `install.sh` checks SHA-256 | v0.1 needs one-command installs on macOS and Linux | D-095 |
 | Q105 | Does the agent know JHarness's own commands? | Yes: the system prompt carries the same guide as the README, one line per command; the agent points the user to them and can't run them | It couldn't answer "how do I resume?" (user, 2026-11-26) | D-096 |
 | Q106 | How does the user start the model fresh without losing files or the session? | `/clear`: the conversation and todo list go; files, session, log, plan mode and subagents stay; undo stops at the clear | `/rewind 0` restores files; a new session loses the log (user, 2026-11-26) | D-097 |
+| Q107 | How do users and extension authors learn JHarness? | One user guide page, an `api` reference generated from `api.d.ts`, and an extension guide built on tested examples | The README had grown into an unordered manual; the roadmap needs a guide and references for v0.1 | D-098 |
 
 ---
 

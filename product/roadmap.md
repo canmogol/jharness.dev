@@ -3,7 +3,7 @@
 Features in build order. Each phase ends with a gate it must pass before the next starts. No dates are set yet.
 How each phase is built and tested is in `../plan.md`; why each choice was made is in `decisions.md`.
 
-Last updated: 2026-11-24
+Last updated: 2026-11-26
 
 ---
 
@@ -118,10 +118,10 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] GitHub releases with checksums, build attestations, Homebrew tap, install script; the first release follows the other v0.1 items (D-095, spec 062)
 - [x] Capabilities and commands overview in the README and the system prompt (D-096, spec 063)
 - [x] `/clear`: empty the conversation, keep the files and the session (D-097, spec 064)
-- [ ] macOS code signing and notarization
+- [ ] macOS code signing and notarization (waits for an Apple Developer account)
 - [ ] `jharness update` with signature verification
 - [ ] Live Claude run of the P1 gate scenario (D-045)
-- [ ] User guide, `api` reference, extension authoring guide
+- [x] User guide, `api` reference, extension authoring guide (D-098, spec 065)
 
 **Gate:** v0.1 tagged; signed binaries for Linux and macOS; the manual browser and terminal checks pass on both (D-086, `docs/manual-checks.md`).
 
