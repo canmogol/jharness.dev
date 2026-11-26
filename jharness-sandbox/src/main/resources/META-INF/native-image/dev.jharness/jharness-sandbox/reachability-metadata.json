@@ -10,6 +10,14 @@
         {
           "name": "readFile",
           "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "readBytes",
+          "parameterTypes": [
+            "java.lang.String",
             "java.lang.String"
           ]
         },

@@ -114,6 +114,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Evals on real repo tasks (spec 051)
 - [x] Go tool: shipped `go.json` and `gofmt.json`, modules only through the egress proxy and proxy.golang.org, no git, no toolchain downloads (D-092, spec 059)
 - [x] Tool update notices and write hints: new or changed shipped tools named at the start; refused writes explained to the model (D-093, spec 060)
+- [x] Ranged and binary reads: `api.readFile` by lines or bytes, `api.readBytes` as base64, hex or a charset (D-094, spec 061)
 - [ ] GitHub releases with checksums, Homebrew tap, install script
 - [ ] macOS code signing and notarization
 - [ ] `jharness update` with signature verification

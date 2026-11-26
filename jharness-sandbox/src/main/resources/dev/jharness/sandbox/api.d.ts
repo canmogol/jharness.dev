@@ -18,6 +18,18 @@ type WriteResultJson = string;
 /** {"path": string, "replacements": 1} */
 type EditResultJson = string;
 
+/** Lines (fromLine is 1-based) or bytes of a text file; not both. */
+type ReadPart = { fromLine?: number; lines?: number } | { offset?: number; length?: number };
+
+/** encoding: "base64" (default), "hex", or a charset name */
+type ReadBytesOptions = { offset?: number; length?: number; encoding?: string };
+
+/**
+ * {"path": string, "size": number, "offset": number, "length": number, "nextOffset": number, "eof": boolean,
+ *  "encoding": string, "content": string} — length is the bytes read; a charset's last cut character waits for the next call
+ */
+type BytesJson = string;
+
 /** {"path": string, "bytes": number} — the deleted file */
 type DeleteFileResultJson = string;
 
@@ -182,8 +194,16 @@ interface AgentEvent {
 declare const api: {
   /** Workspace root, OS, date, git branch and the top-level files. */
   readContext(): ContextJson;
-  /** UTF-8 text of a file, up to 1 MB. */
-  readFile(path: string): string;
+  /**
+   * UTF-8 text of a file, up to 1 MB. For a larger file, read a part: {fromLine, lines} (1-based, whole lines; an empty
+   * string past the end) or {offset, length} (bytes, cut to whole characters). At most 1 MB per call.
+   */
+  readFile(path: string, part?: ReadPart): string;
+  /**
+   * Any file's bytes, binary too: {offset, length} (at most 1 MB per call, default from 0) as base64 (the default), hex,
+   * or text in a charset such as "ISO-8859-1", "windows-1252" or "UTF-16LE". Go on from nextOffset until eof.
+   */
+  readBytes(path: string, options?: ReadBytesOptions): BytesJson;
   /** Creates or replaces a file in the workspace; creates missing folders. Needs approval. */
   writeFile(path: string, content: string): WriteResultJson;
   /** Replaces oldText, which must occur exactly once, with newText. Needs approval. */
