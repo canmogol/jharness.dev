@@ -122,6 +122,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [ ] `jharness update` with signature verification
 - [ ] Live Claude run of the P1 gate scenario (D-045)
 - [x] User guide, `api` reference, extension authoring guide (D-098, spec 065)
+- [x] TUI polish: a line above the input, the agent in the status line, questions at once (D-100, spec 067)
 
 **Gate:** v0.1 tagged; signed binaries for Linux and macOS; the manual browser and terminal checks pass on both (D-086, `docs/manual-checks.md`).
 

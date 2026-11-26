@@ -405,7 +405,8 @@ class TuiTest {
 
     /**
      * Spec 058 AC-01, AC-02: the prompt starts on the row above the status line. The terminal says the cursor is on row 5
-     * of 50, so it moves down 44 rows to row 49; keys typed before that answer still reach the prompt.
+     * of 50, so it moves down 43 rows to row 48, where the thin line above the input goes (spec 067), with the input on
+     * row 49; keys typed before that answer still reach the prompt.
      */
     @Test
     void thePromptStartsAtTheBottom() throws Exception {
@@ -423,7 +424,7 @@ class TuiTest {
         while (n < after.length() && after.charAt(n) == '\n') {
             n++;
         }
-        assertEquals(44, n, "moved to row 49: " + sc.replace("\u001b", "<ESC>"));
+        assertEquals(43, n, "moved to row 48: " + sc.replace("\u001b", "<ESC>"));
         var started = dev.jharness.events.SessionLog.read(log).stream().filter(e -> e.get("type").asText().equals("turn.started")).toList();
         assertEquals("hello", started.getFirst().get("prompt").asText(), "keys around the answer were kept");
     }

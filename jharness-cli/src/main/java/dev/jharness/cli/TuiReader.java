@@ -13,6 +13,9 @@ final class TuiReader extends LineReaderImpl {
 
     volatile Runnable beforeResize;
 
+    /** Spec 067: the prompt to draw after a resize, whose line above the input follows the new width; null keeps it. */
+    volatile java.util.function.Supplier<String> promptOnResize;
+
     TuiReader(Terminal terminal, String appName, Map<String, Object> variables) {
         super(terminal, appName, variables);
     }
@@ -22,6 +25,10 @@ final class TuiReader extends LineReaderImpl {
         Runnable r = beforeResize;
         if (signal == Terminal.Signal.WINCH && r != null) {
             r.run();
+        }
+        java.util.function.Supplier<String> p = promptOnResize;
+        if (signal == Terminal.Signal.WINCH && p != null && isReading()) {
+            setPrompt(p.get());
         }
         super.handleSignal(signal);
     }

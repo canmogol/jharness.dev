@@ -42,7 +42,10 @@ class StatusLineTest {
         s.model = "claude-opus-5-5";
         s.contextWindow = 200_000;
         s.workspace = "shop";
-        assertEquals("claude (claude-opus-5-5) · ~0% of 200K · ask · shop", s.line(UiSettings.STATUS_ITEMS));
+        assertEquals("claude (claude-opus-5-5) · ~0% of 200K · main · ask · shop", s.line(UiSettings.STATUS_ITEMS));
+        s.agent = "sub-2";
+        assertTrue(s.line(UiSettings.STATUS_ITEMS).contains(" · sub-2 · ask"), "spec 067: the agent the prompt talks to");
+        s.agent = "main";
         assertTrue(s.apply(event("main", 3, "turn.started", Json.object().put("prompt", "go"))));
         assertTrue(s.apply(event("main", 3, "model.completed", Json.object().put("provider", "anthropic").put("model", "m").put("stopReason", "end_turn")
                 .put("inputTokens", 80_000).put("outputTokens", 2_000).put("cacheReadTokens", 76_500))));
@@ -56,7 +59,7 @@ class StatusLineTest {
         assertFalse(s.apply(event("main", 3, "model.delta", Json.object().put("text", "x"))), "streamed chunks never refresh");
         assertFalse(s.apply(event("sub-1", 1, "model.completed", Json.object().put("provider", "p").put("model", "m").put("stopReason", "s")
                 .put("inputTokens", 5))), "a subagent's count isn't the main context");
-        assertEquals("claude (claude-opus-5-5) · 41% of 200K · ask · 1 running, 1 held · cache 77K read · turn 3 · working · shop", s.line(UiSettings.STATUS_ITEMS));
+        assertEquals("claude (claude-opus-5-5) · 41% of 200K · main · ask · 1 running, 1 held · cache 77K read · turn 3 · working · shop", s.line(UiSettings.STATUS_ITEMS));
         assertEquals("turn 3 · working · 41% of 200K", s.line(List.of("turn", "context")));
         s.plan = true;
         assertTrue(s.line(List.of("mode")).equals("[plan]"));

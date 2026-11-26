@@ -24,6 +24,8 @@ final class StatusState {
     boolean contextEstimated = true;
     int compactAt;
     String mode = "ask";
+    /** The agent the prompt talks to (spec 067): main, or a subagent after /switch. */
+    volatile String agent = "main";
     boolean plan;
     int turn;
     boolean busy;
@@ -144,7 +146,7 @@ final class StatusState {
         int percent = contextWindow > 0 ? (int) Math.round(100.0 * contextTokens / contextWindow) : 0;
         o.putObject("context").put("tokens", contextTokens).put("window", contextWindow).put("percent", percent)
                 .put("estimated", contextEstimated).put("compactAt", compactAt);
-        o.put("mode", mode).put("plan", plan);
+        o.put("mode", mode).put("plan", plan).put("agent", agent);
         long held = agents.values().stream().filter(x -> x).count();
         var a = o.putObject("agents").put("running", agents.size() - held).put("held", held + mainHeld);
         var names = a.putArray("names");
@@ -169,6 +171,7 @@ final class StatusState {
                 case "model" -> profile == null || profile.equals(model) ? model : profile + " (" + model + ")";
                 case "context" -> contextWindow <= 0 ? null
                         : (contextEstimated ? "~" : "") + Math.round(100.0 * contextTokens / contextWindow) + "% of " + kilo(contextWindow);
+                case "agent" -> agent;
                 case "mode" -> plan ? "[plan]" : mode;
                 case "agents" -> {
                     long subHeld = agents.values().stream().filter(x -> x).count();

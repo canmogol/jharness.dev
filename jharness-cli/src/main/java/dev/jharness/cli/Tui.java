@@ -365,6 +365,17 @@ final class Tui {
         reader.setVariable(LineReader.AMBIGUOUS_BINDING, 150L);
     }
 
+    /** Spec 067: reads an answer such as y or n, which stays out of the prompt's history. */
+    private String answerLine(String prompt) {
+        Object history = reader.getVariable(LineReader.DISABLE_HISTORY);
+        reader.setVariable(LineReader.DISABLE_HISTORY, true);
+        try {
+            return reader.readLine(prompt);
+        } finally {
+            reader.setVariable(LineReader.DISABLE_HISTORY, history == null ? false : history);
+        }
+    }
+
     /** The trust question (AC-01, AC-02); end of input means no. */
     boolean askTrust(Path workspace) {
         return askTrust(workspace, List.of());
@@ -391,7 +402,7 @@ final class Tui {
         while (true) {
             String a;
             try {
-                a = reader.readLine("[y] trust  [n] don't trust: ");
+                a = answerLine("[y] trust  [n] don't trust: ");
             } catch (UserInterruptException | EndOfFileException e) {
                 return false;
             }
@@ -422,7 +433,7 @@ final class Tui {
         while (true) {
             String a;
             try {
-                a = reader.readLine("Use the project's tools this session? [y] yes  [n] no, only mine: ");
+                a = answerLine("Use the project's tools this session? [y] yes  [n] no, only mine: ");
             } catch (UserInterruptException | EndOfFileException e) {
                 return false;
             }
@@ -444,6 +455,7 @@ final class Tui {
     TerminalPrompter prompter() {
         if (prompter == null) {
             prompter = new TerminalPrompter(reader, styler, out, raw);
+            prompter.output = above;
         }
         return prompter;
     }
@@ -492,11 +504,16 @@ final class Tui {
         startStatus(session);
         out.flush();
         startAtBottom();
-        // Spec 055: the main agent's questions during a background turn wait as notices.
+        // Spec 055: the main agent's questions during a background turn wait. Spec 067: while the prompt talks to the main
+        // agent, the question takes the prompt at once (what was typed comes back after); otherwise it waits as a notice.
         prompter().holds = new TerminalPrompter.Holds() {
             @Override
             public void waiting(dev.jharness.security.Operation op) {
                 session.publish("question.waiting", dev.jharness.events.Json.object().put("api", op.api()).put("summary", op.summary()));
+                if (talking == null) {
+                    answerNow = true;
+                    wakeForQuestion();
+                }
             }
 
             @Override
@@ -505,6 +522,13 @@ final class Tui {
             }
         };
         mainHeld = prompter()::holding;
+        reader.getWidgets().put("jharness-ask", () -> {
+            Thread t = promptThread;
+            if (t != null) {
+                t.interrupt();
+            }
+            return true;
+        });
         // Spec 054: a finished background subagent wakes an empty main prompt, so the main agent takes a turn with its reply.
         reader.getWidgets().put("jharness-deliver", () -> {
             Thread t = promptThread;
@@ -618,8 +642,9 @@ final class Tui {
             if (row < 0 || rows <= 0) {
                 return;
             }
-            // The last row is the status line's (or free without one); the prompt takes the row above it.
-            int target = rows - 2;
+            // The last row is the status line's (or free without one); the input takes the row above it, and the thin
+            // line above the input (spec 067) the row above that.
+            int target = rows - 3;
             int down = target - row;
             if (down > 0) {
                 PrintWriter w = terminal.writer();
@@ -739,9 +764,15 @@ final class Tui {
             if (sl != null) {
                 sl.refreshNow();
             }
+            if (answerNow && takeQuestion(session, null)) {
+                continue;
+            }
             try {
                 line = readPrompt();
             } catch (UserInterruptException e) {
+                if (answerNow) {
+                    takeQuestion(session, e.getPartialLine());
+                }
                 continue;
             } catch (EndOfFileException e) {
                 break;
@@ -1021,6 +1052,77 @@ final class Tui {
         }
     }
 
+    /** For tests (spec 067): the lines in the prompt's history, oldest first. */
+    List<String> historyLines() {
+        List<String> l = new java.util.ArrayList<>();
+        reader.getHistory().forEach(e -> l.add(e.line()));
+        return l;
+    }
+
+    /** Spec 067: the status line's agent item follows /switch. */
+    private void showAgent(String name) {
+        StatusLine sl = statusLine;
+        if (sl != null) {
+            sl.state.agent = name;
+            sl.refreshNow();
+        }
+    }
+
+    /** Spec 067: a main-agent question is waiting to take the prompt. */
+    private volatile boolean answerNow;
+
+    /** Spec 067: ends the prompt's read so the loop asks the main agent's question; the loop asks it next otherwise. */
+    private void wakeForQuestion() {
+        for (int i = 0; i < 50 && promptThread != null && !reader.isReading(); i++) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        if (promptThread == null || !reader.isReading()) {
+            return;
+        }
+        try {
+            reader.callWidget("jharness-ask");
+        } catch (IllegalStateException e) {
+            // The prompt just ended; the loop asks next.
+        }
+    }
+
+    /** Spec 067: asks the held main-agent question now, keeping what the user had typed for the next prompt. */
+    private boolean takeQuestion(Session session, String typed) {
+        answerNow = false;
+        if (typed != null && !typed.isEmpty()) {
+            restoreBuffer = typed;
+        }
+        if (!prompter().holding()) {
+            return false;
+        }
+        answer(session, "main");
+        return true;
+    }
+
+    /** Text the user was typing when a question took the prompt (spec 067); the next prompt starts with it. */
+    private volatile String restoreBuffer;
+
+    /**
+     * The prompt: {@code > }, or {@code sub-2> } while talking to a subagent, with {@code [plan] } in plan mode. On a live
+     * terminal a thin dim line across the screen sits above it (spec 067), one column short so it never wraps.
+     */
+    String promptText() {
+        String t = talking;
+        Session s = current;
+        String plan = s != null && s.planMode() ? "[plan] " : "";
+        String p = plan + (t == null ? "> " : t + "> ");
+        if (!live) {
+            return p;
+        }
+        int width = Math.max(1, terminal.getWidth() - 1);
+        return styler.dim("─".repeat(width)) + "\n" + p;
+    }
+
     /** The {@code > } prompt, with modified keys reported only while it reads (spec 014 AC-01). */
     private String readPrompt() {
         promptThread = Thread.currentThread();
@@ -1037,12 +1139,18 @@ final class Tui {
             direct.print(MODIFY_KEYS_ON);
             direct.flush();
         }
+        TuiReader tr = reader instanceof TuiReader x ? x : null;
         try {
-            String t = talking;
-            Session s = current;
-            String plan = s != null && s.planMode() ? "[plan] " : "";
-            return reader.readLine(plan + (t == null ? "> " : t + "> "));
+            if (tr != null && live) {
+                tr.promptOnResize = this::promptText;
+            }
+            String typed = restoreBuffer;
+            restoreBuffer = null;
+            return reader.readLine(promptText(), null, typed);
         } finally {
+            if (tr != null) {
+                tr.promptOnResize = null;
+            }
             if (keys) {
                 direct.print(MODIFY_KEYS_OFF);
                 direct.flush();
@@ -1599,6 +1707,7 @@ final class Tui {
             talking = null;
             following = null;
             session.attend(null);
+            showAgent("main");
             return;
         }
         if (!session.subagentOpen(name)) {
@@ -1610,6 +1719,7 @@ final class Tui {
         }
         talking = name;
         following = name;
+        showAgent(name);
         boolean running = session.runningSubagents().contains(name);
         if (running) {
             // A held question (spec 033) is asked as soon as attend() wakes it, so the prompter must be ready first;
@@ -1781,8 +1891,13 @@ final class Tui {
                     raw.println(text);
                 }
             }
-            case "question.waiting" -> raw.println(styler.error(TerminalSafe.escape("▸ the main agent is waiting for you: "
-                    + e.body().get("summary").asText() + " (/answer main to answer; Esc stops the turn)")));
+            case "question.waiting" -> {
+                // Spec 067: on the main chat the question shows at once; the notice is for when the prompt talks to a subagent.
+                if (talking != null) {
+                    raw.println(styler.error(TerminalSafe.escape("▸ the main agent is waiting for you: "
+                            + e.body().get("summary").asText() + " (/answer main to answer; Esc stops the turn)")));
+                }
+            }
             case "question.wait_ended" -> {
                 if (e.body().get("outcome").asText().equals("stopped")) {
                     raw.println(styler.error("▸ that question was denied"));
