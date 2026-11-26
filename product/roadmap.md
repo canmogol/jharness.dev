@@ -120,7 +120,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] `/clear`: empty the conversation, keep the files and the session (D-097, spec 064)
 - [ ] macOS code signing and notarization (waits for an Apple Developer account)
 - [ ] `jharness update` with signature verification
-- [ ] Live Claude run of the P1 gate scenario (D-045)
+- [x] Live Claude run of the P1 gate scenario (D-045, `docs/p1-gate.md`)
 - [x] User guide, `api` reference, extension authoring guide (D-098, spec 065)
 - [x] Compaction for thinking models; the context window from the server (D-099, spec 066)
 

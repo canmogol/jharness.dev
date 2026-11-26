@@ -1,19 +1,19 @@
 # P1 gate run
 
-Gate (`../product/roadmap.md`): fixes a seeded bug in a sample repo end to end, with a local model and with Claude. The Claude run moves to the v0.1 release checks (D-045); this run covers the local model.
+Gate (`../product/roadmap.md`): fixes a seeded bug in a sample repo end to end, with a local model and with Claude. The Claude run moved to the v0.1 release checks (D-045) and was done on 2026-11-26.
 
-Status: **passed** on attempt 2 (local model) · Run: 2026-11-19
+Status: **passed**: local model on attempt 2 (2026-11-19), Claude on attempt 1 (2026-11-26)
 
 ## Summary
 
 | Check | Pass if | Local model | Claude |
 | --- | --- | --- | --- |
-| Finds the bug | Searches or lists, then reads `Calculator.java` | Pass | Deferred (D-045) |
-| Fixes it | `add` returns `a + b`; nothing else changed | Pass | Deferred (D-045) |
-| Approvals | Asked for the edit and the commit in `ask` mode | Pass | Deferred (D-045) |
-| Commits | A new commit after `Initial commit` | Pass | Deferred (D-045) |
-| Ends the turn | Stop reason `done`, within 15 steps | Pass | Deferred (D-045) |
-| Session log | One JSONL file with the turn's events | Pass | Deferred (D-045) |
+| Finds the bug | Searches or lists, then reads `Calculator.java` | Pass | Pass |
+| Fixes it | `add` returns `a + b`; nothing else changed | Pass | Pass |
+| Approvals | Asked for the edit and the commit in `ask` mode | Pass | Pass |
+| Commits | A new commit after `Initial commit` | Pass | Pass |
+| Ends the turn | Stop reason `done`, within 15 steps | Pass | Pass (4 steps) |
+| Session log | One JSONL file with the turn's events | Pass | Pass |
 
 Covered without a live Claude run: the Claude provider against the stub server (spec 002) and the gate scenario through the replay provider (spec 003, `GateScenarioTest`).
 
@@ -82,6 +82,7 @@ Covered without a live Claude run: the Claude provider against the stub server (
 | --- | --- | --- | --- | --- | --- |
 | 1 | 11 + 1 | `done`, then `done` | Yes | Only after a second prompt | See attempt 1 below |
 | 2 | Not recorded | `done` | Yes | Yes, in the same turn | See attempt 2 below |
+| Claude 1 | 4 | `done` | Yes | Yes, in the same turn | See the Claude run below |
 
 ## Notes
 
@@ -99,3 +100,23 @@ Covered without a live Claude run: the Claude provider against the stub server (
 - Run by the user on a second machine with `qwen/qwen3.6-27b`, following this procedure, after specs 008 (notice for extra code blocks), 009 (TUI usability) and 010 (thinking text, quieter log).
 - Reported result: every check passed, with the fix committed in the same turn.
 - The session log stayed on that machine, so step counts and timings are not recorded here.
+
+### Claude run (D-045)
+
+- **Setup.**
+  - 2026-11-26, Linux x86-64, the native binary built from the `067-tui-polish` branch (`0.1.0-SNAPSHOT`).
+  - Profile `anthropic`, model `claude-sonnet-5-5`, key from `~/.jharness/secrets`, in a separate JHarness home.
+  - The same sample repo and task, run by hand in the TUI (in tmux); trust answered no; `ask` mode.
+- **Steps.**
+  1. `readContext` and `grep`.
+  2. Read `Calculator.java`.
+  3. `editFile` (`return a - b;` → `return a + b;`) and `git diff`.
+  4. `git add` and `git commit`.
+- **Approvals.** The edit, `git add` and `git commit` were asked and approved with `y`. Each question took the prompt at once (spec 067).
+- **Result.**
+  - `477a919 Fix Calculator.add to return a + b`; `git show --stat HEAD`: only `Calculator.java`, 1 insertion and 1 deletion.
+  - Stop reason `done` after 4 steps; one session log `s-2026-11-26T181754Z-3311.jsonl`.
+  - The reply said it didn't run the tests because the build tools need a trusted project, which is right.
+- **Usage.** 5 model requests, 52,120 input tokens (41,309 of them read from the prompt cache) and 550 output tokens.
+- **Finding.** The first reply had a stray `</invoke>` line after its code block. It was shown, but did no harm; the block ran as usual.
+
