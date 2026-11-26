@@ -39,6 +39,8 @@ final class LogFormat {
             Map.entry("hook.ran", List.of("hook", "event", "outcome", "reason")),
             Map.entry("subagent.waiting", List.of("summary")),
             Map.entry("subagent.wait_ended", List.of("outcome")),
+            Map.entry("question.waiting", List.of("summary")),
+            Map.entry("question.wait_ended", List.of("api", "outcome")),
             Map.entry("subagent.completed", List.of("stopReason", "steps", "durationMs", "error")),
             Map.entry("context.compacted", List.of("by", "tokensBefore", "tokensAfter", "messagesAfter")),
             Map.entry("context.compact_failed", List.of("by", "error")),

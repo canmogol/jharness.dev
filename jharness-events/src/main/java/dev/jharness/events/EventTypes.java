@@ -50,6 +50,8 @@ public final class EventTypes {
         HOST.put("subagent.delivered", List.of("agents"));
         HOST.put("subagent.waiting", List.of("api", "summary"));
         HOST.put("subagent.wait_ended", List.of("outcome"));
+        HOST.put("question.waiting", List.of("api", "summary"));
+        HOST.put("question.wait_ended", List.of("api", "outcome"));
         HOST.put("mcp.connected", List.of("server", "transport", "tools"));
         HOST.put("mcp.called", List.of("server", "tool", "isError"));
         HOST.put("context.compacted", List.of("by", "tokensBefore", "tokensAfter", "messagesBefore", "messagesAfter"));
