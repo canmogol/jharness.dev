@@ -174,6 +174,8 @@ public final class Session implements AutoCloseable {
             started.put("agentSource", agent.source());
         }
         bus.publish(turns.get(), "session.started", started);
+        // Spec 066: how much context the server loaded the model with, when the provider can ask.
+        String contextNotice = provider.discoverContext();
         // <sessionDir>/tmp is the children's TMPDIR; <sessionDir>/net holds the proxy socket and Maven's settings (D-049).
         Path sessionDir = Files.createTempDirectory("jharness-");
         Path childTmp = Files.createDirectory(sessionDir.resolve("tmp"), OWNER_ONLY);
@@ -283,6 +285,7 @@ public final class Session implements AutoCloseable {
         }
         Session s = new Session(bus, log, isolate, loop, ws, turns, settings);
         s.toolUpdates = toolUpdates;
+        s.contextNotice = contextNotice;
         if (!toolUpdates.isEmpty()) {
             var ev = Json.object();
             var missing = ev.putArray("missing");
@@ -469,6 +472,7 @@ public final class Session implements AutoCloseable {
         ModelProfile p = settings.models().resolve(name);
         Secrets s = secrets != null ? secrets : Secrets.load(Path.of(System.getProperty("user.home")), System::getenv);
         ModelProvider provider = ModelProviders.create(p, bus, turns, s);
+        contextNotice = provider.discoverContext();
         loop.useProvider(provider);
         profile = p.name();
         subagents.profile(p.name());
@@ -677,6 +681,13 @@ public final class Session implements AutoCloseable {
 
     public Path logPath() {
         return log.path();
+    }
+
+    private volatile String contextNotice;
+
+    /** Spec 066: a line about the model's context window for the start or /model, or null. */
+    public String contextNotice() {
+        return contextNotice;
     }
 
     private ToolDefinitions.Updates toolUpdates = new ToolDefinitions.Updates(List.of(), List.of());

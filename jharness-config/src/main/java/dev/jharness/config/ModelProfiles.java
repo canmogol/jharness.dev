@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 /** The {@code model} and {@code models} sections: named profiles and the default (D-032). */
 public final class ModelProfiles {
 
-    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes", "retries", "retryMaxWait", "responseTimeout", "contextWindow", "promptCache", "price");
+    private static final Set<String> KEYS = Set.of("provider", "baseUrl", "model", "apiKeyEnv", "maxTokens", "notes", "retries", "retryMaxWait", "responseTimeout", "contextWindow", "promptCache", "price", "summaryTokens");
 
     private final String defaultName;
     private final Map<String, ModelProfile> profiles;
@@ -87,7 +87,7 @@ public final class ModelProfiles {
     /** True for key names that look like a secret value rather than a reference to one. */
     static boolean looksLikeSecret(String key) {
         String k = key.toLowerCase();
-        if (k.equals("apikeyenv") || k.equals("maxtokens")) {
+        if (k.equals("apikeyenv") || k.equals("maxtokens") || k.equals("summarytokens")) {
             return false;
         }
         return k.contains("key") || k.contains("token") || k.contains("secret") || k.contains("password");
@@ -170,6 +170,18 @@ public final class ModelProfiles {
             }
             window = w.asInt();
         }
+        int summary = ModelProfile.DEFAULT_SUMMARY_TOKENS;
+        if (n.has("summaryTokens")) {
+            JsonNode st = n.get("summaryTokens");
+            if (!st.isIntegralNumber() || st.asLong() < ModelProfile.MIN_SUMMARY_TOKENS || st.asLong() > ModelProfile.MAX_SUMMARY_TOKENS) {
+                throw new ConfigException(where + ".summaryTokens: expected a whole number of tokens from " + ModelProfile.MIN_SUMMARY_TOKENS
+                        + " to " + ModelProfile.MAX_SUMMARY_TOKENS);
+            }
+            summary = st.asInt();
+        }
+        if (n.has("summaryTokens") && summary * 2 > window) {
+            throw new ConfigException(where + ".summaryTokens (" + summary + ") must be at most half of contextWindow (" + window + ")");
+        }
         if (maxTokens >= window) {
             throw new ConfigException(where + ".maxTokens (" + maxTokens + ") must be below contextWindow (" + window + ")");
         }
@@ -185,7 +197,7 @@ public final class ModelProfiles {
         }
         ModelPrice price = n.has("price") ? price(n.get("price"), where + ".price", provider) : null;
         return new ModelProfile(name, provider, baseUrl.replaceAll("/+$", ""), model, apiKeyEnv, maxTokens, notes,
-                retries, retryMaxWait, responseTimeout, window, cache, price);
+                retries, retryMaxWait, responseTimeout, window, cache, price, summary, n.has("contextWindow"));
     }
 
     private static final Set<String> PRICE_KEYS = Set.of("input", "output", "cacheRead", "cacheWrite");

@@ -29,6 +29,7 @@ public final class ReplayProvider implements ModelProvider {
     private int next;
     private final List<ChatRequest> requests = new ArrayList<>();
     private volatile int contextWindow;
+    private volatile int summaryTokens = dev.jharness.config.ModelProfile.DEFAULT_SUMMARY_TOKENS;
     private volatile ModelPrice price;
 
     public ReplayProvider(List<JsonNode> lines, EventBus bus, Supplier<Origin> origin) {
@@ -69,6 +70,17 @@ public final class ReplayProvider implements ModelProvider {
     public ReplayProvider contextWindow(int tokens) {
         contextWindow = tokens;
         return this;
+    }
+
+    /** For tests (spec 066): the summary size a compaction asks for. */
+    public ReplayProvider summaryTokens(int tokens) {
+        summaryTokens = tokens;
+        return this;
+    }
+
+    @Override
+    public int summaryTokens() {
+        return summaryTokens;
     }
 
     /** For tests (spec 049): price the replies' token counts like a profile with this price. */
@@ -127,6 +139,11 @@ public final class ReplayProvider implements ModelProvider {
             }
 
             @Override
+            public int summaryTokens() {
+                return shared.summaryTokens();
+            }
+
+            @Override
             public void cancel() {
                 shared.cancel();
             }
@@ -164,7 +181,7 @@ public final class ReplayProvider implements ModelProvider {
             from = to;
         }
         // A recording may give the token counts the real model reported (spec 039).
-        ChatReply reply = new ChatReply(text, thinking, "replay", line.path("inputTokens").asInt(0), line.path("outputTokens").asInt(0),
+        ChatReply reply = new ChatReply(text, thinking, line.path("stopReason").asText("replay"), line.path("inputTokens").asInt(0), line.path("outputTokens").asInt(0),
                 line.path("cacheReadTokens").asInt(0), line.path("cacheWriteTokens").asInt(0));
         bus.publish(origin.get(), "model.completed", ModelEvents.completed("replay", "replay", reply, price));
         return reply;

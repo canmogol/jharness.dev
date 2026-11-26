@@ -485,6 +485,7 @@ final class Tui {
         }
         session.tools().errors().forEach((n, err) -> raw.println(styler.error("Tool " + n + " is unavailable: " + err)));
         session.toolUpdates().lines().forEach(l -> raw.println(styler.dim(TerminalSafe.escape(l))));
+        contextLine(session);
         session.describeHooks().stream().filter(l -> l.contains("  broken: ")).forEach(l -> raw.println(styler.error("Hook " + l)));
         // A command file named like a built-in is loaded now, so the clash shows at the start (spec 041 AC-02).
         session.commands(BUILT_IN).clashes().forEach(c -> raw.println(styler.error(TerminalSafe.escape("Command " + c.file()
@@ -901,6 +902,14 @@ final class Tui {
         }
     }
 
+    /** Spec 066: what the server said about the model's context; a guess or a smaller window shows as a warning. */
+    private void contextLine(Session session) {
+        String n = session.contextNotice();
+        if (n != null) {
+            raw.println(n.startsWith("Context window:") ? styler.dim(TerminalSafe.escape(n)) : styler.error(TerminalSafe.escape("▸ " + n)));
+        }
+    }
+
     /** {@code /exit}, Ctrl-D or the end of input (spec 055 AC-05): the running turn stops, and the session ends after it. */
     private void stopTurns(Session session) {
         Thread w;
@@ -1266,6 +1275,7 @@ final class Tui {
                     try {
                         session.switchModel(parts[1].strip());
                         out.println("Model: " + session.profile());
+                        contextLine(session);
                     } catch (ConfigException e) {
                         out.println(e.getMessage());
                     }

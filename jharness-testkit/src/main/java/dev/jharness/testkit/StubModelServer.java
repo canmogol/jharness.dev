@@ -84,8 +84,16 @@ public final class StubModelServer implements AutoCloseable {
         return List.copyOf(requests);
     }
 
+    static final java.util.Set<String> PROBES = java.util.Set.of("/v1/models", "/props", "/api/v0/models", "/api/v1/models", "/api/ps", "/api/show");
+
     private void handle(HttpExchange x) throws IOException {
         String body = new String(x.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        // Spec 066: the context window probe asks these; like a server that has none of them, answer 404, and keep the queue.
+        if (PROBES.contains(x.getRequestURI().getPath())) {
+            x.sendResponseHeaders(404, -1);
+            x.close();
+            return;
+        }
         Reply r;
         synchronized (this) {
             requests.add(new Request(x.getRequestMethod(), x.getRequestURI().getPath(), Map.copyOf(x.getRequestHeaders()), body));

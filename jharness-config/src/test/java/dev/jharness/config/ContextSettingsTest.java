@@ -44,4 +44,24 @@ class ContextSettingsTest {
             assertTrue(e.getMessage().contains(c[1]), e.getMessage());
         }
     }
+
+    /** Spec 066: summaryTokens per profile, and whether contextWindow was set. */
+    @Test
+    void summaryTokensAndASetWindow() throws Exception {
+        ModelProfile d = parse(LOCAL + "}", null).models().all().get("m");
+        assertEquals(4096, d.summaryTokens());
+        assertFalse(d.contextWindowSet(), "unset: JHarness asks the server");
+        ModelProfile set = parse(LOCAL + ", \"contextWindow\": 144000, \"summaryTokens\": 8000}", null).models().all().get("m");
+        assertEquals(8000, set.summaryTokens());
+        assertTrue(set.contextWindowSet());
+        assertEquals(4096, parse(LOCAL + ", \"contextWindow\": 4096, \"maxTokens\": 1024}", null).models().all().get("m").summaryTokens(),
+                "the default fits any window; compaction caps it at half");
+        for (String[] c : new String[][] {
+                {LOCAL + ", \"summaryTokens\": 100}", "summaryTokens: expected a whole number of tokens from 512 to 32768"},
+                {LOCAL + ", \"summaryTokens\": 4096.5}", "summaryTokens: expected a whole number"},
+                {LOCAL + ", \"contextWindow\": 8192, \"maxTokens\": 1024, \"summaryTokens\": 6000}", "summaryTokens (6000) must be at most half of contextWindow (8192)"}}) {
+            ConfigException e = assertThrows(ConfigException.class, () -> parse(c[0], null), c[0]);
+            assertTrue(e.getMessage().contains(c[1]), e.getMessage());
+        }
+    }
 }
