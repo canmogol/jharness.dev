@@ -101,6 +101,7 @@ Last updated: 2026-11-26
 | D-088 | The main prompt never blocks: on terminals that aren't dumb, main turns run on a worker while the prompt reads; output prints above it a line at a time; messages sent during a turn are queued and go next as one; Esc on the prompt stops the turn; the main agent's questions are held as notices (`question.waiting`) and `/answer main` asks them; commands that change the conversation wait for the turn; dumb terminals keep foreground turns | Accepted |
 | D-089 | Deletes: `api.deleteFile` (a `write`, as `writeFile`) and `api.deleteFolder` (kind `delete`: asked even in accept-edits unless a saved rule or bypass allows it); checkpoints make both undoable; the root, `.git`, `.jharness`, mounts, denied files and folders with links, denied files, files over 10 MB or more than 1,000 files are refused | Accepted |
 | D-090 | Checkpoint cleanup: when a session opens, this project's checkpoints of other sessions untouched for `files.checkpointDays` (default 30, 0 for ever) are removed, without following links; `checkpoints.pruned` | Accepted |
+| D-091 | Input at the bottom: after the banner the cursor moves to the row above the status line (DSR 6, 200 ms limit, typed keys replayed); before a resize a line feed keeps a row free for the status line, through a `LineReaderImpl` subclass while the prompt reads | Accepted |
 
 ---
 
@@ -1531,6 +1532,22 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-091 — Input at the bottom
+
+**Decision.** The prompt starts at the bottom of the terminal and stays there (spec 058).
+
+- **Start.** After the banner and the status line's first draw, JHarness asks the terminal for the cursor position (`ESC [6n`) and line-feeds the cursor to the row above the last. It waits at most 200 ms; keys read meanwhile go back to the line reader, Enter included. Without an answer the prompt stays where it is. Dumb terminals are skipped.
+- **Staying there.** Output already prints above the live prompt (D-088), so the prompt stays on the bottom row once it is there.
+- **Resize.** When a window shrinks, terminals such as tmux keep the cursor on the screen, which put the prompt on the last row under the status line (the spec 053 finding). Before a resize is handled, JHarness saves the cursor, resets the scroll region, restores the cursor, and writes a line feed followed by a cursor move up. That scrolls only when the cursor is on the last row, so a row stays free for the status line. JLine replaces the WINCH handler while it reads, so the hook sits in a `LineReaderImpl` subclass that overrides `handleSignal`; when the prompt isn't reading, the TUI's own WINCH handler calls it.
+
+**Why.** "Is it possible to start the jharness input field at the bottom of the terminal, and keep it at the bottom?" (user, 2026-11-26). The resize finding came from the same code.
+
+**Rejected.** Clearing the screen at start (loses what the user's terminal showed). Redrawing the whole screen on resize (JLine keeps no copy of the output). A setting (no case for the old top start was found).
+
+**Source.** User question, 2026-11-26; recommended design accepted while the user was away. Specifying 058-input-at-the-bottom.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1636,6 +1653,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q97 | Should the main prompt close while the main agent works? | No: turns run behind a live prompt; output above it a line at a time; typed messages queue and go next; Esc stops the turn; the main agent's questions are held for `/answer main` | Keys typed during a turn were lost, and automatic turns closed the prompt without the user asking (user, 2026-11-26) | D-088 |
 | Q98 | How do agents delete files and folders? | `api.deleteFile` as a write; `api.deleteFolder` always asks outside bypass; both undoable; root, `.git`, `.jharness`, mounts, secrets, links and huge folders refused | Agents needed deletes, and a folder delete is the riskiest file change there is (user, 2026-11-26) | D-089 |
 | Q99 | How long are saved files for `/undo` kept? | 30 days after their session last changed them (`files.checkpointDays`, 0 for ever); removed when a session of the project opens | They were kept for ever, and deletes can save up to about 10 GB per session (user, 2026-11-26) | D-090 |
+| Q100 | Can the input start at the bottom of the terminal and stay there? | Yes: the cursor moves to the row above the status line at start (asked with DSR 6), and a line feed before each resize keeps the status row free | The prompt started under the banner, and a shrink drew the status line over it (user, 2026-11-26; spec 053 finding) | D-091 |
 
 ---
 
