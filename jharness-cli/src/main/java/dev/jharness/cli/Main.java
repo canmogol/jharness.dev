@@ -27,12 +27,20 @@ import picocli.CommandLine.Option;
  * The {@code jharness} command (AC-01, AC-02). Exit codes: 0 done, 1 turn error, 2 settings, usage or I/O
  * error, 3 internal error with a crash report (spec 021).
  */
-@Command(name = "jharness", mixinStandardHelpOptions = true, version = "jharness " + Main.VERSION,
+@Command(name = "jharness", mixinStandardHelpOptions = true, versionProvider = Main.VersionProvider.class,
         description = "A terminal coding agent whose model acts by writing JavaScript in a sandbox.",
         subcommands = {LogCommand.class, ToolsCommand.class, UsageCommand.class, ViewCommand.class})
 public final class Main implements Callable<Integer> {
 
-    static final String VERSION = "0.1.0-SNAPSHOT";
+    static final String VERSION = dev.jharness.events.Version.CURRENT;
+
+    /** {@code jharness --version}: the version from the pom (spec 062). */
+    static final class VersionProvider implements picocli.CommandLine.IVersionProvider {
+        @Override
+        public String[] getVersion() {
+            return new String[] {"jharness " + VERSION};
+        }
+    }
 
     @Option(names = "--cwd", paramLabel = "DIR", description = "Workspace folder (default: the current folder).")
     Path cwd;

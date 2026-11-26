@@ -263,6 +263,12 @@ jobs:
           grep '"type":"review.verdict"' "$tmp/rev-log.txt" | grep -q '"outcome":"deny"'
 
       # The P3 gate (docs/p3-gate.md): the shipped custom agent and hook work in the native binary.
+      # The release scripts (spec 062): package, install from a local folder with a good and a bad checksum, formula.
+      - name: Release scripts
+        env:
+          LC_ALL: en_US.UTF-8
+        run: scripts/release-check.sh jharness-cli/target/jharness "${{ matrix.target }}"
+
       - name: P3 gate
         run: scripts/p3-gate.sh jharness-cli/target/jharness
 

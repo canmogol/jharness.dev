@@ -14,4 +14,20 @@
   <dependencies>
     <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
   </dependencies>
+
+  <build>
+    <!-- The pom's version is the one source of JHarness's version (spec 062): Maven writes it into version.properties. -->
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+        <includes><include>dev/jharness/events/version.properties</include></includes>
+      </resource>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>false</filtering>
+        <excludes><exclude>dev/jharness/events/version.properties</exclude></excludes>
+      </resource>
+    </resources>
+  </build>
 </project>
