@@ -120,7 +120,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] `/clear`: empty the conversation, keep the files and the session (D-097, spec 064)
 - [ ] macOS code signing and notarization (waits for an Apple Developer account)
 - [ ] `jharness update` with signature verification
-- [ ] Live Claude run of the P1 gate scenario (D-045)
+- [x] Live Claude run of the P1 gate scenario (D-045, `docs/p1-gate.md`)
 - [x] User guide, `api` reference, extension authoring guide (D-098, spec 065)
 
 **Gate:** v0.1 tagged; signed binaries for Linux and macOS; the manual browser and terminal checks pass on both (D-086, `docs/manual-checks.md`).
