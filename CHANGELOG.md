@@ -1,6 +1,16 @@
 # Changelog
 
-<!-- last-commit: 778ce684569546a5574a1cba879897c09dd25a6b -->
+<!-- last-commit: d10dd3750f5d91c4546f1a719b80e2aa99219167 -->
+
+## 2026-11-26 · 065 User guide, api reference and extension guide
+
+- `docs/user-guide.md` is one page for everything a user does: install, models and keys, the terminal UI, permissions and trust, files and undo, build tools, the network, git, the web, subagents, sessions, headless runs and troubleshooting. It ends with a reference of every setting.
+- `docs/api.md` lists every `api` method and type. It is generated from `api.d.ts`, the file the model gets, by `scripts/api-reference.sh`, and a test fails when the two differ.
+- `docs/extensions.md` explains custom agents, slash commands, hooks, tool definitions, MCP servers and the status line script. It quotes the example files in `examples/`, which tests load, and a test checks that the quotes match the files.
+- New examples: `examples/settings.json` and `examples/statusline.js`.
+- The README is shorter: an overview, install, a table of the documents and building from source.
+- CI fixes: the runner's tool cache was writable by everyone, so JHarness refused its `go` and the Linux native check failed. Three flaky macOS tests (two terminal UI tests and a resume test) no longer race.
+- Decision: user guide, api reference and extension guide (D-098, Q107).
 
 ## 2026-11-26 · 064 /clear
 
