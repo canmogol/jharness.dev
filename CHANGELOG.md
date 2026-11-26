@@ -1,6 +1,15 @@
 # Changelog
 
-<!-- last-commit: a2f68e4ce776535f26045491f89569598afc018e -->
+<!-- last-commit: 39a14fee0b6770529a37e8a5d09d19c4fcf75a4b -->
+
+## 2026-11-26 · 055 A main prompt that never blocks
+
+- On a real terminal the prompt stays open while the main agent works, automatic turns included. The reply prints above the line you're typing, a whole line at a time, and the status line says `working`.
+- A message sent during a turn is queued (`▸ queued: …`) and goes to the agent as your next message when the turn ends. Esc on the prompt stops the turn, then the queue goes.
+- The main agent's approvals during a turn never take the prompt: a notice says it is waiting, the status line counts it as held, and `/answer main` (or `/answer`) asks it. Esc denies it. New events: `question.waiting` and `question.wait_ended`.
+- While a turn runs, `/compact`, `/diff`, `/undo`, `/rewind`, `/model NAME`, `/plan`, `/switch NAME` and `/follow` say they wait for it; other commands work. `/exit` and Ctrl-D stop the turn and quit.
+- Dumb terminals keep running turns in the foreground.
+- Decision: a main prompt that never blocks (D-088, Q97; note on D-087).
 
 ## 2026-11-25 · 054 Subagents that don't block
 
