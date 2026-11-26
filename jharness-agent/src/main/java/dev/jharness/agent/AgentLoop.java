@@ -77,6 +77,8 @@ public final class AgentLoop {
     private int retryAbove;
     /** Turns up to this one came from a resumed or forked session; their files can't be undone (spec 043). */
     private int restoredThrough;
+    /** The last turn before a {@code /clear} (spec 064): undo and rewind stop there. */
+    private int clearedThrough;
     private volatile java.util.function.Consumer<Snapshot> stateSink;
     private String firstPrompt;
 
@@ -320,8 +322,30 @@ public final class AgentLoop {
         return rewind(liveTurns.lastKey() - 1, force);
     }
 
+    /**
+     * {@code /clear} (spec 064): empties the conversation so the model starts fresh. Files are left as they are, and the
+     * session and its log go on; undo and rewind stop at this point. Called between turns.
+     *
+     * @return the number of messages removed
+     */
+    public synchronized int clear() {
+        int n = conversation.size();
+        conversation.clear();
+        liveTurns.clear();
+        clearedThrough = Math.max(clearedThrough, turns.current());
+        firstPrompt = null;
+        knownTokens = 0;
+        bus.publish(turns.get(), "conversation.cleared", Json.object().put("messages", n).put("clearedThrough", clearedThrough));
+        saveState();
+        return n;
+    }
+
     /** {@code /rewind N}: undoes every turn after turn {@code n}. */
     public synchronized Checkpoints.Restore rewind(int n, boolean force) {
+        if (n < clearedThrough) {
+            throw new IllegalArgumentException("turns up to " + clearedThrough + " were cleared with /clear; /rewind can go back to turn "
+                    + clearedThrough + " at the earliest");
+        }
         if (n < restoredThrough) {
             throw new IllegalArgumentException("turns up to " + restoredThrough + " are from before the session was resumed; /rewind can go back to turn "
                     + restoredThrough + " at the earliest");
@@ -541,7 +565,7 @@ public final class AgentLoop {
     }
 
     public synchronized Snapshot snapshot() {
-        return new Snapshot(List.copyOf(conversation), turns.current(), Math.max(compactedThrough, restoredThrough), firstPrompt);
+        return new Snapshot(List.copyOf(conversation), turns.current(), Math.max(Math.max(compactedThrough, restoredThrough), clearedThrough), firstPrompt);
     }
 
     /**

@@ -502,6 +502,18 @@ public final class Session implements AutoCloseable {
         return plans.toggle();
     }
 
+    /**
+     * {@code /clear} (spec 064): empties the main agent's conversation and its todo list. Files, the session, its log,
+     * plan mode and subagents stay.
+     *
+     * @return the number of messages removed
+     */
+    public int clear() {
+        int n = loop.clear();
+        plans.clearTodos("main");
+        return n;
+    }
+
     /** {@code /todos}: an agent's todo list as {@code [status, text]} pairs. */
     public List<String[]> todos(String agent) {
         List<String[]> out = new java.util.ArrayList<>();

@@ -24,6 +24,7 @@ public final class EventTypes {
         HOST.put("file.changed", List.of("path", "diff"));
         HOST.put("folder.deleted", List.of("path", "files", "bytes"));
         HOST.put("tools.updates", List.of("missing", "differ"));
+        HOST.put("conversation.cleared", List.of("messages", "clearedThrough"));
         HOST.put("checkpoints.pruned", List.of("sessions", "bytes", "days"));
         HOST.put("settings.ignored", List.of("keys"));
         HOST.put("api.call", List.of("api", "status"));

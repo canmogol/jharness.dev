@@ -117,6 +117,7 @@ The local-model run is recorded in `../docs/p1-gate.md`; the live Claude run is 
 - [x] Ranged and binary reads: `api.readFile` by lines or bytes, `api.readBytes` as base64, hex or a charset (D-094, spec 061)
 - [x] GitHub releases with checksums, build attestations, Homebrew tap, install script; the first release follows the other v0.1 items (D-095, spec 062)
 - [x] Capabilities and commands overview in the README and the system prompt (D-096, spec 063)
+- [x] `/clear`: empty the conversation, keep the files and the session (D-097, spec 064)
 - [ ] macOS code signing and notarization
 - [ ] `jharness update` with signature verification
 - [ ] Live Claude run of the P1 gate scenario (D-045)

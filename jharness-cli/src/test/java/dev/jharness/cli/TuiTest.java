@@ -455,6 +455,24 @@ class TuiTest {
         assertFalse(screen().contains("\r\n\n\n"), "no move without an answer");
     }
 
+    /** Spec 064: /clear empties the conversation, keeps the files and plan mode, and /undo then has nothing before it. */
+    @Test
+    void clearEmptiesTheConversation() throws Exception {
+        Path ws = Files.createDirectories(tmp.resolve("ws64"));
+        Tui tui = new Tui(terminal("write it\n/plan\n/clear\n/clear\n/undo\n/exit\n"), null);
+        try (Session session = replaySession(tmp.resolve("home64"), ws, "{\"permissions\": {\"mode\": \"bypass\"}}", tui,
+                "```js\napi.writeFile('a.txt', 'kept')\n```", "Wrote it.")) {
+            tui.run(session);
+            assertTrue(session.planMode(), "plan mode stays");
+        }
+        String sc = screen();
+        assertTrue(sc.contains("Cleared 4 messages from the conversation; the model starts fresh. Your files are unchanged,"), sc);
+        assertTrue(sc.contains("The conversation is already empty."), sc);
+        assertTrue(sc.contains("Nothing to undo."), sc);
+        assertEquals("kept", Files.readString(ws.resolve("a.txt")));
+        assertTrue(Tui.HELP.contains("/clear          empty the conversation"), Tui.HELP);
+    }
+
     /** Spec 060: a shipped tool missing from ~/.jharness/tools/ is named once at the start, with the command that adds it. */
     @Test
     void missingShippedToolsAreNamedOnce() throws Exception {
@@ -641,7 +659,7 @@ class TuiTest {
     /** Spec 024 AC-03: every command in the help is completed, each with its description. */
     @Test
     void commandsComeFromTheHelp() {
-        assertEquals(List.of("/agent", "/agents", "/answer", "/commands", "/compact", "/context", "/diff", "/events", "/exit", "/follow", "/help", "/hooks", "/mcp",
+        assertEquals(List.of("/agent", "/agents", "/answer", "/clear", "/commands", "/compact", "/context", "/diff", "/events", "/exit", "/follow", "/help", "/hooks", "/mcp",
                 "/model", "/network", "/plan", "/rewind", "/stop", "/switch", "/thinking", "/todos", "/undo", "/usage", "/view"), List.copyOf(Tui.COMMANDS.keySet()));
         // Spec 046: the help lists the commands in alphabetical order, then the keys.
         assertEquals(Tui.COMMANDS.keySet().stream().sorted().toList(), List.copyOf(Tui.COMMANDS.keySet()));

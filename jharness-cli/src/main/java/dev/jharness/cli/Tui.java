@@ -43,6 +43,7 @@ final class Tui {
               /agents         list this session's subagents
               /agents NAME    show a subagent's last 20 events
               /answer [NAME]  answer a held question (main, or a background subagent's) and stay in the main chat
+              /clear          empty the conversation so the model starts fresh (files stay as they are)
               /commands       list your slash commands from ~/.jharness/commands/ and the project's .jharness/commands/
               /compact        summarize the conversation now to free context
               /context        show how full the model's context is
@@ -927,7 +928,7 @@ final class Tui {
     /** Commands that change the conversation or take the prompt, which wait while a main turn runs (spec 055 AC-05). */
     private boolean waitsForTurn(String cmd, String arg) {
         boolean waits = switch (cmd) {
-            case "/compact", "/diff", "/undo", "/rewind", "/plan", "/follow" -> true;
+            case "/clear", "/compact", "/diff", "/undo", "/rewind", "/plan", "/follow" -> true;
             case "/model" -> !arg.isEmpty();
             case "/switch" -> !arg.isEmpty() && !arg.equals("main");
             default -> false;
@@ -1210,6 +1211,15 @@ final class Tui {
                         c.autoCompact() ? String.format(" · compacts at about %,d", c.threshold()) : " · automatic compaction is off"));
                 if (c.compactedThrough() > 0) {
                     out.println("Turns up to " + c.compactedThrough() + " are kept as a summary.");
+                }
+            }
+            case "/clear" -> {
+                int n = session.clear();
+                out.println(n == 0 ? "The conversation is already empty."
+                        : "Cleared " + n + (n == 1 ? " message" : " messages") + " from the conversation; the model starts fresh. Your files are"
+                                + " unchanged, the session log keeps everything (jharness log), and /undo and /rewind stop here.");
+                if (talking != null) {
+                    out.println("That was the main agent's conversation; " + talking + " keeps its own.");
                 }
             }
             case "/compact" -> {
