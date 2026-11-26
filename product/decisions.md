@@ -106,6 +106,7 @@ Last updated: 2026-11-26
 | D-093 | Tool update notices and write hints: at the start, shipped tools the user lacks or whose file differs are named once per shipped version (`~/.jharness/tools-notified.json`, `tools.updates`); a failed tool run that reads like a refused write gets a `hint` with the tool's writable folders | Accepted |
 | D-094 | Ranged and binary reads: `api.readFile(path, {fromLine, lines})` or `{offset, length}` for parts of text files of any size; `api.readBytes(path, {offset, length, encoding})` for any file as base64, hex or a charset, with `size`, `nextOffset` and `eof`; at most 1 MB per call; strict decoding; all charsets in the native binary | Accepted |
 | D-095 | Releases: the pom is the one source of the version (a filtered resource); a tag `vX.Y.Z` that matches it builds all targets and publishes at once, with `SHA256SUMS`, GitHub build attestations and `install.sh`; the workflow commits the formula to the tap `canmogol/homebrew-jharness`; `install.sh` checks SHA-256 and installs to `~/.local/bin` | Accepted |
+| D-096 | A capabilities and commands guide (`guide.md`, one line per command) is the README's "What it does" section and part of the system prompt, so the agent can point the user to commands; `GuideTest` keeps it complete and in step | Accepted |
 
 ---
 
@@ -1648,6 +1649,22 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-096 — Capabilities overview
+
+**Decision.** One short guide says what JHarness does and what each command does (spec 063).
+
+- **Text.** `jharness-agent/.../guide.md`: six capability bullets, the terminal UI commands, the keys and the command line, one table line each.
+- **Readers.** The README's "What it does" section is the same text (`scripts/sync-guide.py`). The system prompt carries it under "# JHarness itself", with the rule that the user types these commands and the agent can't run them. That costs about 1,000 tokens per request, cached where the provider caches.
+- **Kept current.** `GuideTest` fails when a `/help` command, a CLI subcommand or a visible option has no line, when the README differs, or when the prompt lacks it.
+
+**Why.** The user wanted a short description of the capabilities and the commands, and the agent knew none of the commands. Asked how to resume a session, it had to guess (user, 2026-11-26).
+
+**Rejected.** Generating the guide from `/help` and picocli (the help texts are written for a different layout; a test is simpler and catches the same drift). Fetching it on demand with a new api method (the model has to know to ask). A separate docs page only (the agent wouldn't see it).
+
+**Source.** User request and choice, 2026-11-26: "Include the system-prompt part"; README placement recommended and accepted while the user was away. Specifying 063-capabilities-overview.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1758,6 +1775,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q102 | How does a user learn that a newer JHarness ships new or changed tools? | At the start, once per shipped version, with the `jharness tools reset NAME` that takes it; and a failed run's `hint` names where the tool may write | An old `go.json` stayed after an update and the model couldn't tell why Go failed (user, 2026-11-26) | D-093 |
 | Q103 | How does the agent read files over 1 MB, in other charsets, or binary? | `api.readFile(path, {fromLine, lines})` or `{offset, length}`; `api.readBytes` as base64, hex or a charset, with `nextOffset`; 1 MB per call | A local model couldn't read a 12 MB file (user, 2026-11-26) | D-094 |
 | Q104 | How is a release made and installed? | A PR sets the pom's version; a matching tag builds all targets and publishes with `SHA256SUMS`, attestations and `install.sh`; the formula goes to the tap; `install.sh` checks SHA-256 | v0.1 needs one-command installs on macOS and Linux | D-095 |
+| Q105 | Does the agent know JHarness's own commands? | Yes: the system prompt carries the same guide as the README, one line per command; the agent points the user to them and can't run them | It couldn't answer "how do I resume?" (user, 2026-11-26) | D-096 |
 
 ---
 
