@@ -35,6 +35,73 @@ public final class OpenAiCompatibleProvider extends HttpProvider {
         super(profile, http, bus, origin, env, waiter);
     }
 
+    /** Spec 066: what servers reported, by base URL and model, so subagents and /model don't ask again. */
+    private static final java.util.Map<String, ContextProbe.Found> REPORTED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ContextProbe.Found NONE = new ContextProbe.Found("none", 0);
+
+    private String key() {
+        return profile.baseUrl() + "\n" + profile.model();
+    }
+
+    /**
+     * Spec 066: the profile's contextWindow when set, else what the server reported, else the default. A server that
+     * loaded the model with less than the profile says wins, since longer requests would fail.
+     */
+    @Override
+    public int contextWindow() {
+        ContextProbe.Found f = REPORTED.get(key());
+        int reported = f == null ? 0 : f.tokens();
+        if (profile.contextWindowSet()) {
+            return reported > 0 ? Math.min(reported, profile.contextWindow()) : profile.contextWindow();
+        }
+        return reported > 0 ? reported : profile.contextWindow();
+    }
+
+    @Override
+    public String discoverContext() {
+        ContextProbe.Found f = REPORTED.get(key());
+        if (f == null) {
+            String k;
+            try {
+                k = apiKey(false);
+            } catch (ModelException e) {
+                k = null;
+            }
+            f = ContextProbe.probe(http, profile, k, ContextProbe.DEADLINE);
+            REPORTED.put(key(), f == null ? NONE : f);
+            if (f == null) {
+                f = NONE;
+            }
+        }
+        int window = contextWindow();
+        String source = f.tokens() > 0 && window == f.tokens() ? "server" : profile.contextWindowSet() ? "profile" : "default";
+        var ev = Json.object().put("profile", profile.name()).put("model", profile.model()).put("window", window).put("from", source);
+        if (f.tokens() > 0) {
+            ev.put("server", f.server()).put("reported", f.tokens());
+        }
+        if (profile.contextWindowSet()) {
+            ev.put("set", profile.contextWindow());
+        }
+        bus.publish(origin.get(), "model.context_window", ev);
+        if (f.tokens() > 0 && profile.contextWindowSet() && f.tokens() < profile.contextWindow()) {
+            return String.format("%s loaded %s with %,d tokens of context, less than profile %s's contextWindow (%,d); using %,d.",
+                    f.server(), profile.model(), f.tokens(), profile.name(), profile.contextWindow(), f.tokens());
+        }
+        if (f.tokens() > 0 && !profile.contextWindowSet()) {
+            return String.format("Context window: %,d tokens, as %s reports for %s.", f.tokens(), f.server(), profile.model());
+        }
+        if (!profile.contextWindowSet()) {
+            return String.format("The server didn't say how much context %s has, so JHarness assumes %,d tokens; set \"contextWindow\" in"
+                    + " profile %s to the context the server loads.", profile.model(), window, profile.name());
+        }
+        return null;
+    }
+
+    /** Tests: forget what servers reported. */
+    static void forgetReported() {
+        REPORTED.clear();
+    }
+
     @Override
     URI endpoint() {
         return URI.create(profile.baseUrl() + "/chat/completions");

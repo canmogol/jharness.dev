@@ -18,10 +18,12 @@ import java.time.Duration;
  * @param promptCache whether requests mark the stable prefix for the provider's prompt cache (spec 040);
  *        only {@code anthropic} uses it, and it is on by default there
  * @param price what the tokens cost (spec 049), or null when the profile sets no price
+ * @param summaryTokens the summary a compaction asks for (spec 066), default 4,096; a thinking model gets more room
+ * @param contextWindowSet whether the profile sets {@code contextWindow}; when not, JHarness asks the server (spec 066)
  */
 public record ModelProfile(String name, String provider, String baseUrl, String model, String apiKeyEnv,
         int maxTokens, String notes, int retries, Duration retryMaxWait, Duration responseTimeout, int contextWindow,
-        boolean promptCache, ModelPrice price) {
+        boolean promptCache, ModelPrice price, int summaryTokens, boolean contextWindowSet) {
 
     public static final String OPENAI_COMPATIBLE = "openai-compatible";
     public static final String ANTHROPIC = "anthropic";
@@ -37,9 +39,19 @@ public record ModelProfile(String name, String provider, String baseUrl, String 
     public static final int ANTHROPIC_CONTEXT_WINDOW = 200_000;
     public static final int MIN_CONTEXT_WINDOW = 2_048;
     public static final int MAX_CONTEXT_WINDOW = 10_000_000;
+    public static final int DEFAULT_SUMMARY_TOKENS = 4_096;
+    public static final int MIN_SUMMARY_TOKENS = 512;
+    public static final int MAX_SUMMARY_TOKENS = 32_768;
 
     public static int defaultContextWindow(String provider) {
         return ANTHROPIC.equals(provider) ? ANTHROPIC_CONTEXT_WINDOW : DEFAULT_CONTEXT_WINDOW;
+    }
+
+    /** A profile with the default summary size, whose context window counts as set. */
+    public ModelProfile(String name, String provider, String baseUrl, String model, String apiKeyEnv, int maxTokens, String notes,
+            int retries, Duration retryMaxWait, Duration responseTimeout, int contextWindow, boolean promptCache, ModelPrice price) {
+        this(name, provider, baseUrl, model, apiKeyEnv, maxTokens, notes, retries, retryMaxWait, responseTimeout, contextWindow,
+                promptCache, price, DEFAULT_SUMMARY_TOKENS, true);
     }
 
     /** A profile with no price. */

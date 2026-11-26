@@ -47,6 +47,7 @@ public final class EventTypes {
         HOST.put("model.thinking_delta", List.of("text"));
         HOST.put("model.response", List.of("provider", "model", "attempt", "status", "durationMs"));
         HOST.put("model.completed", List.of("provider", "model", "stopReason"));
+        HOST.put("model.context_window", List.of("profile", "model", "window", "from"));
         HOST.put("model.error", List.of("provider", "message"));
         HOST.put("model.retry", List.of("provider", "model", "attempt", "attempts", "waitMs", "reason"));
         HOST.put("subagent.started", List.of("task", "customAgent", "maxSteps", "background"));

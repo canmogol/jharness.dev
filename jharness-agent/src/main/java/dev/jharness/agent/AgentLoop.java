@@ -52,7 +52,6 @@ public final class AgentLoop {
     /** The window assumed when the provider doesn't know its own. */
     static final int FALLBACK_WINDOW = dev.jharness.config.ModelProfile.DEFAULT_CONTEXT_WINDOW;
     /** The summary's reply size. */
-    static final int SUMMARY_TOKENS = 2048;
     /** A message longer than this is cut in the middle in the transcript the summary is written from. */
     static final int TRANSCRIPT_MESSAGE_CHARS = 6000;
     static final String SUMMARY_PREFIX = "Summary of the conversation so far (earlier messages were compacted to free context):\n\n";
@@ -220,16 +219,38 @@ public final class AgentLoop {
         if (summarized.isEmpty()) {
             return null;
         }
-        String summary;
+        // Spec 066: a thinking model reasons before it writes, and its reasoning counts against the limit, so the request
+        // asks for the larger of maxTokens and summaryTokens; when it still runs out with nothing written, once more with twice.
+        int words = summaryTokens() * 3 / 4;
+        int limit = Math.min(Math.max(provider.maxTokens(), summaryTokens()), window() / 2);
+        int retryLimit = Math.min(limit * 2, window() * 3 / 4);
+        String summary = "";
+        ChatReply r = null;
+        int attempts = 0;
+        int asked = limit;
         try {
-            ChatReply r = provider.stream(new ChatRequest(COMPACT_SYSTEM, List.of(ChatMessage.user(COMPACT_INSTRUCTIONS + transcript(summarized, budget))),
-                    SUMMARY_TOKENS, false), d -> {});
-            summary = r.text().strip();
+            while (true) {
+                attempts++;
+                r = provider.stream(new ChatRequest(COMPACT_SYSTEM, List.of(ChatMessage.user(instructions(words)
+                        + transcript(summarized, window() - asked))), asked, false), d -> {});
+                summary = r.text().strip();
+                if (!summary.isEmpty() || !ranOut(r) || attempts > 1 || retryLimit <= asked) {
+                    break;
+                }
+                asked = retryLimit;
+            }
             if (summary.isEmpty()) {
-                throw new ModelException("the summary was empty");
+                throw new ModelException(ranOut(r)
+                        ? String.format("the model used all %,d tokens%s and wrote no summary; raise \"summaryTokens\" or \"maxTokens\""
+                                + " in the profile, or turn the model's thinking off", asked, r.thinking().isEmpty() ? "" : " thinking")
+                        : "the summary was empty (stop reason: " + r.stopReason() + ")");
             }
         } catch (ModelException e) {
-            bus.publish(turns.get(), "context.compact_failed", Json.object().put("by", by).put("error", String.valueOf(e.getMessage())));
+            var ev = Json.object().put("by", by).put("error", String.valueOf(e.getMessage())).put("attempts", attempts).put("maxTokens", asked);
+            if (r != null) {
+                ev.put("stopReason", r.stopReason()).put("outputTokens", r.outputTokens()).put("thinkingChars", r.thinking().length());
+            }
+            bus.publish(turns.get(), "context.compact_failed", ev);
             return null;
         }
         conversation.clear();
@@ -252,9 +273,28 @@ public final class AgentLoop {
         return String.format("Compacted the conversation: about %,d → %,d tokens.", before, after);
     }
 
-    /** The messages as one text, newest kept when it doesn't fit; the first message (often an earlier summary) is kept too. */
+    /** A stop because the reply hit its token limit: {@code length} (OpenAI-compatible) or {@code max_tokens} (Anthropic). */
+    static boolean ranOut(ChatReply r) {
+        return r != null && ("length".equals(r.stopReason()) || "max_tokens".equals(r.stopReason()));
+    }
+
+    private int summaryTokens() {
+        int t = provider.summaryTokens();
+        return t > 0 ? t : dev.jharness.config.ModelProfile.DEFAULT_SUMMARY_TOKENS;
+    }
+
+    /** The summary instructions, with a length to aim for. */
+    static String instructions(int words) {
+        return COMPACT_INSTRUCTIONS.replace("\n\n", String.format(" Keep the summary under about %,d words.%n%n", words));
+    }
+
+    /**
+     * The messages as one text, newest kept when it doesn't fit; the first message (often an earlier summary) is kept too.
+     *
+     * @param budgetTokens the tokens the request's prompt may use: the window less the reply's limit
+     */
     private String transcript(List<ChatMessage> messages, int budgetTokens) {
-        int maxChars = (int) Math.min(Integer.MAX_VALUE, (long) (budgetTokens - SUMMARY_TOKENS - estimate(COMPACT_SYSTEM + COMPACT_INSTRUCTIONS) - 200) * 7 / 2);
+        int maxChars = (int) Math.min(Integer.MAX_VALUE, (long) (budgetTokens - estimate(COMPACT_SYSTEM + COMPACT_INSTRUCTIONS) - 300) * 7 / 2);
         List<String> parts = new ArrayList<>();
         for (ChatMessage m : messages) {
             parts.add("### " + (m.role().equals("user") ? "User or tool result" : "Agent") + "\n" + middle(m.content(), TRANSCRIPT_MESSAGE_CHARS) + "\n");

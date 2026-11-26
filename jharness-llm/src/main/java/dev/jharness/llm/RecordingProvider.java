@@ -37,6 +37,16 @@ public final class RecordingProvider implements ModelProvider {
     }
 
     @Override
+    public int summaryTokens() {
+        return inner.summaryTokens();
+    }
+
+    @Override
+    public String discoverContext() {
+        return inner.discoverContext();
+    }
+
+    @Override
     public String model() {
         return inner.model();
     }

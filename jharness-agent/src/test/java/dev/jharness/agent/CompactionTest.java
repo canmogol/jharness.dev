@@ -80,10 +80,11 @@ class CompactionTest {
             assertEquals(3, replay.requests().size(), "the step, the summary, the next step");
             ChatRequest summary = replay.requests().get(1);
             assertEquals(AgentLoop.COMPACT_SYSTEM, summary.system());
-            assertEquals(2048, summary.maxTokens());
+            assertEquals(4096, summary.maxTokens(), "spec 066: summaryTokens, with no maxTokens from the replay");
+            assertTrue(summary.messages().getFirst().content().contains("Keep the summary under about 3,072 words."));
             assertEquals(1, summary.messages().size());
             String text = summary.messages().getFirst().content();
-            assertTrue(text.startsWith(AgentLoop.COMPACT_INSTRUCTIONS));
+            assertTrue(text.startsWith(AgentLoop.COMPACT_INSTRUCTIONS.strip()), text);
             assertTrue(text.contains("### User or tool result\ngo") && text.contains("step one done"), text);
             ChatRequest next = replay.requests().get(2);
             assertEquals(List.of("user", "assistant", "user"), roles(next), "the first turn's messages are all in the summary");
@@ -157,6 +158,62 @@ class CompactionTest {
             var c = s.loop().context();
             assertFalse(c.estimated(), "the model's own count is used");
             assertTrue(c.tokens() >= 80_100, String.valueOf(c.tokens()));
+        });
+    }
+
+    static JsonNode thoughtOnly() {
+        return Json.object().put("reply", "").put("thinking", "Let me think about what matters here...").put("stopReason", "length")
+                .put("outputTokens", 4096);
+    }
+
+    /** Spec 066: a thinking model that runs out of tokens before writing gets one retry with twice the room. */
+    @Test
+    void aThinkingModelThatRunsOutGetsOneRetryWithMoreRoom() throws Exception {
+        session(Settings.defaults(), List.of(full(js("'step one done'")), thoughtOnly(), reply("Step one ran."), reply("done")), s -> {
+            s.loop().turn("go", d -> {});
+            assertEquals(4, replay.requests().size(), "the step, two summary requests, the next step");
+            assertEquals(4096, replay.requests().get(1).maxTokens());
+            assertEquals(8192, replay.requests().get(2).maxTokens(), "twice the room");
+            assertEquals(AgentLoop.SUMMARY_PREFIX + "Step one ran.", replay.requests().get(3).messages().getFirst().content());
+        });
+        assertEquals(1, of("context.compacted").size());
+        assertTrue(of("context.compact_failed").isEmpty());
+    }
+
+    /** Spec 066: when the retry runs out too, the error says why, and the event carries the stop reason and thinking. */
+    @Test
+    void aSummaryThatNeverComesSaysWhy() throws Exception {
+        session(Settings.defaults(), List.of(full(js("'step one done'")), thoughtOnly(), thoughtOnly(), reply("done")), s -> {
+            s.loop().turn("go", d -> {});
+        });
+        JsonNode f = of("context.compact_failed").getFirst();
+        assertTrue(f.get("error").asText().startsWith("the model used all 8,192 tokens thinking and wrote no summary"), f.toString());
+        assertEquals("length", f.get("stopReason").asText());
+        assertEquals(2, f.get("attempts").asInt());
+        assertTrue(f.get("thinkingChars").asInt() > 0);
+    }
+
+    /** Spec 066: an empty reply that didn't run out isn't retried. */
+    @Test
+    void anEmptySummaryThatDidNotRunOutIsNotRetried() throws Exception {
+        session(Settings.defaults(), List.of(full(js("'step one done'")), reply(""), reply("done")), s -> {
+            s.loop().turn("go", d -> {});
+            assertEquals(3, replay.requests().size());
+        });
+        JsonNode f = of("context.compact_failed").getFirst();
+        assertEquals("the summary was empty (stop reason: replay)", f.get("error").asText());
+        assertEquals(1, f.get("attempts").asInt());
+    }
+
+    /** Spec 066: the profile's summaryTokens sets the request; the transcript leaves room for it. */
+    @Test
+    void summaryTokensSetsTheRequest() throws Exception {
+        session(Settings.defaults(), List.of(full(js("'step one done'")), reply("Ran."), reply("done")), s -> {
+            replay.summaryTokens(6000);
+            s.loop().turn("go", d -> {});
+            ChatRequest summary = replay.requests().get(1);
+            assertEquals(6000, summary.maxTokens());
+            assertTrue(summary.messages().getFirst().content().contains("about 4,500 words"));
         });
     }
 }
