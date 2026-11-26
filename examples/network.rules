@@ -1,0 +1,22 @@
+# An example ~/.jharness/network.rules: copy the lines you need (spec 059, D-092).
+# JHarness ships no allow rules. Without a rule a host asks at the proxy, and "always" saves an allow here.
+default ask
+
+# Maven Central and the npm registry, for the maven, gradle and npm tools.
+allow repo.maven.apache.org
+allow registry.npmjs.org
+
+# Go modules, for the go tool: the module proxy, the checksum database, and golang.org,
+# which the proxy's go.dev pages redirect through.
+allow proxy.golang.org
+allow sum.golang.org
+allow golang.org
+
+# Private Go modules: the go tool never fetches with git (no "direct" in GOPROXY), so serve them
+# from your own module proxy, such as Athens or Artifactory, and allow only that host:
+#   allow goproxy.corp.example.com
+# Then, in ~/.jharness/tools/go.json, put it first in GOPROXY and keep its modules out of the public
+# checksum database:
+#   "GOPROXY": "https://goproxy.corp.example.com,https://proxy.golang.org",
+#   "GONOSUMDB": "corp.example.com/*"
+# Don't set GOPRIVATE or GONOPROXY: they send those modules around the proxy, to git, which is off.

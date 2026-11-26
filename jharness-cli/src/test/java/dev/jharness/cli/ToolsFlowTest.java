@@ -120,7 +120,7 @@ class ToolsFlowTest {
         Path r = replay("```js\nJSON.parse(api.tools()).map(t => t.name + ':' + t.source).join(',')\n```", "done");
         assertEquals(0, run(null, "--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "tools"), err.toString());
         assertTrue(err.toString().contains("the project's tools go are new or changed since you confirmed them; they are left out"), err.toString());
-        assertEquals(List.of("gradle:user", "maven:user", "npm:user"), toolsInLastSession());
+        assertEquals(List.of("go:user", "gofmt:user", "gradle:user", "maven:user", "npm:user"), toolsInLastSession());
         TrustStore.load(home).confirmTools(ws, ToolDefinitions.projectHashes(ws));
         assertEquals(0, run(null, "--home", home.toString(), "--cwd", ws.toString(), "--replay", r.toString(), "-p", "tools"));
         assertEquals("", err.toString());
@@ -191,8 +191,8 @@ class ToolsFlowTest {
 
         assertEquals(0, run(null, "tools", "reset", "npm", "--home", home.toString(), "--cwd", ws.toString()));
         assertEquals(ToolDefinitions.defaultText("npm"), Files.readString(npm));
-        assertEquals(2, run(null, "tools", "reset", "go", "--home", home.toString(), "--cwd", ws.toString()));
-        assertTrue(err.toString().contains("go is not a shipped tool"), err.toString());
+        assertEquals(2, run(null, "tools", "reset", "cargo", "--home", home.toString(), "--cwd", ws.toString()));
+        assertTrue(err.toString().contains("cargo is not a shipped tool"), err.toString());
 
         Files.writeString(home.resolve(".jharness/tools/maven.json"), ToolDefinitions.defaultText("maven").replace("\"clean\":", "\"cleanup\":"));
         Files.delete(ws.resolve(".jharness/tools/bad.json"));

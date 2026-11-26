@@ -102,6 +102,7 @@ Last updated: 2026-11-26
 | D-089 | Deletes: `api.deleteFile` (a `write`, as `writeFile`) and `api.deleteFolder` (kind `delete`: asked even in accept-edits unless a saved rule or bypass allows it); checkpoints make both undoable; the root, `.git`, `.jharness`, mounts, denied files and folders with links, denied files, files over 10 MB or more than 1,000 files are refused | Accepted |
 | D-090 | Checkpoint cleanup: when a session opens, this project's checkpoints of other sessions untouched for `files.checkpointDays` (default 30, 0 for ever) are removed, without following links; `checkpoints.pruned` | Accepted |
 | D-091 | Input at the bottom: after the banner the cursor moves to the row above the status line (DSR 6, 200 ms limit, typed keys replayed); before a resize a line feed keeps a row free for the status line, through a `LineReaderImpl` subclass while the prompt reads | Accepted |
+| D-092 | Go tool: shipped `go.json` (build, test, vet, mod-tidy, mod-download, version) and `gofmt.json` (check); proxy through `env`; `GOPROXY=https://proxy.golang.org` with no `direct`, `GOVCS=*:off`, `-buildvcs=false`, `GOTOOLCHAIN=local`, `GOENV=off`; caches under `~/go/pkg` and `~/.cache/go-build`; `~/` env values are home folders; Go hosts in `examples/network.rules`, not shipped | Accepted |
 
 ---
 
@@ -1548,6 +1549,39 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-092 — Go tool
+
+**Decision.** Go is a shipped tool definition, like Maven, Gradle and npm (spec 059).
+
+- **Operations.**
+  - `go.json`: `build`, `test` and `vet` over one package pattern (default `./...`), `test` with a `-run` filter, `mod-tidy`, `mod-download` and `version`.
+  - `gofmt.json`: `check` (`gofmt -l .`) and `check-folder`, a second tool because a definition has one executable and `go fmt` rewrites files.
+  - Patterns refuse values that start with `-` or leave the module.
+  - No `generate`, `run`, `install` or `get`.
+- **Proxy.** The existing `env` method sets `HTTPS_PROXY` and friends; no Go-specific code.
+- **No other way out.**
+  - `GOPROXY=https://proxy.golang.org`, without `direct`, so Go never fetches with git.
+  - `GOSUMDB=sum.golang.org`.
+  - `GOVCS=*:off`.
+  - `GOFLAGS=-buildvcs=false`, since `go build` otherwise runs git to stamp versions.
+  - `GOTOOLCHAIN=local`, since a `toolchain` line would download and run another Go.
+  - `GOENV=off`, since `go env -w` settings could add flags.
+- **Caches.** `GOPATH=~/go`, `GOMODCACHE=~/go/pkg/mod` and `GOCACHE=~/.cache/go-build` on every OS (macOS's default is under `~/Library`, which tools may not write); `~/go/pkg` and `~/.cache/go-build` are writable. For this, an `env` value that starts with `~/` is now a folder in the home, and must stay below it.
+- **Offline.** `GOPROXY=off`; builds use the module cache or `vendor/`.
+- **Hosts.** Not shipped: JHarness ships no allow rules for any tool, and an unlisted host asks at the proxy, where "always" saves it. `examples/network.rules` lists `proxy.golang.org`, `sum.golang.org` and `golang.org` with the Maven and npm hosts. Private modules come through the user's own module proxy, put first in `GOPROXY`, with `GONOSUMDB`, never `GOPRIVATE` or `GONOPROXY`, which mean git.
+
+**Why.** The user asked for a Go tool like the Maven and npm ones, with downloads through the egress proxy and no direct fetches (2026-11-26). Go's defaults start git (`direct`, VCS stamping) and can run a downloaded toolchain, both outside the process rules (D-049, constitution Article IV). Shipping allow rules would widen every user's egress for one ecosystem.
+
+**Rejected.**
+- A per-operation executable for `gofmt` (a format change for one case).
+- A list field type for several packages (one pattern covers a tree).
+- Shipped allow rules for the Go hosts.
+- `GOPRIVATE` for private modules (it means git).
+
+**Source.** User request and answers, 2026-11-26: a separate gofmt tool, hosts in an example file, Go under `~/sdk` and in CI, one package pattern. Specifying 059-go-tool.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1654,6 +1688,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q98 | How do agents delete files and folders? | `api.deleteFile` as a write; `api.deleteFolder` always asks outside bypass; both undoable; root, `.git`, `.jharness`, mounts, secrets, links and huge folders refused | Agents needed deletes, and a folder delete is the riskiest file change there is (user, 2026-11-26) | D-089 |
 | Q99 | How long are saved files for `/undo` kept? | 30 days after their session last changed them (`files.checkpointDays`, 0 for ever); removed when a session of the project opens | They were kept for ever, and deletes can save up to about 10 GB per session (user, 2026-11-26) | D-090 |
 | Q100 | Can the input start at the bottom of the terminal and stay there? | Yes: the cursor moves to the row above the status line at start (asked with DSR 6), and a line feed before each resize keeps the status row free | The prompt started under the banner, and a shrink drew the status line over it (user, 2026-11-26; spec 053 finding) | D-091 |
+| Q101 | Does each new build tool need JHarness code changes? | No: a tool is a JSON definition over typed fields with a built-in proxy method. Go needed one general change, `~/` home paths in `env` values; Rust and similar tools should need only a file | The user asked before adding Go (2026-11-26) | D-092 |
 
 ---
 

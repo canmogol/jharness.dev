@@ -57,7 +57,7 @@ class ToolApiTest {
         JsonNode list = Json.parse(resultOf(1).substring(resultOf(1).indexOf('[')));
         List<String> names = new java.util.ArrayList<>();
         list.forEach(t -> names.add(t.get("name").asText() + ":" + t.get("source").asText()));
-        assertEquals(List.of("gitv:project", "gradle:user", "maven:user", "npm:user"), names);
+        assertEquals(List.of("gitv:project", "go:user", "gofmt:user", "gradle:user", "maven:user", "npm:user"), names);
         JsonNode gitv = list.get(0);
         assertTrue(gitv.get("available").asBoolean(), gitv.toString());
         assertEquals("[]", Json.write(gitv.get("operations").get("version")));
@@ -100,7 +100,7 @@ class ToolApiTest {
                     && !e.get("network").asBoolean()), "proxy none: no network");
         }
         assertTrue(r.contains("api.tool needs a tool name first"), r);
-        assertTrue(r.contains("no tool \"nope\" (tools: gitv, gradle, maven, npm"), r);
+        assertTrue(r.contains("no tool \"nope\" (tools: gitv, go, gofmt, gradle, maven, npm"), r);
         assertTrue(r.contains("\nundefined"), "api.maven is gone: " + r);
         assertTrue(events.stream().anyMatch(e -> e.get("type").asText().equals("permission.decided") && e.get("api").asText().equals("tool")
                 && e.get("kind").asText().equals("build") && e.get("summary").asText().equals("gitv version (the project's tool)")), "asked as a build");
