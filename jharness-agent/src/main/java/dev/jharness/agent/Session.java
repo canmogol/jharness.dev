@@ -229,6 +229,13 @@ public final class Session implements AutoCloseable {
         }
         PlanState plans = new PlanState(bus, engine, access.prompter(), agent != null && agent.plan());
         Checkpoints checkpoints = new Checkpoints(Checkpoints.rootFor(home, ws.root(), bus.session()), bus, turns);
+        // Spec 057: other sessions' saved files for /undo go after files.checkpointDays.
+        int keepDays = settings.files().checkpointDays();
+        Checkpoints.Pruned pruned = Checkpoints.prune(home, ws.root(), bus.session(), keepDays, java.time.Instant.now());
+        if (pruned.sessions() > 0) {
+            bus.publish(turns.get(), "checkpoints.pruned", Json.object().put("sessions", pruned.sessions()).put("bytes", pruned.bytes())
+                    .put("days", keepDays));
+        }
         var http = new dev.jharness.net.http.HttpOperations(bus, turns, settings.http(), settings.timeouts());
         if (agent != null && agent.tools() != null) {
             gate = new ToolsGate(gate, agent.name(), agent.tools());

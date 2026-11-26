@@ -226,6 +226,15 @@ class SettingsTest {
         assertTrue(bad("{\"files\":{\"mounts\":[\"" + docs.resolve("missing") + "\"]}}").getMessage().contains("not a folder"));
         assertTrue(bad("{\"files\":{\"deny\":[\"\"]}}").getMessage().contains("non-empty"));
         assertTrue(bad("{\"files\":{\"allow\":[\"x\"]}}").getMessage().contains("files.allow"));
+        // Spec 057: how long checkpoints are kept.
+        assertEquals(30, Settings.defaults().files().checkpointDays());
+        assertEquals(30, f.files().checkpointDays());
+        assertEquals(0, Settings.parse("{\"files\":{\"checkpointDays\":0}}", "s").files().checkpointDays());
+        assertEquals(7, Settings.parse("{\"files\":{\"checkpointDays\":7}}", "s").files().checkpointDays());
+        for (String v : java.util.List.of("-1", "3651", "1.5", "\"7\"", "true")) {
+            String m = bad("{\"files\":{\"checkpointDays\":" + v + "}}").getMessage();
+            assertTrue(m.contains("files.checkpointDays") && m.contains("whole number of days"), v + ": " + m);
+        }
     }
 
     @Test

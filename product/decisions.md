@@ -100,6 +100,7 @@ Last updated: 2026-11-26
 | D-087 | Subagents never block the main chat: `api.waitAgent` is removed; a finished background subagent's reply starts a main turn by itself (at an empty prompt; `agent.autoTurns`, default 10 in a row); `-p` runs until no background subagent is left; held questions never interrupt and `/answer [NAME]` asks one in place | Accepted; automatic turns run behind a live prompt since D-088 |
 | D-088 | The main prompt never blocks: on terminals that aren't dumb, main turns run on a worker while the prompt reads; output prints above it a line at a time; messages sent during a turn are queued and go next as one; Esc on the prompt stops the turn; the main agent's questions are held as notices (`question.waiting`) and `/answer main` asks them; commands that change the conversation wait for the turn; dumb terminals keep foreground turns | Accepted |
 | D-089 | Deletes: `api.deleteFile` (a `write`, as `writeFile`) and `api.deleteFolder` (kind `delete`: asked even in accept-edits unless a saved rule or bypass allows it); checkpoints make both undoable; the root, `.git`, `.jharness`, mounts, denied files and folders with links, denied files, files over 10 MB or more than 1,000 files are refused | Accepted |
+| D-090 | Checkpoint cleanup: when a session opens, this project's checkpoints of other sessions untouched for `files.checkpointDays` (default 30, 0 for ever) are removed, without following links; `checkpoints.pruned` | Accepted |
 
 ---
 
@@ -1514,6 +1515,22 @@ Covering these in JSON would need per-operation kinds, secret injection, output 
 
 ---
 
+## D-090 — Checkpoint cleanup
+
+**Decision.** Saved files for `/undo` don't stay for ever (spec 057).
+
+- When a session opens, JHarness removes this project's checkpoint folders of other sessions whose newest file is older than `files.checkpointDays`: 30 days by default, 0 to 3650, and 0 keeps them for ever.
+- The current session's folder, other projects' folders and anything behind a link are never touched. A folder that can't be removed waits for the next start.
+- A `checkpoints.pruned` event gives the sessions, bytes and days.
+
+**Why.** Undo only works in the session that saved the files (a resumed session can't undo earlier turns), yet every session's copies stayed under `~/.jharness/checkpoints/` for good. Since D-089 a session can save up to about 10 GB of deleted files. The user asked to remove them after N days (2026-11-26).
+
+**Rejected.** Removing a session's checkpoints when it ends (a crash or a second window would lose undo the user may still want). A total size cap (removes the newest work along with the old). Cleaning every project at each start (a project's settings would decide for other projects).
+
+**Source.** User question and choice, 2026-11-26: "where do we put the deleted files"; "Do the after N days". Recommended defaults accepted while the user was away. Specifying 057-checkpoint-cleanup.
+
+---
+
 ## Questions and answers
 
 Questions raised during design, the answers given, and why each mattered.
@@ -1618,6 +1635,7 @@ Questions raised during design, the answers given, and why each mattered.
 | Q96 | Should a turn wait for a subagent? | No: `api.waitAgent` is removed; a background subagent's reply starts a main turn (at most `agent.autoTurns` in a row, default 10); `-p` runs until none is left; `/answer` asks a held question in place | The main chat stayed blocked behind a wait while the subagent waited for the user, who couldn't type (user report, 2026-11-25) | D-087 |
 | Q97 | Should the main prompt close while the main agent works? | No: turns run behind a live prompt; output above it a line at a time; typed messages queue and go next; Esc stops the turn; the main agent's questions are held for `/answer main` | Keys typed during a turn were lost, and automatic turns closed the prompt without the user asking (user, 2026-11-26) | D-088 |
 | Q98 | How do agents delete files and folders? | `api.deleteFile` as a write; `api.deleteFolder` always asks outside bypass; both undoable; root, `.git`, `.jharness`, mounts, secrets, links and huge folders refused | Agents needed deletes, and a folder delete is the riskiest file change there is (user, 2026-11-26) | D-089 |
+| Q99 | How long are saved files for `/undo` kept? | 30 days after their session last changed them (`files.checkpointDays`, 0 for ever); removed when a session of the project opens | They were kept for ever, and deletes can save up to about 10 GB per session (user, 2026-11-26) | D-090 |
 
 ---
 

@@ -83,6 +83,74 @@ public final class Checkpoints {
         return home.resolve(".jharness").resolve("checkpoints").resolve(SessionLog.projectFolder(workspace)).resolve(session);
     }
 
+    /** What {@link #prune} removed. */
+    public record Pruned(int sessions, long bytes) {}
+
+    /**
+     * Removes this project's checkpoints of other sessions untouched for {@code days} days (spec 057): their newest file is
+     * older than that. {@code days} 0 keeps them for ever. A folder that can't be read or removed is left as it is.
+     */
+    public static Pruned prune(Path home, Path workspace, String current, int days, java.time.Instant now) {
+        if (days <= 0) {
+            return new Pruned(0, 0);
+        }
+        Path project = rootFor(home, workspace, current).getParent();
+        if (!Files.isDirectory(project, LinkOption.NOFOLLOW_LINKS)) {
+            return new Pruned(0, 0);
+        }
+        java.time.Instant cutoff = now.minus(java.time.Duration.ofDays(days));
+        int sessions = 0;
+        long bytes = 0;
+        List<Path> old = new ArrayList<>();
+        try (var list = Files.list(project)) {
+            for (Path d : (Iterable<Path>) list::iterator) {
+                if (!d.getFileName().toString().equals(current) && Files.isDirectory(d, LinkOption.NOFOLLOW_LINKS)
+                        && !Files.isSymbolicLink(d) && newest(d).isBefore(cutoff)) {
+                    old.add(d);
+                }
+            }
+        } catch (IOException | UncheckedIOException e) {
+            return new Pruned(0, 0);
+        }
+        for (Path d : old) {
+            try {
+                long size = 0;
+                List<Path> all;
+                try (var walk = Files.walk(d)) {
+                    all = walk.sorted(java.util.Comparator.reverseOrder()).toList();
+                }
+                for (Path x : all) {
+                    if (Files.isRegularFile(x, LinkOption.NOFOLLOW_LINKS)) {
+                        size += Files.size(x);
+                    }
+                }
+                for (Path x : all) {
+                    Files.delete(x);
+                }
+                sessions++;
+                bytes += size;
+            } catch (IOException | UncheckedIOException e) {
+                // Left for the next start.
+            }
+        }
+        return new Pruned(sessions, bytes);
+    }
+
+    /** The newest modification time in a folder tree, the folder itself included. */
+    private static java.time.Instant newest(Path dir) {
+        try (var walk = Files.walk(dir)) {
+            return walk.map(x -> {
+                try {
+                    return Files.getLastModifiedTime(x, LinkOption.NOFOLLOW_LINKS).toInstant();
+                } catch (IOException e) {
+                    return java.time.Instant.MAX;
+                }
+            }).max(java.util.Comparator.naturalOrder()).orElse(java.time.Instant.MAX);
+        } catch (IOException | UncheckedIOException e) {
+            return java.time.Instant.MAX;
+        }
+    }
+
     private static String sha(byte[] b) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(b));
